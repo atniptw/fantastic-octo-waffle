@@ -31,14 +31,8 @@ npm install
 ## Development
 
 ```bash
-# Run the development server (renderer only)
-npm run dev:renderer
-
-# Build main process (required before running Electron)
-npm run build:main
-
-# Start Electron app (after building)
-npm run start
+# Start development mode (watches and rebuilds both main and renderer)
+npm run dev
 ```
 
 ## Build
