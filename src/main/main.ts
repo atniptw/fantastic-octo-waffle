@@ -19,7 +19,8 @@ function createWindow(): void {
   // In production, load from dist/renderer
   const isDev = !app.isPackaged;
   if (isDev) {
-    mainWindow.loadURL('http://localhost:5173');
+    const devServerPort = process.env.VITE_DEV_SERVER_PORT || '5173';
+    mainWindow.loadURL(`http://localhost:${devServerPort}`);
     mainWindow.webContents.openDevTools();
   } else {
     mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
