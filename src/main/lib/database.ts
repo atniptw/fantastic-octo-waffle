@@ -24,7 +24,9 @@ export interface Cosmetic {
 
 /**
  * Simple in-memory database for testing purposes.
- * In production, this would use SQLite.
+ * NOTE: This is not suitable for production use as data is not persisted
+ * and memory usage grows linearly with the number of records.
+ * In production, this would be replaced with SQLite or another persistent store.
  */
 export class DatabaseWrapper {
   private mods: Mod[] = [];
@@ -47,24 +49,26 @@ export class DatabaseWrapper {
    * Insert a new mod into the database.
    */
   async insertMod(mod: Omit<Mod, 'id'>): Promise<number> {
+    const id = this.modIdCounter++;
     const newMod: Mod = {
       ...mod,
-      id: this.modIdCounter++,
+      id,
     };
     this.mods.push(newMod);
-    return newMod.id!;
+    return id;
   }
 
   /**
    * Insert a new cosmetic into the database.
    */
   async insertCosmetic(cosmetic: Omit<Cosmetic, 'id'>): Promise<number> {
+    const id = this.cosmeticIdCounter++;
     const newCosmetic: Cosmetic = {
       ...cosmetic,
-      id: this.cosmeticIdCounter++,
+      id,
     };
     this.cosmetics.push(newCosmetic);
-    return newCosmetic.id!;
+    return id;
   }
 
   /**

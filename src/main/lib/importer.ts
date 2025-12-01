@@ -75,7 +75,9 @@ export function extractCosmeticInfo(path: string): {
 }
 
 /**
- * Calculate simple hash for content (SHA-256 like but simplified for testing).
+ * Calculate a simple hash for content.
+ * NOTE: This is a simple checksum for testing purposes only.
+ * In production, use a proper cryptographic hash like SHA-256.
  */
 export function calculateHash(content: Uint8Array): string {
   // Simple hash implementation for testing
