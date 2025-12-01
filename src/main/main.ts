@@ -1,5 +1,11 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, ipcMain } from 'electron';
 import path from 'path';
+
+// Stub IPC handler for import-mods - logs a message until full implementation
+ipcMain.handle('import-mods', async () => {
+  console.log('[IPC] import-mods invoked - functionality not yet implemented');
+  return { success: false, message: 'Import functionality not yet implemented' };
+});
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -19,7 +25,7 @@ function createWindow(): void {
   // In production, load from dist/renderer
   const isDev = !app.isPackaged;
   if (isDev) {
-    const devServerPort = process.env.VITE_DEV_SERVER_PORT || '5173';
+    const devServerPort = process.env.VITE_DEV_SERVER_PORT || process.env.VITE_PORT || '5173';
     mainWindow.loadURL(`http://localhost:${devServerPort}`);
     mainWindow.webContents.openDevTools();
   } else {
