@@ -23,10 +23,13 @@ export interface Cosmetic {
 }
 
 /**
- * Simple in-memory database for testing purposes.
- * NOTE: This is not suitable for production use as data is not persisted
- * and memory usage grows linearly with the number of records.
- * In production, this would be replaced with SQLite or another persistent store.
+ * In-memory database implementation.
+ * This is a temporary implementation that will be replaced with SQLite
+ * for persistent storage. Currently used for development and testing.
+ * 
+ * Limitations:
+ * - Data is not persisted between sessions
+ * - Memory usage grows linearly with records
  */
 export class DatabaseWrapper {
   private mods: Mod[] = [];

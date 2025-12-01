@@ -86,12 +86,13 @@ describe('extractCosmeticInfo', () => {
 });
 
 describe('calculateHash', () => {
-  it('should return a hash string', () => {
+  it('should return a SHA-256 hash string (64 hex characters)', () => {
     const content = new Uint8Array([1, 2, 3, 4, 5]);
     const hash = calculateHash(content);
 
     expect(typeof hash).toBe('string');
-    expect(hash.length).toBeGreaterThan(0);
+    expect(hash.length).toBe(64); // SHA-256 produces 64 hex characters
+    expect(hash).toMatch(/^[a-f0-9]{64}$/); // Valid hex string
   });
 
   it('should return different hashes for different content', () => {

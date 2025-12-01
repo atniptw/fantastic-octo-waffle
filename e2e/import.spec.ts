@@ -45,10 +45,7 @@ test.describe('R.E.P.O. Cosmetic Catalog', () => {
     const importButton = page.locator('button.import-button');
     await importButton.click();
 
-    // Wait a bit for the console message
-    await page.waitForTimeout(100);
-
-    // Verify the console log was triggered
+    // Verify the console log was triggered (console.log is synchronous)
     expect(consoleMessages.some((msg) => 
       msg.includes('Import button clicked')
     )).toBe(true);

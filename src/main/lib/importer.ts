@@ -74,19 +74,14 @@ export function extractCosmeticInfo(path: string): {
   };
 }
 
+import { createHash } from 'crypto';
+
 /**
- * Calculate a simple hash for content.
- * NOTE: This is a simple checksum for testing purposes only.
- * In production, use a proper cryptographic hash like SHA-256.
+ * Calculate SHA-256 hash for content.
+ * Used for reliable file identification and duplicate detection.
  */
 export function calculateHash(content: Uint8Array): string {
-  // Simple hash implementation for testing
-  // In production, this would use crypto.subtle.digest or Node.js crypto
-  let hash = 0;
-  for (let i = 0; i < content.length; i++) {
-    hash = ((hash << 5) - hash + content[i]) | 0;
-  }
-  return Math.abs(hash).toString(16).padStart(8, '0');
+  return createHash('sha256').update(content).digest('hex');
 }
 
 /**

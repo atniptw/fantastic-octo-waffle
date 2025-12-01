@@ -13,7 +13,12 @@ export default defineConfig({
     exclude: ['**/node_modules/**', '**/dist/**', '**/e2e/**'],
     coverage: {
       reporter: ['text', 'html'],
-      exclude: ['node_modules/', 'dist/'],
+      exclude: [
+        'node_modules/',
+        'dist/',
+        '**/*.{test,spec}.{ts,tsx}',
+        '**/test/**',
+      ],
     },
   },
   resolve: {
