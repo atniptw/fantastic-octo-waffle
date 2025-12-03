@@ -35,7 +35,7 @@ test.describe('R.E.P.O. Cosmetic Catalog', () => {
     );
   });
 
-  test('import button click triggers console log', async ({ page }) => {
+  test('should log message to console when import button is clicked', async ({ page }) => {
     // Capture console messages
     const consoleMessages: string[] = [];
     page.on('console', (msg) => consoleMessages.push(msg.text()));
