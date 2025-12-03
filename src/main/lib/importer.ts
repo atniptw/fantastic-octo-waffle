@@ -3,6 +3,7 @@
  */
 
 import { DatabaseWrapper, Mod, Cosmetic } from './database';
+import { createHash } from 'crypto';
 
 export interface ManifestData {
   name: string;
@@ -73,8 +74,6 @@ export function extractCosmeticInfo(path: string): {
     type: 'decoration',
   };
 }
-
-import { createHash } from 'crypto';
 
 /**
  * Calculate SHA-256 hash for content.
