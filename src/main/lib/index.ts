@@ -3,16 +3,20 @@
  * Re-exports all public APIs from the library modules.
  */
 
-// Database wrapper with schema and migrations
+// Database wrapper (service layer for data access)
+export { DatabaseWrapper } from './database';
+
+export type { Mod, Cosmetic } from './database';
+
+// Schema and migrations (separate from service layer)
 export {
-  DatabaseWrapper,
   SCHEMA,
   MIGRATIONS,
   getCurrentSchemaVersion,
   getPendingMigrations,
-} from './database';
+} from './schema';
 
-export type { Mod, Cosmetic, Migration } from './database';
+export type { Migration } from './schema';
 
 // ZIP importer and helpers
 export {
