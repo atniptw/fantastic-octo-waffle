@@ -1,5 +1,72 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { DatabaseWrapper, Mod, Cosmetic } from '../database';
+import {
+  DatabaseWrapper,
+  Mod,
+  Cosmetic,
+  SCHEMA,
+  MIGRATIONS,
+  getCurrentSchemaVersion,
+  getPendingMigrations,
+} from '../database';
+
+describe('Schema and Migrations', () => {
+  describe('SCHEMA', () => {
+    it('should have version 1', () => {
+      expect(SCHEMA.version).toBe(1);
+    });
+
+    it('should define mods table', () => {
+      expect(SCHEMA.tables.mods).toContain('CREATE TABLE');
+      expect(SCHEMA.tables.mods).toContain('mod_name TEXT NOT NULL');
+      expect(SCHEMA.tables.mods).toContain('source_zip TEXT NOT NULL UNIQUE');
+    });
+
+    it('should define cosmetics table', () => {
+      expect(SCHEMA.tables.cosmetics).toContain('CREATE TABLE');
+      expect(SCHEMA.tables.cosmetics).toContain('mod_id INTEGER NOT NULL');
+      expect(SCHEMA.tables.cosmetics).toContain('FOREIGN KEY');
+    });
+
+    it('should define indexes', () => {
+      expect(SCHEMA.indexes.cosmetics_mod_id).toContain('CREATE INDEX');
+      expect(SCHEMA.indexes.cosmetics_display_name).toContain('CREATE INDEX');
+      expect(SCHEMA.indexes.mods_source_zip).toContain('CREATE INDEX');
+    });
+  });
+
+  describe('MIGRATIONS', () => {
+    it('should have at least one migration', () => {
+      expect(MIGRATIONS.length).toBeGreaterThan(0);
+    });
+
+    it('should have migration version 1', () => {
+      expect(MIGRATIONS[0].version).toBe(1);
+    });
+
+    it('should have up and down statements', () => {
+      expect(MIGRATIONS[0].up.length).toBeGreaterThan(0);
+      expect(MIGRATIONS[0].down.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('getCurrentSchemaVersion', () => {
+    it('should return the latest migration version', () => {
+      expect(getCurrentSchemaVersion()).toBe(1);
+    });
+  });
+
+  describe('getPendingMigrations', () => {
+    it('should return all migrations when starting from version 0', () => {
+      const pending = getPendingMigrations(0);
+      expect(pending.length).toBe(MIGRATIONS.length);
+    });
+
+    it('should return no migrations when already at latest', () => {
+      const pending = getPendingMigrations(getCurrentSchemaVersion());
+      expect(pending.length).toBe(0);
+    });
+  });
+});
 
 describe('DatabaseWrapper', () => {
   let db: DatabaseWrapper;
@@ -13,6 +80,17 @@ describe('DatabaseWrapper', () => {
     it('should initialize the database', async () => {
       expect(await db.getModCount()).toBe(0);
       expect(await db.getCosmeticCount()).toBe(0);
+    });
+
+    it('should set initialized flag', async () => {
+      const newDb = new DatabaseWrapper();
+      expect(newDb.isInitialized()).toBe(false);
+      await newDb.initialize();
+      expect(newDb.isInitialized()).toBe(true);
+    });
+
+    it('should set schema version', async () => {
+      expect(db.getSchemaVersion()).toBe(getCurrentSchemaVersion());
     });
   });
 
@@ -160,6 +238,52 @@ describe('DatabaseWrapper', () => {
 
     it('should return empty array for mod with no cosmetics', async () => {
       const cosmetics = await db.getCosmeticsByModId(999);
+      expect(cosmetics).toHaveLength(0);
+    });
+  });
+
+  describe('getAllCosmetics', () => {
+    it('should return all cosmetics in the database', async () => {
+      const mod1Id = await db.insertMod({
+        mod_name: 'Mod1',
+        author: 'Author1',
+        version: '1.0.0',
+        icon_path: null,
+        source_zip: '/path/to/mod1.zip',
+      });
+      const mod2Id = await db.insertMod({
+        mod_name: 'Mod2',
+        author: 'Author2',
+        version: '1.0.0',
+        icon_path: null,
+        source_zip: '/path/to/mod2.zip',
+      });
+
+      await db.insertCosmetic({
+        mod_id: mod1Id,
+        display_name: 'Hat 1',
+        filename: 'hat1.hhh',
+        hash: 'hash1',
+        type: 'decoration',
+        internal_path: 'plugins/Mod1/Decorations/hat1.hhh',
+      });
+      await db.insertCosmetic({
+        mod_id: mod2Id,
+        display_name: 'Hat 2',
+        filename: 'hat2.hhh',
+        hash: 'hash2',
+        type: 'decoration',
+        internal_path: 'plugins/Mod2/Decorations/hat2.hhh',
+      });
+
+      const cosmetics = await db.getAllCosmetics();
+      expect(cosmetics).toHaveLength(2);
+      expect(cosmetics[0].display_name).toBe('Hat 1');
+      expect(cosmetics[1].display_name).toBe('Hat 2');
+    });
+
+    it('should return empty array when no cosmetics exist', async () => {
+      const cosmetics = await db.getAllCosmetics();
       expect(cosmetics).toHaveLength(0);
     });
   });
