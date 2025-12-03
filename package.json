@@ -15,13 +15,24 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui"
   },
-  "keywords": ["electron", "cosmetic", "catalog", "r.e.p.o.", "mods"],
+  "keywords": [
+    "electron",
+    "cosmetic",
+    "catalog",
+    "r.e.p.o.",
+    "mods"
+  ],
   "author": "",
   "license": "ISC",
   "devDependencies": {
     "@eslint/js": "^9.15.0",
+    "@playwright/test": "^1.57.0",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.0",
     "@types/node": "^20.10.0",
     "@types/react": "^18.2.45",
     "@types/react-dom": "^18.2.18",
@@ -33,6 +44,7 @@
     "eslint-plugin-react": "^7.37.2",
     "eslint-plugin-react-hooks": "^5.0.0",
     "globals": "^15.12.0",
+    "jsdom": "^27.2.0",
     "prettier": "^3.1.1",
     "typescript": "^5.3.3",
     "typescript-eslint": "^8.15.0",
