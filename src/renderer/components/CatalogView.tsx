@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Cosmetic, Mod, CatalogData } from '../types/electron';
 
 interface CatalogViewProps {
@@ -18,7 +18,7 @@ function CatalogView({ refreshTrigger }: CatalogViewProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const loadCatalog = async () => {
+  const loadCatalog = useCallback(async () => {
     if (!window.electronAPI) {
       // Running outside Electron (web browser), show placeholder
       return;
@@ -44,7 +44,7 @@ function CatalogView({ refreshTrigger }: CatalogViewProps) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   const handleSearch = async () => {
     if (!window.electronAPI) return;
@@ -59,17 +59,18 @@ function CatalogView({ refreshTrigger }: CatalogViewProps) {
 
     try {
       // Ensure mods are loaded before searching
+      let currentMods = mods;
       if (mods.length === 0) {
         const data: CatalogData = await window.electronAPI.getCatalog();
+        currentMods = data.mods;
         setMods(data.mods);
         setTotalMods(data.mods.length);
         setTotalCosmetics(data.cosmetics.length);
-        // Do NOT setCosmetics here, only update mods
       }
       const results = await window.electronAPI.searchCosmetics(searchQuery);
       const cosmeticsWithMods: CosmeticWithMod[] = results.map(cosmetic => ({
         ...cosmetic,
-        mod: (mods.length > 0 ? mods : (await window.electronAPI.getCatalog()).mods).find(m => m.id === cosmetic.mod_id),
+        mod: currentMods.find(m => m.id === cosmetic.mod_id),
       }));
       setCosmetics(cosmeticsWithMods);
     } catch (err) {
@@ -81,7 +82,7 @@ function CatalogView({ refreshTrigger }: CatalogViewProps) {
 
   useEffect(() => {
     loadCatalog();
-  }, [refreshTrigger]);
+  }, [refreshTrigger, loadCatalog]);
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value);
