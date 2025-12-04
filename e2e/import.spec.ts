@@ -45,9 +45,46 @@ test.describe('R.E.P.O. Cosmetic Catalog', () => {
     const importButton = page.locator('button.import-button');
     await importButton.click();
 
-    // Verify the console log was triggered (console.log is synchronous)
+    // Verify the console log was triggered (runs outside Electron)
     expect(consoleMessages.some((msg) => 
-      msg.includes('Import button clicked')
+      msg.includes('Import button clicked - running outside Electron')
     )).toBe(true);
+  });
+
+  test('should have navigation buttons', async ({ page }) => {
+    await page.goto('/');
+
+    // Verify navigation buttons are present
+    const importNav = page.locator('button.nav-button', { hasText: 'Import' });
+    const catalogNav = page.locator('button.nav-button', { hasText: 'Catalog' });
+
+    await expect(importNav).toBeVisible();
+    await expect(catalogNav).toBeVisible();
+
+    // Import should be active by default
+    await expect(importNav).toHaveClass(/active/);
+  });
+
+  test('should navigate between views', async ({ page }) => {
+    await page.goto('/');
+
+    // Initially on import view
+    await expect(page.locator('button.import-button')).toBeVisible();
+
+    // Click catalog nav
+    const catalogNav = page.locator('button.nav-button', { hasText: 'Catalog' });
+    await catalogNav.click();
+
+    // Should now show catalog placeholder (outside Electron)
+    await expect(page.locator('.catalog-placeholder')).toBeVisible();
+    await expect(catalogNav).toHaveClass(/active/);
+
+    // Click import nav to go back
+    const importNav = page.locator('button.nav-button', { hasText: 'Import' });
+    await importNav.click();
+
+    // Should be back on import view
+    await expect(page.locator('button.import-button')).toBeVisible();
+    await expect(importNav).toHaveClass(/active/);
   });
 });
