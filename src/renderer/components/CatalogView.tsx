@@ -58,10 +58,18 @@ function CatalogView({ refreshTrigger }: CatalogViewProps) {
     setError(null);
 
     try {
+      // Ensure mods are loaded before searching
+      if (mods.length === 0) {
+        const data: CatalogData = await window.electronAPI.getCatalog();
+        setMods(data.mods);
+        setTotalMods(data.mods.length);
+        setTotalCosmetics(data.cosmetics.length);
+        // Do NOT setCosmetics here, only update mods
+      }
       const results = await window.electronAPI.searchCosmetics(searchQuery);
       const cosmeticsWithMods: CosmeticWithMod[] = results.map(cosmetic => ({
         ...cosmetic,
-        mod: mods.find(m => m.id === cosmetic.mod_id),
+        mod: (mods.length > 0 ? mods : (await window.electronAPI.getCatalog()).mods).find(m => m.id === cosmetic.mod_id),
       }));
       setCosmetics(cosmeticsWithMods);
     } catch (err) {
