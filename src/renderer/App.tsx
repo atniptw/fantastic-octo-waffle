@@ -10,7 +10,7 @@ function App() {
   const [currentView, setCurrentView] = useState<ViewMode>('import');
   const [logs, setLogs] = useState<ImportLogEntry[]>([]);
   const [isImporting, setIsImporting] = useState(false);
-  const [catalogRefreshTrigger, setCatalogRefreshTrigger] = useState(0);
+  const [catalogVersion, setCatalogVersion] = useState(0);
   const [lastImportSummary, setLastImportSummary] = useState<{
     total: number;
     success: number;
@@ -34,7 +34,7 @@ function App() {
       warnings: result.warningCount,
     });
     // Trigger catalog refresh
-    setCatalogRefreshTrigger(prev => prev + 1);
+    setCatalogVersion(prev => prev + 1);
   };
 
   const handleImportError = (error: string) => {
@@ -57,12 +57,14 @@ function App() {
           <button
             className={`nav-button ${currentView === 'import' ? 'active' : ''}`}
             onClick={() => setCurrentView('import')}
+            aria-current={currentView === 'import' ? 'page' : undefined}
           >
             📥 Import
           </button>
           <button
             className={`nav-button ${currentView === 'catalog' ? 'active' : ''}`}
             onClick={() => setCurrentView('catalog')}
+            aria-current={currentView === 'catalog' ? 'page' : undefined}
           >
             📚 Catalog
           </button>
@@ -118,7 +120,7 @@ function App() {
         )}
 
         {currentView === 'catalog' && (
-          <CatalogView refreshTrigger={catalogRefreshTrigger} />
+          <CatalogView refreshTrigger={catalogVersion} />
         )}
       </main>
     </div>

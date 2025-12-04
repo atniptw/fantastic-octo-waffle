@@ -132,4 +132,47 @@ describe('ImportButton', () => {
     // Cleanup
     delete window.electronAPI;
   });
+
+  it('should call onImportError when import fails', async () => {
+    const mockSelectZipFiles = vi.fn().mockResolvedValue(['/path/to/mod.zip']);
+    const mockImportZipFiles = vi.fn().mockRejectedValue(new Error('Import failed'));
+    
+    // Mock electronAPI
+    window.electronAPI = {
+      selectZipFiles: mockSelectZipFiles,
+      importZipFiles: mockImportZipFiles,
+      getCatalog: vi.fn(),
+      searchCosmetics: vi.fn(),
+      importMods: vi.fn(),
+    };
+    
+    const onImportStart = vi.fn();
+    const onImportError = vi.fn();
+    
+    render(
+      <ImportButton 
+        onImportStart={onImportStart}
+        onImportError={onImportError}
+      />
+    );
+    
+    const button = screen.getByRole('button');
+    fireEvent.click(button);
+    
+    // Wait for async operations
+    await vi.waitFor(() => {
+      expect(mockSelectZipFiles).toHaveBeenCalled();
+    });
+    
+    await vi.waitFor(() => {
+      expect(onImportStart).toHaveBeenCalled();
+    });
+    
+    await vi.waitFor(() => {
+      expect(onImportError).toHaveBeenCalledWith('Import failed');
+    });
+    
+    // Cleanup
+    delete window.electronAPI;
+  });
 });
