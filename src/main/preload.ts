@@ -1,44 +1,14 @@
 import { contextBridge, ipcRenderer } from 'electron';
+import type {
+  ImportLogEntry,
+  ImportFilesResult,
+  Mod,
+  Cosmetic,
+  CatalogData,
+} from '../shared/types';
 
-// Type definitions for IPC results
-export interface ImportLogEntry {
-  timestamp: string;
-  filename: string;
-  status: 'success' | 'warning' | 'error' | 'info';
-  message: string;
-}
-
-export interface ImportFilesResult {
-  logs: ImportLogEntry[];
-  totalFiles: number;
-  successCount: number;
-  errorCount: number;
-  warningCount: number;
-}
-
-export interface Mod {
-  id?: number;
-  mod_name: string;
-  author: string;
-  version: string;
-  icon_path: string | null;
-  source_zip: string;
-}
-
-export interface Cosmetic {
-  id?: number;
-  mod_id: number;
-  display_name: string;
-  filename: string;
-  hash: string;
-  type: string;
-  internal_path: string;
-}
-
-export interface CatalogData {
-  mods: Mod[];
-  cosmetics: Cosmetic[];
-}
+// Re-export types for consumers of this module
+export type { ImportLogEntry, ImportFilesResult, Mod, Cosmetic, CatalogData };
 
 // Expose protected methods that allow the renderer process to use
 // the ipcRenderer without exposing the entire object

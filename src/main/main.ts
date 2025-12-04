@@ -3,32 +3,17 @@ import path from 'path';
 import fs from 'fs/promises';
 import { scanZip, isValidScanResult } from './lib/zipScanner';
 import { DatabaseWrapper, ModImporter } from './lib';
+import type { ImportLogEntry, ImportFilesResult } from '../shared/types';
 
 // Initialize database
 const db = new DatabaseWrapper();
-let dbInitialized = false;
+let initPromise: Promise<void> | null = null;
 
 async function ensureDbInitialized(): Promise<void> {
-  if (!dbInitialized) {
-    await db.initialize();
-    dbInitialized = true;
+  if (!initPromise) {
+    initPromise = db.initialize();
   }
-}
-
-// Type definitions for import results
-interface ImportLogEntry {
-  timestamp: string;
-  filename: string;
-  status: 'success' | 'warning' | 'error' | 'info';
-  message: string;
-}
-
-interface ImportFilesResult {
-  logs: ImportLogEntry[];
-  totalFiles: number;
-  successCount: number;
-  errorCount: number;
-  warningCount: number;
+  return initPromise;
 }
 
 // IPC handler to open file dialog and select ZIP files
