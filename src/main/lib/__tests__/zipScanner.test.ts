@@ -151,7 +151,7 @@ describe('scanZip', () => {
     const result = await scanZip(zipData);
 
     expect(result.manifest).toBeNull();
-    expect(result.errors.some(e => e.includes('Invalid manifest.json'))).toBe(true);
+    expect(result.errors).toContain('Invalid manifest.json format');
   });
 
   it('should handle ZIP with no cosmetic files', async () => {
@@ -169,7 +169,7 @@ describe('scanZip', () => {
 
     expect(result.manifest).not.toBeNull();
     expect(result.cosmeticFiles.size).toBe(0);
-    expect(result.errors.filter(e => !e.includes('manifest')).length).toBe(0);
+    expect(result.errors.length).toBe(0);
   });
 
   it('should handle corrupt ZIP data', async () => {
