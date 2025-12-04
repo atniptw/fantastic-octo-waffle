@@ -9,7 +9,7 @@
  * These will be used when migrating to actual SQLite storage.
  */
 export const SCHEMA = {
-  version: 1,
+  version: 2,
   tables: {
     mods: `
       CREATE TABLE IF NOT EXISTS mods (
@@ -18,7 +18,8 @@ export const SCHEMA = {
         author TEXT NOT NULL,
         version TEXT NOT NULL,
         icon_path TEXT,
-        source_zip TEXT NOT NULL UNIQUE
+        source_zip TEXT NOT NULL UNIQUE,
+        UNIQUE(mod_name, author, version)
       )
     `,
     cosmetics: `
@@ -27,7 +28,7 @@ export const SCHEMA = {
         mod_id INTEGER NOT NULL,
         display_name TEXT NOT NULL,
         filename TEXT NOT NULL,
-        hash TEXT NOT NULL,
+        hash TEXT NOT NULL UNIQUE,
         type TEXT NOT NULL,
         internal_path TEXT NOT NULL,
         FOREIGN KEY (mod_id) REFERENCES mods(id) ON DELETE CASCADE
@@ -42,7 +43,10 @@ export const SCHEMA = {
   indexes: {
     cosmetics_mod_id: 'CREATE INDEX IF NOT EXISTS idx_cosmetics_mod_id ON cosmetics(mod_id)',
     cosmetics_display_name: 'CREATE INDEX IF NOT EXISTS idx_cosmetics_display_name ON cosmetics(display_name)',
+    cosmetics_mod_type_name: 'CREATE INDEX IF NOT EXISTS idx_cosmetics_mod_type_name ON cosmetics(mod_id, type, display_name)',
+    cosmetics_hash: 'CREATE UNIQUE INDEX IF NOT EXISTS idx_cosmetics_hash ON cosmetics(hash)',
     mods_source_zip: 'CREATE INDEX IF NOT EXISTS idx_mods_source_zip ON mods(source_zip)',
+    mods_name_author_version: 'CREATE UNIQUE INDEX IF NOT EXISTS idx_mods_name_author_version ON mods(mod_name, author, version)',
   },
 };
 
@@ -63,8 +67,26 @@ export const MIGRATIONS: Migration[] = [
     description: 'Initial schema creation',
     up: [
       SCHEMA.tables.schema_version,
-      SCHEMA.tables.mods,
-      SCHEMA.tables.cosmetics,
+      // Create mods table without the unique constraint for version 1
+      `CREATE TABLE IF NOT EXISTS mods (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        mod_name TEXT NOT NULL,
+        author TEXT NOT NULL,
+        version TEXT NOT NULL,
+        icon_path TEXT,
+        source_zip TEXT NOT NULL UNIQUE
+      )`,
+      // Create cosmetics table without hash unique constraint for version 1
+      `CREATE TABLE IF NOT EXISTS cosmetics (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        mod_id INTEGER NOT NULL,
+        display_name TEXT NOT NULL,
+        filename TEXT NOT NULL,
+        hash TEXT NOT NULL,
+        type TEXT NOT NULL,
+        internal_path TEXT NOT NULL,
+        FOREIGN KEY (mod_id) REFERENCES mods(id) ON DELETE CASCADE
+      )`,
       SCHEMA.indexes.cosmetics_mod_id,
       SCHEMA.indexes.cosmetics_display_name,
       SCHEMA.indexes.mods_source_zip,
@@ -77,6 +99,26 @@ export const MIGRATIONS: Migration[] = [
       'DROP TABLE IF EXISTS cosmetics',
       'DROP TABLE IF EXISTS mods',
       'DROP TABLE IF EXISTS schema_version',
+    ],
+  },
+  {
+    version: 2,
+    description: 'Add unique constraints for duplicate detection',
+    up: [
+      // Add unique index on mods(mod_name, author, version) for duplicate detection
+      SCHEMA.indexes.mods_name_author_version,
+      // Add unique index on cosmetics(hash) for duplicate detection by SHA256
+      SCHEMA.indexes.cosmetics_hash,
+      // Add composite index on cosmetics for fast search/filter
+      SCHEMA.indexes.cosmetics_mod_type_name,
+      // Update schema version
+      'UPDATE schema_version SET version = 2',
+    ],
+    down: [
+      'DROP INDEX IF EXISTS idx_cosmetics_mod_type_name',
+      'DROP INDEX IF EXISTS idx_cosmetics_hash',
+      'DROP INDEX IF EXISTS idx_mods_name_author_version',
+      'UPDATE schema_version SET version = 1',
     ],
   },
 ];
