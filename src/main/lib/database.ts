@@ -1,7 +1,12 @@
 /**
  * Database wrapper for SQLite operations.
  * Provides an interface for mod and cosmetic data storage.
+ * 
+ * Note: Schema definitions and migrations are in a separate module (schema.ts)
+ * to maintain separation of concerns between schema management and data access.
  */
+
+import { getCurrentSchemaVersion } from './schema';
 
 export interface Mod {
   id?: number;
@@ -26,7 +31,7 @@ export interface Cosmetic {
  * In-memory database implementation.
  * This is a temporary implementation that will be replaced with SQLite
  * for persistent storage. Currently used for development and testing.
- * 
+ *
  * Limitations:
  * - Data is not persisted between sessions
  * - Memory usage grows linearly with records
@@ -36,16 +41,35 @@ export class DatabaseWrapper {
   private cosmetics: Cosmetic[] = [];
   private modIdCounter = 1;
   private cosmeticIdCounter = 1;
+  private schemaVersion = 0;
+  private initialized = false;
 
   /**
    * Initialize the database (create tables if they don't exist).
+   * Applies all pending migrations.
    */
   async initialize(): Promise<void> {
-    // In production, this would create SQLite tables
+    // In production, this would create SQLite tables and run migrations
     this.mods = [];
     this.cosmetics = [];
     this.modIdCounter = 1;
     this.cosmeticIdCounter = 1;
+    this.schemaVersion = getCurrentSchemaVersion();
+    this.initialized = true;
+  }
+
+  /**
+   * Check if the database has been initialized.
+   */
+  isInitialized(): boolean {
+    return this.initialized;
+  }
+
+  /**
+   * Get the current schema version.
+   */
+  getSchemaVersion(): number {
+    return this.schemaVersion;
   }
 
   /**
@@ -93,6 +117,13 @@ export class DatabaseWrapper {
    */
   async getCosmeticsByModId(modId: number): Promise<Cosmetic[]> {
     return this.cosmetics.filter((cosmetic) => cosmetic.mod_id === modId);
+  }
+
+  /**
+   * Get all cosmetics in the database.
+   */
+  async getAllCosmetics(): Promise<Cosmetic[]> {
+    return [...this.cosmetics];
   }
 
   /**
