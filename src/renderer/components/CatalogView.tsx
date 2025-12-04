@@ -12,6 +12,8 @@ interface CosmeticWithMod extends Cosmetic {
 function CatalogView({ refreshTrigger }: CatalogViewProps) {
   const [cosmetics, setCosmetics] = useState<CosmeticWithMod[]>([]);
   const [mods, setMods] = useState<Mod[]>([]);
+  const [totalMods, setTotalMods] = useState(0);
+  const [totalCosmetics, setTotalCosmetics] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -28,6 +30,8 @@ function CatalogView({ refreshTrigger }: CatalogViewProps) {
     try {
       const data: CatalogData = await window.electronAPI.getCatalog();
       setMods(data.mods);
+      setTotalMods(data.mods.length);
+      setTotalCosmetics(data.cosmetics.length);
       
       // Enrich cosmetics with mod data
       const cosmeticsWithMods: CosmeticWithMod[] = data.cosmetics.map(cosmetic => ({
@@ -101,7 +105,11 @@ function CatalogView({ refreshTrigger }: CatalogViewProps) {
       <div className="catalog-header">
         <h2>Cosmetics Catalog</h2>
         <div className="catalog-stats">
-          {mods.length} mod(s) • {cosmetics.length} cosmetic(s)
+          {searchQuery ? (
+            <>{cosmetics.length} of {totalCosmetics} cosmetic(s) • {totalMods} mod(s)</>
+          ) : (
+            <>{totalMods} mod(s) • {totalCosmetics} cosmetic(s)</>
+          )}
         </div>
       </div>
 
