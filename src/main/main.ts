@@ -129,23 +129,26 @@ ipcMain.handle('import-zip-files', async (_event, filePaths: string[]): Promise<
   let errorCount = 0;
   let warningCount = 0;
 
-  for (const result of results) {
+  for (let i = 0; i < results.length; i++) {
+    const result = results[i];
     if (result.status === 'fulfilled') {
       allLogs.push(...result.value.logs);
       if (result.value.success) {
         successCount++;
-      } else if (!result.value.warning) {
-        // Count as error only if not a warning case
-        errorCount++;
       }
       if (result.value.warning) {
         warningCount++;
       }
+      // Count as error if neither success nor warning
+      if (!result.value.success && !result.value.warning) {
+        errorCount++;
+      }
     } else {
       // Promise rejected - unexpected error
+      const filename = path.basename(filePaths[i]);
       allLogs.push({
         timestamp: new Date().toISOString(),
-        filename: 'Unknown',
+        filename,
         status: 'error',
         message: `Unexpected error: ${result.reason}`,
       });
