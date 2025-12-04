@@ -204,4 +204,42 @@ describe('CatalogView', () => {
       expect(screen.getByText('2 mod(s) • 3 cosmetic(s)')).toBeInTheDocument();
     });
   });
+
+  it('should display error message when catalog fails to load', async () => {
+    window.electronAPI = {
+      selectZipFiles: vi.fn(),
+      importZipFiles: vi.fn(),
+      getCatalog: vi.fn().mockRejectedValue(new Error('Database error')),
+      searchCosmetics: vi.fn(),
+      importMods: vi.fn(),
+    };
+
+    render(<CatalogView />);
+    
+    await vi.waitFor(() => {
+      expect(screen.getByText(/Database error/i)).toBeInTheDocument();
+    });
+  });
+
+  it('should display error message when search fails', async () => {
+    window.electronAPI = {
+      selectZipFiles: vi.fn(),
+      importZipFiles: vi.fn(),
+      getCatalog: vi.fn().mockResolvedValue({ mods: [], cosmetics: [] }),
+      searchCosmetics: vi.fn().mockRejectedValue(new Error('Search failed')),
+      importMods: vi.fn(),
+    };
+
+    render(<CatalogView />);
+    
+    const searchInput = screen.getByPlaceholderText('Search cosmetics...');
+    const searchButton = screen.getByText('🔍 Search');
+    
+    fireEvent.change(searchInput, { target: { value: 'test' } });
+    fireEvent.click(searchButton);
+    
+    await vi.waitFor(() => {
+      expect(screen.getByText(/Search failed/i)).toBeInTheDocument();
+    });
+  });
 });

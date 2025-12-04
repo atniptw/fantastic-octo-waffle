@@ -31,94 +31,130 @@ ipcMain.handle('select-zip-files', async (): Promise<string[] | null> => {
   return result.filePaths;
 });
 
+// Helper function to process a single ZIP file
+async function processZipFile(
+  filePath: string,
+  importer: ModImporter
+): Promise<{ logs: ImportLogEntry[]; success: boolean; warning: boolean }> {
+  const filename = path.basename(filePath);
+  const timestamp = new Date().toISOString();
+  const logs: ImportLogEntry[] = [];
+  let success = false;
+  let warning = false;
+
+  try {
+    // Read ZIP file
+    const zipData = await fs.readFile(filePath);
+    
+    // Scan the ZIP
+    const scanResult = await scanZip(zipData);
+    
+    // Check for scan errors (corrupt files, etc.)
+    if (scanResult.errors.length > 0) {
+      for (const error of scanResult.errors) {
+        logs.push({
+          timestamp,
+          filename,
+          status: 'warning',
+          message: error,
+        });
+        warning = true;
+      }
+    }
+
+    // Validate scan result
+    if (!isValidScanResult(scanResult)) {
+      logs.push({
+        timestamp,
+        filename,
+        status: 'error',
+        message: 'Invalid mod structure - manifest.json not found or invalid',
+      });
+      return { logs, success: false, warning };
+    }
+
+    // Import the mod
+    const importResult = await importer.importMod(
+      filePath,
+      scanResult.manifestContent!,
+      scanResult.cosmeticFiles,
+      scanResult.iconData ? `icon_${Date.now()}.png` : null
+    );
+
+    if (importResult.success) {
+      logs.push({
+        timestamp,
+        filename,
+        status: 'success',
+        message: `Imported successfully: ${importResult.cosmeticsCount} cosmetic(s) found`,
+      });
+      success = true;
+    } else {
+      logs.push({
+        timestamp,
+        filename,
+        status: importResult.error === 'Mod already imported' ? 'warning' : 'error',
+        message: importResult.error || 'Unknown error',
+      });
+      if (importResult.error === 'Mod already imported') {
+        warning = true;
+      }
+    }
+  } catch (error) {
+    logs.push({
+      timestamp,
+      filename,
+      status: 'error',
+      message: `Failed to process: ${error instanceof Error ? error.message : String(error)}`,
+    });
+  }
+
+  return { logs, success, warning };
+}
+
 // IPC handler to import selected ZIP files
 ipcMain.handle('import-zip-files', async (_event, filePaths: string[]): Promise<ImportFilesResult> => {
   await ensureDbInitialized();
   
   const importer = new ModImporter(db);
-  const logs: ImportLogEntry[] = [];
+
+  // Process files in parallel using Promise.allSettled for better performance
+  const results = await Promise.allSettled(
+    filePaths.map(filePath => processZipFile(filePath, importer))
+  );
+
+  // Aggregate results
+  const allLogs: ImportLogEntry[] = [];
   let successCount = 0;
   let errorCount = 0;
   let warningCount = 0;
 
-  for (const filePath of filePaths) {
-    const filename = path.basename(filePath);
-    const timestamp = new Date().toISOString();
-
-    try {
-      // Read ZIP file
-      const zipData = await fs.readFile(filePath);
-      
-      // Scan the ZIP
-      const scanResult = await scanZip(zipData);
-      
-      // Check for scan errors (corrupt files, etc.)
-      if (scanResult.errors.length > 0) {
-        for (const error of scanResult.errors) {
-          logs.push({
-            timestamp,
-            filename,
-            status: 'warning',
-            message: error,
-          });
-          warningCount++;
-        }
-      }
-
-      // Validate scan result
-      if (!isValidScanResult(scanResult)) {
-        logs.push({
-          timestamp,
-          filename,
-          status: 'error',
-          message: 'Invalid mod structure - manifest.json not found or invalid',
-        });
-        errorCount++;
-        continue;
-      }
-
-      // Import the mod
-      const importResult = await importer.importMod(
-        filePath,
-        scanResult.manifestContent!,
-        scanResult.cosmeticFiles,
-        scanResult.iconData ? `icon_${Date.now()}.png` : null
-      );
-
-      if (importResult.success) {
-        logs.push({
-          timestamp,
-          filename,
-          status: 'success',
-          message: `Imported successfully: ${importResult.cosmeticsCount} cosmetic(s) found`,
-        });
+  for (const result of results) {
+    if (result.status === 'fulfilled') {
+      allLogs.push(...result.value.logs);
+      if (result.value.success) {
         successCount++;
-      } else {
-        logs.push({
-          timestamp,
-          filename,
-          status: importResult.error === 'Mod already imported' ? 'warning' : 'error',
-          message: importResult.error || 'Unknown error',
-        });
-        if (importResult.error === 'Mod already imported') {
-          warningCount++;
-        } else {
-          errorCount++;
-        }
+      } else if (!result.value.warning) {
+        // Count as error only if not a warning case
+        errorCount++;
       }
-    } catch (error) {
-      logs.push({
-        timestamp,
-        filename,
+      if (result.value.warning) {
+        warningCount++;
+      }
+    } else {
+      // Promise rejected - unexpected error
+      allLogs.push({
+        timestamp: new Date().toISOString(),
+        filename: 'Unknown',
         status: 'error',
-        message: `Failed to process: ${error instanceof Error ? error.message : String(error)}`,
+        message: `Unexpected error: ${result.reason}`,
       });
       errorCount++;
     }
   }
 
   return {
-    logs,
+    logs: allLogs,
     totalFiles: filePaths.length,
     successCount,
     errorCount,
