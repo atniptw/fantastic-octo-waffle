@@ -67,6 +67,8 @@ body {
 .nav-button.active {
   background-color: #e94560;
   color: white;
+  font-weight: 600;
+  border-bottom: 2px solid white;
 }
 
 .app-main {
