@@ -1,17 +1,130 @@
 /**
  * ZIP Scanner module for scanning Thunderstore mod ZIP files.
- * Extracts manifest.json, icon.png, and .hhh cosmetic files.
+ * Extracts manifest.json, icon.png, and .hhh cosmetic files with comprehensive metadata.
  */
 
 import JSZip from 'jszip';
+import { createHash } from 'crypto';
 import { ManifestData, parseManifest } from './importer';
+
+/**
+ * Metadata for a single cosmetic file extracted from a ZIP.
+ */
+export interface CosmeticMetadata {
+  /** The internal path within the ZIP file */
+  internalPath: string;
+  /** The filename (with extension) */
+  filename: string;
+  /** Human-readable display name */
+  displayName: string;
+  /** Inferred cosmetic type (e.g., 'head', 'decoration', 'accessory') */
+  type: string;
+  /** SHA256 hash of the file content */
+  hash: string;
+  /** Raw file content */
+  content: Uint8Array;
+}
 
 export interface ZipScanResult {
   manifestContent: string | null;
   manifest: ManifestData | null;
   iconData: Uint8Array | null;
+  /** Array of cosmetic metadata */
+  cosmetics: CosmeticMetadata[];
+  /** Deprecated: Use cosmetics array instead */
   cosmeticFiles: Map<string, Uint8Array>;
   errors: string[];
+  /** True if there was a fatal error parsing the ZIP file */
+  hasFatalError: boolean;
+}
+
+/**
+ * Generates a display name from a filename by removing extension and formatting.
+ * Example: "my_cool_hat.hhh" -> "My Cool Hat"
+ * Note: This function expects .hhh files. If a filename doesn't end with .hhh,
+ * the extension will remain in the display name.
+ *
+ * @param filename - The filename to convert (expected to end with .hhh)
+ * @returns Human-readable display name
+ */
+export function generateDisplayName(filename: string): string {
+  // Trim whitespace first
+  const trimmed = filename.trim();
+  
+  // Remove extension
+  const nameWithoutExt = trimmed.replace(/\.hhh$/i, '');
+  
+  // Replace underscores and hyphens with spaces
+  // Capitalize first letter of each word
+  return nameWithoutExt
+    .replace(/[_-]/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase())
+    .trim();
+}
+
+/**
+ * Infers cosmetic type from filename.
+ * Looks for common patterns like "head", "hat", "accessory", etc.
+ * Uses word boundary matching to avoid false positives from substrings.
+ *
+ * @param filename - The filename to analyze
+ * @returns Inferred type string
+ */
+export function inferCosmeticType(filename: string): string {
+  const lowerFilename = filename.toLowerCase();
+  
+  // Check for common type keywords using lookahead/lookbehind for word boundaries
+  // Match whole words that are separated by underscores, hyphens, dots, or string boundaries
+  if (/(?:^|[_\-. ])head(?:[_\-. ]|$)/.test(lowerFilename)) {
+    return 'head';
+  } else if (/(?:^|[_\-. ])hat(?:[_\-. ]|$)/.test(lowerFilename) || /(?:^|[_\-. ])helmet(?:[_\-. ]|$)/.test(lowerFilename)) {
+    return 'hat';
+  } else if (/(?:^|[_\-. ])glasses(?:[_\-. ]|$)/.test(lowerFilename) || /(?:^|[_\-. ])goggles(?:[_\-. ]|$)/.test(lowerFilename)) {
+    return 'glasses';
+  } else if (/(?:^|[_\-. ])mask(?:[_\-. ]|$)/.test(lowerFilename)) {
+    return 'mask';
+  } else if (/(?:^|[_\-. ])accessory(?:[_\-. ]|$)/.test(lowerFilename) || /acc_/.test(lowerFilename)) {
+    return 'accessory';
+  }
+  
+  // Default to decoration
+  return 'decoration';
+}
+
+/**
+ * Calculates SHA256 hash for file content.
+ *
+ * @param content - File content as Uint8Array
+ * @returns Hex-encoded SHA256 hash
+ */
+export function calculateFileHash(content: Uint8Array): string {
+  return createHash('sha256').update(content).digest('hex');
+}
+
+/**
+ * Extracts cosmetic metadata from a file path and content.
+ *
+ * @param internalPath - The path within the ZIP file
+ * @param content - The file content
+ * @returns CosmeticMetadata object
+ */
+export function extractCosmeticMetadata(
+  internalPath: string,
+  content: Uint8Array
+): CosmeticMetadata {
+  // Extract filename from path (handle both forward and backward slashes)
+  const normalizedPath = internalPath.replace(/\\/g, '/');
+  const parts = normalizedPath.split('/');
+  const filename = parts[parts.length - 1] || 'unknown.hhh';
+  
+  return {
+    internalPath: normalizedPath,
+    filename,
+    displayName: generateDisplayName(filename),
+    type: inferCosmeticType(filename),
+    hash: calculateFileHash(content),
+    content,
+  };
 }
 
 /**
@@ -29,8 +142,10 @@ export async function scanZip(zipData: Buffer | Uint8Array): Promise<ZipScanResu
     manifestContent: null,
     manifest: null,
     iconData: null,
+    cosmetics: [],
     cosmeticFiles: new Map(),
     errors: [],
+    hasFatalError: false,
   };
 
   try {
@@ -63,13 +178,19 @@ export async function scanZip(zipData: Buffer | Uint8Array): Promise<ZipScanResu
     }
 
     // Extract .hhh files from plugins/<plugin>/Decorations/ directories
+    // Note: JSZip normalizes all paths to use forward slashes internally,
+    // even if the ZIP was created on Windows with backslashes
     const cosmeticPattern = /^plugins\/[^/]+\/Decorations\/[^/]+\.hhh$/i;
     
     for (const [path, file] of Object.entries(zip.files)) {
       if (!file.dir && cosmeticPattern.test(path)) {
         try {
           const content = await file.async('uint8array');
-          result.cosmeticFiles.set(path, content);
+          const metadata = extractCosmeticMetadata(path, content);
+          result.cosmetics.push(metadata);
+          
+          // Maintain backward compatibility with old API
+          result.cosmeticFiles.set(metadata.internalPath, content);
         } catch (e) {
           result.errors.push(`Error reading ${path}: ${e instanceof Error ? e.message : String(e)}`);
         }
@@ -77,6 +198,7 @@ export async function scanZip(zipData: Buffer | Uint8Array): Promise<ZipScanResu
     }
   } catch (e) {
     result.errors.push(`Error parsing ZIP file: ${e instanceof Error ? e.message : String(e)}`);
+    result.hasFatalError = true;
   }
 
   return result;
@@ -99,5 +221,91 @@ export function isValidScanResult(scanResult: ZipScanResult): boolean {
  * @returns Array of cosmetic file paths
  */
 export function getCosmeticPaths(scanResult: ZipScanResult): string[] {
-  return Array.from(scanResult.cosmeticFiles.keys());
+  return scanResult.cosmetics.map(c => c.internalPath);
+}
+
+/**
+ * Result of scanning multiple ZIP files.
+ */
+export interface BatchScanResult {
+  /** Successfully scanned ZIPs with their results */
+  successful: Array<{ zipPath: string; result: ZipScanResult }>;
+  /** Failed ZIPs with error information */
+  failed: Array<{ zipPath: string; error: string }>;
+  /** Total number of ZIPs processed */
+  total: number;
+  /** Total number of cosmetics found across all ZIPs */
+  totalCosmetics: number;
+}
+
+/**
+ * Scans multiple ZIP files and returns aggregate results.
+ * Processes each ZIP independently, collecting errors per file.
+ *
+ * @param zipFiles - Array of objects containing path and data for each ZIP
+ * @returns BatchScanResult with successful and failed scans
+ */
+export async function scanMultipleZips(
+  zipFiles: Array<{ path: string; data: Buffer | Uint8Array }>
+): Promise<BatchScanResult> {
+  const result: BatchScanResult = {
+    successful: [],
+    failed: [],
+    total: zipFiles.length,
+    totalCosmetics: 0,
+  };
+
+  const scanPromises = zipFiles.map(async (zipFile) => {
+    try {
+      const scanResult = await scanZip(zipFile.data);
+      return {
+        zipPath: zipFile.path,
+        scanResult,
+      };
+    } catch (e) {
+      return {
+        zipPath: zipFile.path,
+        error: `Unexpected error: ${e instanceof Error ? e.message : String(e)}`,
+      };
+    }
+  });
+
+  const settledResults = await Promise.allSettled(scanPromises);
+
+  for (const settled of settledResults) {
+    if (settled.status === 'fulfilled') {
+      const { zipPath, scanResult, error } = settled.value;
+      if (scanResult) {
+        // Use the explicit hasFatalError flag to determine success/failure
+        if (scanResult.hasFatalError) {
+          // Fatal ZIP parsing error
+          result.failed.push({
+            zipPath,
+            error: scanResult.errors.join('; '),
+          });
+        } else {
+          // Non-fatal errors (like missing icon) are considered successful
+          result.successful.push({
+            zipPath,
+            result: scanResult,
+          });
+          result.totalCosmetics += scanResult.cosmetics.length;
+        }
+      } else if (error) {
+        result.failed.push({
+          zipPath,
+          error,
+        });
+      }
+    } else {
+      // Promise rejected (should be rare, but handle just in case)
+      const { zipPath, error } = settled.reason || {};
+      result.failed.push({
+        zipPath: zipPath || 'unknown',
+        error: error || String(settled.reason),
+      });
+    }
+  }
+
+  return result;
 }
