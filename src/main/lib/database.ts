@@ -45,11 +45,12 @@ export interface CosmeticFilters {
 }
 
 /**
- * Escape special SQL LIKE wildcard characters (%, _) in user input.
+ * Escape special SQL LIKE wildcard characters (%, _, \) in user input.
  * This ensures that these characters are treated as literals rather than wildcards.
+ * The backslash must be escaped first to avoid double-escaping.
  */
 function escapeLikePattern(str: string): string {
-  return str.replace(/[%_]/g, '\\$&');
+  return str.replace(/\\/g, '\\\\').replace(/[%_]/g, '\\$&');
 }
 
 /**
