@@ -293,8 +293,10 @@ export class ModImporter {
       result.success = true;
       result.modId = existingByZip.id;
       // Count cosmetics from the existing mod
-      const existingCosmetics = await this.db.getCosmeticsByModId(existingByZip.id!);
-      result.cosmeticsDuplicate = existingCosmetics.length;
+      if (existingByZip.id) {
+        const existingCosmetics = await this.db.getCosmeticsByModId(existingByZip.id);
+        result.cosmeticsDuplicate = existingCosmetics.length;
+      }
       result.warnings.push('Mod with this ZIP path already imported');
       return result;
     }
@@ -309,15 +311,17 @@ export class ModImporter {
       result.isDuplicate = true;
       result.success = true;
       result.modId = existingByIdentity.id;
-      const existingCosmetics = await this.db.getCosmeticsByModId(existingByIdentity.id!);
-      result.cosmeticsDuplicate = existingCosmetics.length;
+      if (existingByIdentity.id) {
+        const existingCosmetics = await this.db.getCosmeticsByModId(existingByIdentity.id);
+        result.cosmeticsDuplicate = existingCosmetics.length;
+      }
       result.warnings.push('Mod with this name, author, and version already imported from a different ZIP');
       return result;
     }
 
     // Import mod and cosmetics
-    // Note: better-sqlite3 operations are actually synchronous despite async signatures,
-    // and since we're doing sequential operations, we don't need explicit transaction wrapping
+    // Note: better-sqlite3 is a synchronous library, so these async methods are actually
+    // synchronous wrappers. We process operations sequentially to maintain data consistency.
     try {
       // Insert mod
       const mod: Omit<Mod, 'id'> = {
@@ -369,7 +373,8 @@ export class ModImporter {
    * Import a mod from ZIP file data.
    * Returns import result with success status and counts.
    * 
-   * @deprecated Use importModZips() for better duplicate detection and error handling
+   * @deprecated Use importModZips() for better duplicate detection and error handling.
+   * This method will be maintained for backward compatibility but may be removed in a future version.
    */
   async importMod(
     zipPath: string,
