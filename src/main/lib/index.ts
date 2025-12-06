@@ -6,7 +6,7 @@
 // Database wrapper (service layer for data access)
 export { DatabaseWrapper } from './database';
 
-export type { Mod, Cosmetic } from './database';
+export type { Mod, Cosmetic, CosmeticFilters } from './database';
 
 // Schema and migrations (separate from service layer)
 export {

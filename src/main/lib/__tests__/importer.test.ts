@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
   parseManifest,
   extractCosmeticInfo,
@@ -121,9 +121,13 @@ describe('ModImporter', () => {
   let importer: ModImporter;
 
   beforeEach(async () => {
-    db = new DatabaseWrapper();
+    db = new DatabaseWrapper(':memory:');
     await db.initialize();
     importer = new ModImporter(db);
+  });
+
+  afterEach(async () => {
+    await db.close();
   });
 
   describe('importMod', () => {
