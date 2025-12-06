@@ -110,7 +110,8 @@ export function extractCosmeticMetadata(
 ): CosmeticMetadata {
   // Extract filename from path (handle both forward and backward slashes)
   const normalizedPath = internalPath.replace(/\\/g, '/');
-  const filename = normalizedPath.split('/').pop() || internalPath;
+  const parts = normalizedPath.split('/');
+  const filename = parts[parts.length - 1] || 'unknown.hhh';
   
   return {
     internalPath: normalizedPath,
