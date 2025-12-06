@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { ImportFilesResult } from '../types/electron';
 
 interface ImportButtonProps {
@@ -7,12 +8,31 @@ interface ImportButtonProps {
   disabled?: boolean;
 }
 
+type ImportStatus = 'idle' | 'loading' | 'success' | 'error';
+
+interface StatusState {
+  status: ImportStatus;
+  message?: string;
+}
+
 function ImportButton({
   onImportStart,
   onImportComplete,
   onImportError,
   disabled = false,
 }: ImportButtonProps) {
+  const [statusState, setStatusState] = useState<StatusState>({ status: 'idle' });
+
+  // Auto-clear success and error messages after 3 seconds
+  useEffect(() => {
+    if (statusState.status === 'success' || statusState.status === 'error') {
+      const timer = setTimeout(() => {
+        setStatusState({ status: 'idle' });
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [statusState.status]);
+
   const handleImport = async () => {
     // Check if running in Electron
     if (!window.electronAPI) {
@@ -29,28 +49,77 @@ function ImportButton({
         return;
       }
 
+      // Set loading state
+      setStatusState({ status: 'loading', message: 'Importing...' });
+
       // Notify start
       onImportStart?.();
 
       // Process imports
       const result = await window.electronAPI.importZipFiles(filePaths);
       
+      // Set success state with summary
+      const successMsg = result.successCount === result.totalFiles
+        ? `${result.successCount} mod(s) imported successfully`
+        : `${result.successCount} mod(s) imported, ${result.totalFiles - result.successCount} skipped/failed`;
+      setStatusState({ status: 'success', message: successMsg });
+
       // Notify completion
       onImportComplete?.(result);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.error('Import failed:', errorMessage);
+      
+      // Set error state
+      setStatusState({ status: 'error', message: errorMessage });
+      
       onImportError?.(errorMessage);
+    }
+  };
+
+  const isDisabled = disabled || statusState.status === 'loading';
+
+  const renderButtonContent = () => {
+    switch (statusState.status) {
+      case 'loading':
+        return (
+          <>
+            <span className="spinner">⏳</span>
+            <span>{statusState.message}</span>
+          </>
+        );
+      case 'success':
+        return (
+          <>
+            <span className="success-icon">✅</span>
+            <span>{statusState.message}</span>
+          </>
+        );
+      case 'error':
+        return (
+          <>
+            <span className="error-icon">❌</span>
+            <span>{statusState.message || 'Import failed'}</span>
+          </>
+        );
+      default:
+        return (
+          <>
+            <span>📁</span>
+            <span>Import Mod ZIP(s)</span>
+          </>
+        );
     }
   };
 
   return (
     <button 
-      className="import-button" 
+      className={`import-button import-button--${statusState.status}`}
       onClick={handleImport}
-      disabled={disabled}
+      disabled={isDisabled}
+      aria-busy={statusState.status === 'loading'}
     >
-      📁 Import Mod ZIP(s)
+      {renderButtonContent()}
     </button>
   );
 }
