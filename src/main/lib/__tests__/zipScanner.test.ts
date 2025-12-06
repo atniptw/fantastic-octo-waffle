@@ -499,7 +499,8 @@ describe('scanZip - cosmetics metadata', () => {
     const result = await scanZip(zipData);
 
     // The regex should handle both / and \ in paths
-    expect(result.cosmetics.length).toBeGreaterThanOrEqual(0);
+    expect(result.cosmetics).toHaveLength(1);
+    expect(result.cosmetics[0].filename).toBe('head.hhh');
   });
 });
 
