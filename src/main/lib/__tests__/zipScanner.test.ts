@@ -187,7 +187,26 @@ describe('scanZip', () => {
     const result = await scanZip(corruptData);
 
     expect(result.manifest).toBeNull();
+    expect(result.hasFatalError).toBe(true);
     expect(result.errors.some(e => e.includes('Error parsing ZIP'))).toBe(true);
+  });
+
+  it('should set hasFatalError to false for non-fatal errors', async () => {
+    const manifest = JSON.stringify({
+      name: 'TestMod',
+      author: 'TestAuthor',
+      version_number: '1.0.0',
+    });
+
+    const zipData = await createMockZip({
+      'manifest.json': manifest,
+      // Missing icon.png is a non-fatal error
+    });
+
+    const result = await scanZip(zipData);
+
+    expect(result.hasFatalError).toBe(false);
+    expect(result.manifest).not.toBeNull();
   });
 });
 

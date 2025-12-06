@@ -29,11 +29,13 @@ export interface ZipScanResult {
   manifestContent: string | null;
   manifest: ManifestData | null;
   iconData: Uint8Array | null;
-  /** Map of internal path to cosmetic metadata */
+  /** Array of cosmetic metadata */
   cosmetics: CosmeticMetadata[];
   /** Deprecated: Use cosmetics array instead */
   cosmeticFiles: Map<string, Uint8Array>;
   errors: string[];
+  /** True if there was a fatal error parsing the ZIP file */
+  hasFatalError: boolean;
 }
 
 /**
@@ -138,6 +140,7 @@ export async function scanZip(zipData: Buffer | Uint8Array): Promise<ZipScanResu
     cosmetics: [],
     cosmeticFiles: new Map(),
     errors: [],
+    hasFatalError: false,
   };
 
   try {
@@ -189,6 +192,7 @@ export async function scanZip(zipData: Buffer | Uint8Array): Promise<ZipScanResu
     }
   } catch (e) {
     result.errors.push(`Error parsing ZIP file: ${e instanceof Error ? e.message : String(e)}`);
+    result.hasFatalError = true;
   }
 
   return result;
@@ -249,15 +253,15 @@ export async function scanMultipleZips(
     try {
       const scanResult = await scanZip(zipFile.data);
       
-      // Consider scan successful even if there are non-fatal errors
-      // (like missing icon.png), as long as we can parse the ZIP
-      if (scanResult.errors.length > 0 && scanResult.errors.some(e => e.includes('Error parsing ZIP'))) {
+      // Use the explicit hasFatalError flag to determine success/failure
+      if (scanResult.hasFatalError) {
         // Fatal ZIP parsing error
         result.failed.push({
           zipPath: zipFile.path,
           error: scanResult.errors.join('; '),
         });
       } else {
+        // Non-fatal errors (like missing icon) are considered successful
         result.successful.push({
           zipPath: zipFile.path,
           result: scanResult,
