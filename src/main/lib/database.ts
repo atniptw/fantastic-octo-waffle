@@ -45,6 +45,14 @@ export interface CosmeticFilters {
 }
 
 /**
+ * Escape special SQL LIKE wildcard characters (%, _) in user input.
+ * This ensures that these characters are treated as literals rather than wildcards.
+ */
+function escapeLikePattern(str: string): string {
+  return str.replace(/[%_]/g, '\\$&');
+}
+
+/**
  * SQLite database wrapper providing typed methods for mod and cosmetic operations.
  * Supports migrations, transactions, and error handling.
  */
@@ -323,8 +331,8 @@ export class DatabaseWrapper {
     const params: (string | number)[] = [];
 
     if (filters.display_name) {
-      conditions.push('display_name LIKE ?');
-      params.push(`%${filters.display_name}%`);
+      conditions.push("display_name LIKE ? ESCAPE '\\'");
+      params.push(`%${escapeLikePattern(filters.display_name)}%`);
     }
 
     if (filters.type) {
@@ -339,9 +347,9 @@ export class DatabaseWrapper {
 
     if (filters.text) {
       conditions.push(
-        '(display_name LIKE ? OR filename LIKE ? OR type LIKE ?)'
+        "(display_name LIKE ? ESCAPE '\\' OR filename LIKE ? ESCAPE '\\' OR type LIKE ? ESCAPE '\\')"
       );
-      const textPattern = `%${filters.text}%`;
+      const textPattern = `%${escapeLikePattern(filters.text)}%`;
       params.push(textPattern, textPattern, textPattern);
     }
 

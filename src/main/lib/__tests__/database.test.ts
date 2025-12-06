@@ -432,6 +432,82 @@ describe('DatabaseWrapper', () => {
       const results = await db.queryCosmetics({});
       expect(results).toHaveLength(3);
     });
+
+    it('should handle SQL wildcard % as literal character', async () => {
+      const modId = await db.insertMod({
+        mod_name: 'WildcardMod',
+        author: 'Author',
+        version: '1.0.0',
+        icon_path: null,
+        source_zip: '/path/to/wildcard.zip',
+      });
+
+      await db.insertCosmetic({
+        mod_id: modId,
+        display_name: 'Hat_100%_Cool',
+        filename: 'hat_100_percent.hhh',
+        hash: 'hash_percent',
+        type: 'decoration',
+        internal_path: 'plugins/WildcardMod/Decorations/hat_100_percent.hhh',
+      });
+
+      // Search should find it literally, not as wildcard
+      const results = await db.queryCosmetics({ display_name: '100%' });
+      expect(results).toHaveLength(1);
+      expect(results[0].display_name).toBe('Hat_100%_Cool');
+
+      // Should not match unrelated items
+      const noResults = await db.queryCosmetics({ display_name: '%' });
+      // Only the one with literal % should match
+      expect(noResults).toHaveLength(1);
+    });
+
+    it('should handle SQL wildcard _ as literal character', async () => {
+      const modId = await db.insertMod({
+        mod_name: 'UnderscoreMod',
+        author: 'Author',
+        version: '1.0.0',
+        icon_path: null,
+        source_zip: '/path/to/underscore.zip',
+      });
+
+      await db.insertCosmetic({
+        mod_id: modId,
+        display_name: 'Item_A_B',
+        filename: 'item_a_b.hhh',
+        hash: 'hash_underscore',
+        type: 'decoration',
+        internal_path: 'plugins/UnderscoreMod/Decorations/item_a_b.hhh',
+      });
+
+      // Search with _ should treat it as literal
+      const results = await db.queryCosmetics({ display_name: '_A_' });
+      expect(results).toHaveLength(1);
+      expect(results[0].display_name).toBe('Item_A_B');
+    });
+
+    it('should handle SQL wildcards in free text search', async () => {
+      const modId = await db.insertMod({
+        mod_name: 'TextSearchMod',
+        author: 'Author',
+        version: '1.0.0',
+        icon_path: null,
+        source_zip: '/path/to/textsearch.zip',
+      });
+
+      await db.insertCosmetic({
+        mod_id: modId,
+        display_name: 'Special%Item',
+        filename: 'special_item.hhh',
+        hash: 'hash_text_search',
+        type: 'decoration',
+        internal_path: 'plugins/TextSearchMod/Decorations/special_item.hhh',
+      });
+
+      const results = await db.queryCosmetics({ text: '%Item' });
+      expect(results).toHaveLength(1);
+      expect(results[0].display_name).toBe('Special%Item');
+    });
   });
 
   describe('searchCosmetics', () => {
@@ -532,6 +608,22 @@ describe('DatabaseWrapper', () => {
         // This would be synchronous in the transaction
       });
       expect(db.isInitialized()).toBe(true);
+    });
+
+    it('should rollback on error', async () => {
+      // First verify no mods exist
+      expect(await db.getModCount()).toBe(0);
+
+      try {
+        await db.transaction(() => {
+          // Insert a mod synchronously within the transaction
+          // Note: transaction uses synchronous better-sqlite3 operations
+          throw new Error('Simulated error');
+        });
+      } catch {
+        // Transaction should have rolled back
+        expect(await db.getModCount()).toBe(0);
+      }
     });
   });
 

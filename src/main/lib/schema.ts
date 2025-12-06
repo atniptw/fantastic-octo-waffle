@@ -47,8 +47,10 @@ export const SCHEMA = {
     cosmetics_mod_id: 'CREATE INDEX IF NOT EXISTS idx_cosmetics_mod_id ON cosmetics(mod_id)',
     cosmetics_display_name: 'CREATE INDEX IF NOT EXISTS idx_cosmetics_display_name ON cosmetics(display_name)',
     cosmetics_mod_type_name: 'CREATE INDEX IF NOT EXISTS idx_cosmetics_mod_type_name ON cosmetics(mod_id, type, display_name)',
-    // Note: cosmetics_hash index is used in migration 2 for databases without the UNIQUE constraint
+    // Unique indexes for migration 2 (adds constraints to tables created without them in v1)
+    cosmetics_hash: 'CREATE UNIQUE INDEX IF NOT EXISTS idx_cosmetics_hash ON cosmetics(hash)',
     mods_source_zip: 'CREATE INDEX IF NOT EXISTS idx_mods_source_zip ON mods(source_zip)',
+    mods_name_author_version: 'CREATE UNIQUE INDEX IF NOT EXISTS idx_mods_name_author_version ON mods(mod_name, author, version)',
   },
 };
 
@@ -107,6 +109,10 @@ export const MIGRATIONS: Migration[] = [
     version: 2,
     description: 'Add unique constraints for duplicate detection',
     up: [
+      // Clean up any duplicate mods before adding unique index (keep oldest entry by id)
+      'DELETE FROM mods WHERE id NOT IN (SELECT MIN(id) FROM mods GROUP BY mod_name, author, version)',
+      // Clean up any duplicate cosmetics by hash before adding unique index (keep oldest entry by id)
+      'DELETE FROM cosmetics WHERE id NOT IN (SELECT MIN(id) FROM cosmetics GROUP BY hash)',
       // Add unique index on mods(mod_name, author, version) for duplicate detection
       SCHEMA.indexes.mods_name_author_version,
       // Add unique index on cosmetics(hash) for duplicate detection by SHA256
