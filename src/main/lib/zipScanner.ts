@@ -175,7 +175,7 @@ export async function scanZip(zipData: Buffer | Uint8Array): Promise<ZipScanResu
 
     // Extract .hhh files from plugins/<plugin>/Decorations/ directories
     // Handle both forward slashes and backslashes in paths
-    const cosmeticPattern = /^plugins[/\\][^/\\]+[/\\]Decorations[/\\][^/\\]+\.hhh$/i;
+    const cosmeticPattern = /^plugins\/[^/]+\/Decorations\/[^/]+\.hhh$/i;
     
     for (const [path, file] of Object.entries(zip.files)) {
       if (!file.dir && cosmeticPattern.test(path)) {
