@@ -26,7 +26,13 @@ export {
   calculateHash,
 } from './importer';
 
-export type { ManifestData, ImportResult } from './importer';
+export type {
+  ManifestData,
+  ImportResult,
+  ModImportResult,
+  BatchImportResult,
+  ImportActivity,
+} from './importer';
 
 // ZIP scanner
 export { scanZip, isValidScanResult, getCosmeticPaths } from './zipScanner';
