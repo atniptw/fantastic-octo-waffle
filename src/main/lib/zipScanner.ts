@@ -250,29 +250,54 @@ export async function scanMultipleZips(
     totalCosmetics: 0,
   };
 
-  for (const zipFile of zipFiles) {
+  const scanPromises = zipFiles.map(async (zipFile) => {
     try {
       const scanResult = await scanZip(zipFile.data);
-      
-      // Use the explicit hasFatalError flag to determine success/failure
-      if (scanResult.hasFatalError) {
-        // Fatal ZIP parsing error
-        result.failed.push({
-          zipPath: zipFile.path,
-          error: scanResult.errors.join('; '),
-        });
-      } else {
-        // Non-fatal errors (like missing icon) are considered successful
-        result.successful.push({
-          zipPath: zipFile.path,
-          result: scanResult,
-        });
-        result.totalCosmetics += scanResult.cosmetics.length;
-      }
+      return {
+        zipPath: zipFile.path,
+        scanResult,
+      };
     } catch (e) {
-      result.failed.push({
+      return {
         zipPath: zipFile.path,
         error: `Unexpected error: ${e instanceof Error ? e.message : String(e)}`,
+      };
+    }
+  });
+
+  const settledResults = await Promise.allSettled(scanPromises);
+
+  for (const settled of settledResults) {
+    if (settled.status === 'fulfilled') {
+      const { zipPath, scanResult, error } = settled.value;
+      if (scanResult) {
+        // Use the explicit hasFatalError flag to determine success/failure
+        if (scanResult.hasFatalError) {
+          // Fatal ZIP parsing error
+          result.failed.push({
+            zipPath,
+            error: scanResult.errors.join('; '),
+          });
+        } else {
+          // Non-fatal errors (like missing icon) are considered successful
+          result.successful.push({
+            zipPath,
+            result: scanResult,
+          });
+          result.totalCosmetics += scanResult.cosmetics.length;
+        }
+      } else if (error) {
+        result.failed.push({
+          zipPath,
+          error,
+        });
+      }
+    } else {
+      // Promise rejected (should be rare, but handle just in case)
+      const { zipPath, error } = settled.reason || {};
+      result.failed.push({
+        zipPath: zipPath || 'unknown',
+        error: error || String(settled.reason),
       });
     }
   }
