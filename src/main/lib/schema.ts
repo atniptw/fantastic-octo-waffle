@@ -48,10 +48,7 @@ export const SCHEMA = {
     cosmetics_display_name: 'CREATE INDEX IF NOT EXISTS idx_cosmetics_display_name ON cosmetics(display_name)',
     cosmetics_mod_type_name: 'CREATE INDEX IF NOT EXISTS idx_cosmetics_mod_type_name ON cosmetics(mod_id, type, display_name)',
     // Note: cosmetics_hash index is used in migration 2 for databases without the UNIQUE constraint
-    cosmetics_hash: 'CREATE UNIQUE INDEX IF NOT EXISTS idx_cosmetics_hash ON cosmetics(hash)',
     mods_source_zip: 'CREATE INDEX IF NOT EXISTS idx_mods_source_zip ON mods(source_zip)',
-    // Note: mods_name_author_version index is used in migration 2 for databases without the UNIQUE constraint
-    mods_name_author_version: 'CREATE UNIQUE INDEX IF NOT EXISTS idx_mods_name_author_version ON mods(mod_name, author, version)',
   },
 };
 
