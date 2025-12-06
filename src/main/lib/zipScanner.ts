@@ -41,8 +41,10 @@ export interface ZipScanResult {
 /**
  * Generates a display name from a filename by removing extension and formatting.
  * Example: "my_cool_hat.hhh" -> "My Cool Hat"
+ * Note: This function expects .hhh files. If a filename doesn't end with .hhh,
+ * the extension will remain in the display name.
  *
- * @param filename - The filename to convert
+ * @param filename - The filename to convert (expected to end with .hhh)
  * @returns Human-readable display name
  */
 export function generateDisplayName(filename: string): string {
@@ -63,6 +65,7 @@ export function generateDisplayName(filename: string): string {
 /**
  * Infers cosmetic type from filename.
  * Looks for common patterns like "head", "hat", "accessory", etc.
+ * Uses word boundary matching to avoid false positives from substrings.
  *
  * @param filename - The filename to analyze
  * @returns Inferred type string
@@ -70,16 +73,17 @@ export function generateDisplayName(filename: string): string {
 export function inferCosmeticType(filename: string): string {
   const lowerFilename = filename.toLowerCase();
   
-  // Check for common type keywords
-  if (lowerFilename.includes('head')) {
+  // Check for common type keywords using lookahead/lookbehind for word boundaries
+  // Match whole words that are separated by underscores, hyphens, dots, or string boundaries
+  if (/(?:^|[_\-. ])head(?:[_\-. ]|$)/.test(lowerFilename)) {
     return 'head';
-  } else if (lowerFilename.includes('hat') || lowerFilename.includes('helmet')) {
+  } else if (/(?:^|[_\-. ])hat(?:[_\-. ]|$)/.test(lowerFilename) || /(?:^|[_\-. ])helmet(?:[_\-. ]|$)/.test(lowerFilename)) {
     return 'hat';
-  } else if (lowerFilename.includes('glasses') || lowerFilename.includes('goggles')) {
+  } else if (/(?:^|[_\-. ])glasses(?:[_\-. ]|$)/.test(lowerFilename) || /(?:^|[_\-. ])goggles(?:[_\-. ]|$)/.test(lowerFilename)) {
     return 'glasses';
-  } else if (lowerFilename.includes('mask')) {
+  } else if (/(?:^|[_\-. ])mask(?:[_\-. ]|$)/.test(lowerFilename)) {
     return 'mask';
-  } else if (lowerFilename.includes('accessory') || lowerFilename.includes('acc_')) {
+  } else if (/(?:^|[_\-. ])accessory(?:[_\-. ]|$)/.test(lowerFilename) || /acc_/.test(lowerFilename)) {
     return 'accessory';
   }
   
@@ -174,7 +178,8 @@ export async function scanZip(zipData: Buffer | Uint8Array): Promise<ZipScanResu
     }
 
     // Extract .hhh files from plugins/<plugin>/Decorations/ directories
-    // Handle both forward slashes and backslashes in paths
+    // Note: JSZip normalizes all paths to use forward slashes internally,
+    // even if the ZIP was created on Windows with backslashes
     const cosmeticPattern = /^plugins\/[^/]+\/Decorations\/[^/]+\.hhh$/i;
     
     for (const [path, file] of Object.entries(zip.files)) {
