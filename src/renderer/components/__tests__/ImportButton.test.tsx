@@ -59,6 +59,8 @@ describe('ImportButton', () => {
   });
 
   it('should show loading state during import', async () => {
+    vi.useFakeTimers();
+    
     let resolveImport: ((value: {
       logs: never[];
       totalFiles: number;
@@ -92,24 +94,35 @@ describe('ImportButton', () => {
     render(<ImportButton onImportStart={onImportStart} />);
     
     const button = screen.getByRole('button');
-    fireEvent.click(button);
     
-    // Wait for loading state
-    await waitFor(() => {
-      expect(button.textContent).toContain('⏳');
-      expect(button.textContent).toContain('Importing...');
-      expect(button).toHaveClass('import-button--loading');
-      expect(button).toHaveAttribute('aria-busy', 'true');
-      expect(button).toBeDisabled();
+    // Start import and advance to loading state
+    await act(async () => {
+      fireEvent.click(button);
+      await vi.runAllTimersAsync();
     });
     
-    // Cleanup - resolve the promise
-    resolveImport!({
-      logs: [],
-      totalFiles: 1,
-      successCount: 1,
-      errorCount: 0,
-      warningCount: 0,
+    // Verify loading state
+    expect(button.textContent).toContain('⏳');
+    expect(button.textContent).toContain('Importing...');
+    expect(button).toHaveClass('import-button--loading');
+    expect(button).toHaveAttribute('aria-busy', 'true');
+    expect(button).toBeDisabled();
+    
+    // Resolve the promise and wait for success state
+    await act(async () => {
+      resolveImport!({
+        logs: [],
+        totalFiles: 1,
+        successCount: 1,
+        errorCount: 0,
+        warningCount: 0,
+      });
+      await vi.runAllTimersAsync();
+    });
+    
+    // Clean up - advance past the auto-dismiss timer
+    await act(async () => {
+      vi.advanceTimersByTime(3000);
     });
   });
 
@@ -141,11 +154,42 @@ describe('ImportButton', () => {
     // Wait for import to complete
     await waitFor(() => {
       expect(button.textContent).toContain('✅');
-      expect(button.textContent).toContain('2 mod(s) imported');
+      expect(button.textContent).toContain('2 mod(s) imported successfully');
       expect(button).toHaveClass('import-button--success');
     });
     
     expect(onImportComplete).toHaveBeenCalled();
+  });
+
+  it('should show partial success message when some imports fail', async () => {
+    const mockSelectZipFiles = vi.fn().mockResolvedValue(['/path/to/mod1.zip', '/path/to/mod2.zip']);
+    const mockImportZipFiles = vi.fn().mockResolvedValue({
+      logs: [],
+      totalFiles: 3,
+      successCount: 2,
+      errorCount: 1,
+      warningCount: 0,
+    });
+    
+    window.electronAPI = {
+      selectZipFiles: mockSelectZipFiles,
+      importZipFiles: mockImportZipFiles,
+      getCatalog: vi.fn(),
+      searchCosmetics: vi.fn(),
+      importMods: vi.fn(),
+    };
+    
+    render(<ImportButton />);
+    
+    const button = screen.getByRole('button');
+    fireEvent.click(button);
+    
+    // Wait for import to complete
+    await waitFor(() => {
+      expect(button.textContent).toContain('✅');
+      expect(button.textContent).toContain('2 mod(s) imported, 1 skipped/failed');
+      expect(button).toHaveClass('import-button--success');
+    });
   });
 
   it('should auto-dismiss success message after 3 seconds', async () => {
@@ -222,7 +266,48 @@ describe('ImportButton', () => {
     expect(onImportError).toHaveBeenCalledWith('Import failed');
   });
 
+  it('should auto-dismiss error message after 3 seconds', async () => {
+    vi.useFakeTimers();
+    
+    const mockSelectZipFiles = vi.fn().mockResolvedValue(['/path/to/mod.zip']);
+    const mockImportZipFiles = vi.fn().mockRejectedValue(new Error('Import failed'));
+    
+    window.electronAPI = {
+      selectZipFiles: mockSelectZipFiles,
+      importZipFiles: mockImportZipFiles,
+      getCatalog: vi.fn(),
+      searchCosmetics: vi.fn(),
+      importMods: vi.fn(),
+    };
+    
+    render(<ImportButton />);
+    
+    const button = screen.getByRole('button');
+    
+    // Start import
+    await act(async () => {
+      fireEvent.click(button);
+      await vi.runAllTimersAsync();
+    });
+    
+    // Verify error state
+    expect(button.textContent).toContain('❌');
+    
+    // Fast-forward time by 3 seconds
+    await act(async () => {
+      vi.advanceTimersByTime(3000);
+      await vi.runAllTimersAsync();
+    });
+    
+    // Should return to idle state
+    expect(button.textContent).toContain('📁');
+    expect(button.textContent).toContain('Import Mod ZIP(s)');
+    expect(button).toHaveClass('import-button--idle');
+  });
+
   it('should call onImportStart when import begins', async () => {
+    vi.useFakeTimers();
+    
     const mockSelectZipFiles = vi.fn().mockResolvedValue(['/path/to/mod.zip']);
     const mockImportZipFiles = vi.fn().mockResolvedValue({
       logs: [],
@@ -245,11 +330,18 @@ describe('ImportButton', () => {
     render(<ImportButton onImportStart={onImportStart} />);
     
     const button = screen.getByRole('button');
-    fireEvent.click(button);
     
-    await waitFor(() => {
-      expect(mockSelectZipFiles).toHaveBeenCalled();
-      expect(onImportStart).toHaveBeenCalled();
+    await act(async () => {
+      fireEvent.click(button);
+      await vi.runAllTimersAsync();
+    });
+    
+    expect(mockSelectZipFiles).toHaveBeenCalled();
+    expect(onImportStart).toHaveBeenCalled();
+    
+    // Clean up - advance past the auto-dismiss timer
+    await act(async () => {
+      vi.advanceTimersByTime(3000);
     });
   });
 
@@ -317,6 +409,8 @@ describe('ImportButton', () => {
   });
 
   it('should be disabled during loading state', async () => {
+    vi.useFakeTimers();
+    
     let resolveImport: ((value: {
       logs: never[];
       totalFiles: number;
@@ -350,22 +444,31 @@ describe('ImportButton', () => {
     const button = screen.getByRole('button');
     expect(button).not.toBeDisabled();
     
-    fireEvent.click(button);
-    
-    await waitFor(() => {
-      expect(button).toHaveClass('import-button--loading');
+    // Start import and advance to loading state
+    await act(async () => {
+      fireEvent.click(button);
+      await vi.runAllTimersAsync();
     });
     
-    // Button should be disabled during loading
+    // Verify loading state
+    expect(button).toHaveClass('import-button--loading');
     expect(button).toBeDisabled();
     
-    // Cleanup - resolve the promise
-    resolveImport!({
-      logs: [],
-      totalFiles: 1,
-      successCount: 1,
-      errorCount: 0,
-      warningCount: 0,
+    // Resolve the promise and wait for success state
+    await act(async () => {
+      resolveImport!({
+        logs: [],
+        totalFiles: 1,
+        successCount: 1,
+        errorCount: 0,
+        warningCount: 0,
+      });
+      await vi.runAllTimersAsync();
+    });
+    
+    // Clean up - advance past the auto-dismiss timer
+    await act(async () => {
+      vi.advanceTimersByTime(3000);
     });
   });
 });

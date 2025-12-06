@@ -116,10 +116,6 @@ body {
 }
 
 /* Status-specific styles */
-.import-button--idle {
-  /* Use default styles */
-}
-
 .import-button--loading {
   background-color: #ff9800;
 }

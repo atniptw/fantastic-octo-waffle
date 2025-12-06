@@ -23,9 +23,9 @@ function ImportButton({
 }: ImportButtonProps) {
   const [statusState, setStatusState] = useState<StatusState>({ status: 'idle' });
 
-  // Auto-clear success message after 3 seconds
+  // Auto-clear success and error messages after 3 seconds
   useEffect(() => {
-    if (statusState.status === 'success') {
+    if (statusState.status === 'success' || statusState.status === 'error') {
       const timer = setTimeout(() => {
         setStatusState({ status: 'idle' });
       }, 3000);
@@ -59,7 +59,9 @@ function ImportButton({
       const result = await window.electronAPI.importZipFiles(filePaths);
       
       // Set success state with summary
-      const successMsg = `${result.successCount} mod(s) imported, ${result.totalFiles - result.successCount} skipped/failed`;
+      const successMsg = result.successCount === result.totalFiles
+        ? `${result.successCount} mod(s) imported successfully`
+        : `${result.successCount} mod(s) imported, ${result.totalFiles - result.successCount} skipped/failed`;
       setStatusState({ status: 'success', message: successMsg });
 
       // Notify completion
