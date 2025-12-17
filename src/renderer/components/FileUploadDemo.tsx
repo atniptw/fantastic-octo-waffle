@@ -26,8 +26,11 @@ function FileUploadDemo() {
             Selected Files ({selectedFiles.length})
           </h3>
           <ul style={{ listStyle: 'none', padding: 0 }}>
-            {selectedFiles.map((file, index) => (
-              <li key={index} style={{ color: '#eaeaea', padding: '0.25rem 0' }}>
+            {selectedFiles.map((file) => (
+              <li
+                key={`${file.name}-${file.size}-${file.lastModified}`}
+                style={{ color: '#eaeaea', padding: '0.25rem 0' }}
+              >
                 • {file.name} ({Math.round(file.size / 1024)} KB)
               </li>
             ))}

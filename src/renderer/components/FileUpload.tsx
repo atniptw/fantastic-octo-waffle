@@ -1,21 +1,51 @@
 import { useState, useRef, DragEvent, ChangeEvent } from 'react';
 
+/**
+ * Represents an uploaded file with its metadata and status
+ */
 export interface UploadedFile {
+  /** Unique identifier for the file */
   id: string;
+  /** The File object from the browser */
   file: File;
+  /** Display name of the file */
   filename: string;
+  /** File size in bytes */
   size: number;
+  /** Current upload/processing status */
   status: 'pending' | 'processing' | 'complete' | 'error';
+  /** Upload progress percentage (0-100) */
   progress: number;
+  /** Error message if status is 'error' */
   errorMessage?: string;
 }
 
+/**
+ * Props for the FileUpload component
+ */
 interface FileUploadProps {
+  /** Callback fired when valid files are selected */
   onFilesSelected?: (files: File[]) => void;
+  /** Whether to allow multiple file selection (default: true) */
   multiple?: boolean;
+  /** Accepted file extensions (default: '.zip') */
   accept?: string;
 }
 
+/**
+ * FileUpload component provides a user interface for uploading files via
+ * drag-and-drop or file input button. Supports file type validation and
+ * displays upload status for each file.
+ * 
+ * @example
+ * ```tsx
+ * <FileUpload 
+ *   onFilesSelected={(files) => processFiles(files)}
+ *   accept=".zip,.rar"
+ *   multiple={true}
+ * />
+ * ```
+ */
 function FileUpload({
   onFilesSelected,
   multiple = true,
@@ -28,8 +58,8 @@ function FileUpload({
   const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB'];
+    const i = Math.min(Math.floor(Math.log(bytes) / Math.log(k)), sizes.length - 1);
     return `${Math.round((bytes / Math.pow(k, i)) * 100) / 100} ${sizes[i]}`;
   };
 
@@ -41,6 +71,13 @@ function FileUpload({
     // Handle files without extensions
     if (lastDotIndex === -1) {
       return false;
+    }
+    
+    // Handle files that start with a dot (like .htaccess)
+    // These have a lastDotIndex of 0, which means the filename is just the extension
+    if (lastDotIndex === 0) {
+      const fileExtension = fileName.toLowerCase();
+      return validExtensions.includes(fileExtension);
     }
     
     const fileExtension = fileName.substring(lastDotIndex).toLowerCase();
@@ -184,7 +221,7 @@ function FileUpload({
         onDrop={handleDrop}
         role="button"
         tabIndex={0}
-        aria-label="Drop zone for ZIP files"
+        aria-label={`Drop zone for ${accept.split(',').map(ext => ext.trim()).join(', ')} files`}
       >
         <div className="drop-zone-content">
           <div className="drop-zone-icon">📦</div>
@@ -272,4 +309,4 @@ function FileUpload({
 
 // Export the component and its props type
 export default FileUpload;
-export type { FileUploadProps, UploadedFile };
+export type { FileUploadProps };

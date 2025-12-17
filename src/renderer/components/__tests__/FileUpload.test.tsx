@@ -17,7 +17,7 @@ describe('FileUpload', () => {
   it('should render the drop zone icon', () => {
     render(<FileUpload />);
     
-    const dropZone = screen.getByRole('button', { name: /drop zone for zip files/i });
+    const dropZone = screen.getByRole('button', { name: /drop zone for .zip files/i });
     expect(dropZone.textContent).toContain('📦');
   });
 
@@ -211,7 +211,7 @@ describe('FileUpload', () => {
   it('should handle drag enter event', () => {
     render(<FileUpload />);
     
-    const dropZone = screen.getByRole('button', { name: /drop zone for zip files/i });
+    const dropZone = screen.getByRole('button', { name: /drop zone for .zip files/i });
     
     fireEvent.dragEnter(dropZone, {
       dataTransfer: { files: [] },
@@ -224,7 +224,7 @@ describe('FileUpload', () => {
   it('should remove drag state on drop', () => {
     render(<FileUpload />);
     
-    const dropZone = screen.getByRole('button', { name: /drop zone for zip files/i });
+    const dropZone = screen.getByRole('button', { name: /drop zone for .zip files/i });
     
     // Drag enter
     fireEvent.dragEnter(dropZone, {
@@ -245,7 +245,7 @@ describe('FileUpload', () => {
   it('should maintain drag state while dragging over drop zone', () => {
     render(<FileUpload />);
     
-    const dropZone = screen.getByRole('button', { name: /drop zone for zip files/i });
+    const dropZone = screen.getByRole('button', { name: /drop zone for .zip files/i });
     
     // Drag enter
     fireEvent.dragEnter(dropZone, {
@@ -267,7 +267,7 @@ describe('FileUpload', () => {
     const onFilesSelected = vi.fn();
     render(<FileUpload onFilesSelected={onFilesSelected} />);
     
-    const dropZone = screen.getByRole('button', { name: /drop zone for zip files/i });
+    const dropZone = screen.getByRole('button', { name: /drop zone for .zip files/i });
     const file = new File(['content'], 'dropped.zip', { type: 'application/zip' });
     
     fireEvent.drop(dropZone, {
@@ -287,7 +287,7 @@ describe('FileUpload', () => {
     const onFilesSelected = vi.fn();
     render(<FileUpload onFilesSelected={onFilesSelected} />);
     
-    const dropZone = screen.getByRole('button', { name: /drop zone for zip files/i });
+    const dropZone = screen.getByRole('button', { name: /drop zone for .zip files/i });
     const file1 = new File(['content1'], 'drop1.zip', { type: 'application/zip' });
     const file2 = new File(['content2'], 'drop2.zip', { type: 'application/zip' });
     
@@ -306,7 +306,7 @@ describe('FileUpload', () => {
     const onFilesSelected = vi.fn();
     render(<FileUpload onFilesSelected={onFilesSelected} />);
     
-    const dropZone = screen.getByRole('button', { name: /drop zone for zip files/i });
+    const dropZone = screen.getByRole('button', { name: /drop zone for .zip files/i });
     const invalidFile = new File(['content'], 'invalid.exe', { type: 'application/x-executable' });
     
     fireEvent.drop(dropZone, {
@@ -323,7 +323,7 @@ describe('FileUpload', () => {
   it('should handle drag over event', () => {
     render(<FileUpload />);
     
-    const dropZone = screen.getByRole('button', { name: /drop zone for zip files/i });
+    const dropZone = screen.getByRole('button', { name: /drop zone for .zip files/i });
     const event = new Event('dragover', { bubbles: true, cancelable: true });
     
     const preventDefaultSpy = vi.spyOn(event, 'preventDefault');
@@ -372,7 +372,7 @@ describe('FileUpload', () => {
     const onFilesSelected = vi.fn();
     render(<FileUpload onFilesSelected={onFilesSelected} />);
     
-    const dropZone = screen.getByRole('button', { name: /drop zone for zip files/i });
+    const dropZone = screen.getByRole('button', { name: /drop zone for .zip files/i });
     
     fireEvent.drop(dropZone, {
       dataTransfer: { files: [] },
@@ -415,7 +415,7 @@ describe('FileUpload', () => {
   it('should handle accessibility attributes correctly', () => {
     render(<FileUpload />);
     
-    const dropZone = screen.getByRole('button', { name: /drop zone for zip files/i });
+    const dropZone = screen.getByRole('button', { name: /drop zone for .zip files/i });
     expect(dropZone).toHaveAttribute('tabIndex', '0');
     
     const fileInput = screen.getByLabelText('File input');
