@@ -9,7 +9,7 @@ export default defineConfig(({ mode }) => ({
   build: {
     outDir: '../dist',
     emptyOutDir: true,
-    sourcemap: true, // Enable source maps for production debugging
+    sourcemap: mode === 'production' ? 'hidden' : true, // Use hidden source maps in production
     minify: 'esbuild', // Use esbuild for fast minification
     rollupOptions: {
       output: {
