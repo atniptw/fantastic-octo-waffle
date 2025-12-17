@@ -66,7 +66,7 @@ export function useZipScanner(): UseZipScannerResult {
         if (!workerRef.current) {
           // Vite handles worker imports with ?worker suffix
           workerRef.current = new Worker(
-            new URL('./workers/zipWorker.ts', import.meta.url),
+            new URL('../workers/zipWorker.ts', import.meta.url),
             { type: 'module' }
           );
         }
@@ -78,13 +78,14 @@ export function useZipScanner(): UseZipScannerResult {
           const { type, result, error, progress, fileName } = event.data;
 
           switch (type) {
-            case 'progress':
+            case 'progress': {
               if (progress !== undefined && options?.onProgress) {
                 options.onProgress({ fileName: file.name, progress });
               }
               break;
+            }
 
-            case 'result':
+            case 'result': {
               if (result) {
                 isScanningRef.current = false;
                 if (options?.onComplete) {
@@ -94,8 +95,9 @@ export function useZipScanner(): UseZipScannerResult {
                 resolve(result);
               }
               break;
+            }
 
-            case 'error':
+            case 'error': {
               isScanningRef.current = false;
               const errorObj = { fileName: fileName || file.name, error: error || 'Unknown error' };
               if (options?.onError) {
@@ -104,6 +106,7 @@ export function useZipScanner(): UseZipScannerResult {
               worker.removeEventListener('message', handleMessage);
               reject(new Error(errorObj.error));
               break;
+            }
           }
         };
 
