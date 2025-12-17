@@ -3,7 +3,7 @@
  * Provides a clean API for scanning ZIP files without blocking the UI.
  */
 
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useState } from 'react';
 import type { ZipScanResult, WorkerMessage } from './zipScanner';
 
 export interface ScanProgress {
@@ -34,7 +34,7 @@ export interface UseZipScannerResult {
  *
  * @example
  * ```tsx
- * const { scanFile } = useZipScanner();
+ * const { scanFile, isScanning } = useZipScanner();
  * 
  * const handleFileSelect = async (file: File) => {
  *   try {
@@ -50,7 +50,7 @@ export interface UseZipScannerResult {
  */
 export function useZipScanner(): UseZipScannerResult {
   const workerRef = useRef<Worker | null>(null);
-  const isScanningRef = useRef(false);
+  const [isScanning, setIsScanning] = useState(false);
 
   const scanFile = useCallback(
     async (
@@ -72,7 +72,7 @@ export function useZipScanner(): UseZipScannerResult {
         }
 
         const worker = workerRef.current;
-        isScanningRef.current = true;
+        setIsScanning(true);
 
         const handleMessage = (event: MessageEvent<WorkerMessage>) => {
           const { type, result, error, progress, fileName } = event.data;
@@ -87,7 +87,7 @@ export function useZipScanner(): UseZipScannerResult {
 
             case 'result': {
               if (result) {
-                isScanningRef.current = false;
+                setIsScanning(false);
                 if (options?.onComplete) {
                   options.onComplete(result, file.name);
                 }
@@ -98,7 +98,7 @@ export function useZipScanner(): UseZipScannerResult {
             }
 
             case 'error': {
-              isScanningRef.current = false;
+              setIsScanning(false);
               const errorObj = { fileName: fileName || file.name, error: error || 'Unknown error' };
               if (options?.onError) {
                 options.onError(errorObj);
@@ -121,7 +121,7 @@ export function useZipScanner(): UseZipScannerResult {
           };
           worker.postMessage(message);
         }).catch(err => {
-          isScanningRef.current = false;
+          setIsScanning(false);
           const errorMsg = `Failed to read file: ${err instanceof Error ? err.message : String(err)}`;
           if (options?.onError) {
             options.onError({ fileName: file.name, error: errorMsg });
@@ -135,6 +135,6 @@ export function useZipScanner(): UseZipScannerResult {
 
   return {
     scanFile,
-    isScanning: isScanningRef.current,
+    isScanning,
   };
 }

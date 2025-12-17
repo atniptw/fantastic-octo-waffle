@@ -19,27 +19,28 @@ function FileUploadDemo() {
     console.log('Files selected:', files);
     
     // Add files to state with initial scanning status
-    const newFiles: ScannedFile[] = files.map(file => ({
-      file,
-      progress: 0,
-      isScanning: true,
-    }));
-    
-    setScannedFiles(prev => [...prev, ...newFiles]);
-
-    // Scan each file
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      const fileIndex = scannedFiles.length + i;
+    setScannedFiles(prev => {
+      const newFiles: ScannedFile[] = files.map(file => ({
+        file,
+        progress: 0,
+        isScanning: true,
+      }));
       
-      try {
-        await scanFile(file, {
+      // Return the updated array and capture the starting index for scanning
+      const updatedFiles = [...prev, ...newFiles];
+      const startIndex = prev.length;
+      
+      // Scan each file asynchronously
+      files.forEach((file, relativeIndex) => {
+        const absoluteIndex = startIndex + relativeIndex;
+        
+        scanFile(file, {
           onProgress: (progress: ScanProgress) => {
-            setScannedFiles(prev => {
-              const updated = [...prev];
-              if (updated[fileIndex]) {
-                updated[fileIndex] = {
-                  ...updated[fileIndex],
+            setScannedFiles(current => {
+              const updated = [...current];
+              if (updated[absoluteIndex]) {
+                updated[absoluteIndex] = {
+                  ...updated[absoluteIndex],
                   progress: progress.progress,
                 };
               }
@@ -47,11 +48,11 @@ function FileUploadDemo() {
             });
           },
           onComplete: (result: ZipScanResult) => {
-            setScannedFiles(prev => {
-              const updated = [...prev];
-              if (updated[fileIndex]) {
-                updated[fileIndex] = {
-                  ...updated[fileIndex],
+            setScannedFiles(current => {
+              const updated = [...current];
+              if (updated[absoluteIndex]) {
+                updated[absoluteIndex] = {
+                  ...updated[absoluteIndex],
                   result,
                   isScanning: false,
                   progress: 100,
@@ -61,11 +62,11 @@ function FileUploadDemo() {
             });
           },
           onError: (error) => {
-            setScannedFiles(prev => {
-              const updated = [...prev];
-              if (updated[fileIndex]) {
-                updated[fileIndex] = {
-                  ...updated[fileIndex],
+            setScannedFiles(current => {
+              const updated = [...current];
+              if (updated[absoluteIndex]) {
+                updated[absoluteIndex] = {
+                  ...updated[absoluteIndex],
                   error: error.error,
                   isScanning: false,
                   progress: 0,
@@ -74,11 +75,13 @@ function FileUploadDemo() {
               return updated;
             });
           },
+        }).catch(error => {
+          console.error('Error scanning file:', error);
         });
-      } catch (error) {
-        console.error('Error scanning file:', error);
-      }
-    }
+      });
+      
+      return updatedFiles;
+    });
   };
 
   return (

@@ -132,7 +132,7 @@ export function inferCosmeticType(filename: string): string {
  */
 export async function calculateFileHash(content: Uint8Array): Promise<string> {
   // Use Web Crypto API (available in browsers)
-  // Pass the Uint8Array directly - cast to BufferSource to satisfy TypeScript
+  // TypeScript's strict type checking requires assertion to handle ArrayBufferLike vs ArrayBuffer
   const hashBuffer = await crypto.subtle.digest('SHA-256', content as BufferSource);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');

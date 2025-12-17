@@ -28,8 +28,8 @@ async function createMockZip(files: Record<string, string | Uint8Array>): Promis
  * Helper function to create a Blob from Uint8Array for testing File API
  */
 function createMockFile(data: Uint8Array, filename: string): File {
-  // Convert Uint8Array to a plain array to avoid ArrayBufferLike issues
-  const blob = new Blob([data.slice(0)], { type: 'application/zip' });
+  // TypeScript requires assertion due to ArrayBufferLike vs ArrayBuffer distinction
+  const blob = new Blob([data as BlobPart], { type: 'application/zip' });
   return new File([blob], filename, { type: 'application/zip' });
 }
 
