@@ -9,25 +9,30 @@ export default defineConfig(({ mode }) => ({
   build: {
     outDir: '../dist',
     emptyOutDir: true,
-    sourcemap: mode === 'production', // Enable source maps for debugging
+    sourcemap: true, // Enable source maps for production debugging
     minify: 'esbuild', // Use esbuild for fast minification
     rollupOptions: {
       output: {
         manualChunks: (id) => {
           // Split vendor chunks for better caching
           if (id.includes('node_modules')) {
-            if (id.includes('three')) {
+            // Match three.js and related packages
+            if (id.includes('/node_modules/three/')) {
               return 'three';
             }
-            if (id.includes('jszip')) {
+            // Match jszip package
+            if (id.includes('/node_modules/jszip/')) {
               return 'jszip';
             }
-            if (id.includes('react') || id.includes('react-dom')) {
+            // Match React packages
+            if (id.includes('/node_modules/react/') || id.includes('/node_modules/react-dom/')) {
               return 'react-vendor';
             }
-            if (id.includes('idb') || id.includes('gif.js')) {
+            // Match utility packages
+            if (id.includes('/node_modules/idb/') || id.includes('/node_modules/gif.js/')) {
               return 'utils';
             }
+            // Other node_modules go into vendor chunk
             return 'vendor';
           }
         },
