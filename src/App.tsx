@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import ImportButton from './components/ImportButton';
-import ActivityLog from './components/ActivityLog';
-import CatalogView from './components/CatalogView';
-import { ImportLogEntry, ImportFilesResult } from './types/electron';
+import ImportButton from './renderer/components/ImportButton';
+import ActivityLog from './renderer/components/ActivityLog';
+import CatalogView from './renderer/components/CatalogView';
+import { ImportLogEntry, ImportFilesResult } from './renderer/types/electron';
 
 type ViewMode = 'import' | 'catalog';
 
