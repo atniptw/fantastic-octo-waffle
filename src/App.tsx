@@ -2,9 +2,10 @@ import { useState } from 'react';
 import ImportButton from '@/renderer/components/ImportButton';
 import ActivityLog from '@/renderer/components/ActivityLog';
 import CatalogView from '@/renderer/components/CatalogView';
+import FileUploadDemo from '@/renderer/components/FileUploadDemo';
 import { ImportLogEntry, ImportFilesResult } from '@/renderer/types/electron';
 
-type ViewMode = 'import' | 'catalog';
+type ViewMode = 'import' | 'catalog' | 'demo';
 
 function App() {
   const [currentView, setCurrentView] = useState<ViewMode>('import');
@@ -68,6 +69,13 @@ function App() {
           >
             📚 Catalog
           </button>
+          <button
+            className={`nav-button ${currentView === 'demo' ? 'active' : ''}`}
+            onClick={() => setCurrentView('demo')}
+            aria-current={currentView === 'demo' ? 'page' : undefined}
+          >
+            🎨 Upload Demo
+          </button>
         </nav>
       </header>
 
@@ -121,6 +129,10 @@ function App() {
 
         {currentView === 'catalog' && (
           <CatalogView refreshTrigger={catalogVersion} />
+        )}
+
+        {currentView === 'demo' && (
+          <FileUploadDemo />
         )}
       </main>
     </div>
