@@ -1,4 +1,4 @@
-# R.E.P.O. Cosmetic Catalog Desktop Tool – Design Specifications
+# R.E.P.O. Cosmetic Catalog Browser Tool – Design Specifications
 
 ## 1. Project Overview
 Players of **R.E.P.O.** use mods to add cosmetic heads and decorations. However:
@@ -10,133 +10,206 @@ Players of **R.E.P.O.** use mods to add cosmetic heads and decorations. However:
   ```
 - `.hhh` files are Unity asset bundles (UnityFS).
 
-**Goal:** Build a Windows desktop tool that lets users browse all cosmetic mods, search them, and know which mods contain which cosmetics. Later, optionally support previewing cosmetics.
+**Goal:** Build a browser-based web application hosted on GitHub Pages that lets users upload mod ZIPs, extract cosmetic metadata, and preview cosmetics directly in the browser. Future: optionally fetch mods from Thunderstore API via proxy server.
 
 ---
 
 ## 2. Target Platform
-- Windows 10+
-- Desktop application
-- Framework options:
-  - **Electron**
-  - **Tauri**
-  - **Unity**
+- **Browser-based** (Chrome, Firefox, Edge, Safari)
+- Static web application hosted on **GitHub Pages**
+- No backend server required for initial version
+- Client-side only (JavaScript/TypeScript)
+- Cross-platform (Windows, macOS, Linux, mobile)
 
 ---
 
 ## 3. Scope Levels
 
-### Level 1 – Catalog & Search (Required)
+### Level 1 – ZIP Upload & Metadata Extraction (Required)
 The application will:
-- Allow importing Thunderstore mod ZIP files.
+- Allow users to upload Thunderstore mod ZIP files via file input
+- Unzip files entirely in the browser using JSZip
 - Scan each ZIP for:
   - `manifest.json`
   - `icon.png`
-  - `.hhh` cosmetic files
-- Parse metadata.
-- Store results in a SQLite database.
-- Present a searchable UI listing all cosmetics.
+  - `.hhh` cosmetic files under `plugins/<plugin>/Decorations/`
+- Parse metadata
+- Store results in IndexedDB (browser local storage)
+- Present a searchable UI listing all cosmetics
 
-### Level 2 – Cosmetic Preview (Optional)
-- Parse `.hhh` (UnityFS) bundles.
-- Extract meshes and textures.
-- Convert textures to PNG.
-- Convert meshes to GLTF or display using Unity.
-- Render previews in UI.
+### Level 2 – In-Browser Cosmetic Preview (Primary Goal)
+- Parse `.hhh` (UnityFS) bundles in the browser using UnityFS parsers
+- Extract meshes and textures
+- Convert textures to PNG/WebP
+- Convert meshes to GLTF or display using Three.js/Babylon.js
+- Render 3D previews directly in the browser
+- Generate preview images/GIFs for each cosmetic
+
+### Level 3 – Thunderstore API Integration (Future)
+- Optional proxy server to fetch mods from Thunderstore API
+- Users specify mod name/ID
+- Application downloads and processes automatically
+- Caches downloaded mods in IndexedDB
 
 ---
 
-## 4. Data Model (SQLite)
-### Table: mods
-| Column | Type | Description |
-|--------|------|-------------|
-| id | INTEGER PK |
-| mod_name | TEXT | From manifest |
-| author | TEXT |
-| version | TEXT |
-| icon_path | TEXT |
-| source_zip | TEXT |
+## 4. Data Model (IndexedDB)
 
-### Table: cosmetics
-| Column | Type |
-|--------|------|
-| id | INTEGER PK |
-| mod_id | INTEGER FK |
-| display_name | TEXT |
-| filename | TEXT |
-| hash | TEXT |
-| type | TEXT |
-| internal_path | TEXT |
+Browser-based storage using IndexedDB instead of SQLite:
 
-### Table (Level 2): assets
-| Column | Type |
-|--------|------|
-| cosmetic_id | INTEGER |
-| mesh_path | TEXT |
-| texture_path | TEXT |
-| preview_image_path | TEXT |
+### Object Store: mods
+| Field | Type | Description |
+|-------|------|-------------|
+| id | string (key) | UUID |
+| mod_name | string | From manifest |
+| author | string |
+| version | string |
+| icon_data | Blob/string | Base64 or Blob |
+| source_zip_name | string | Original filename |
+| upload_timestamp | number | When uploaded |
+
+### Object Store: cosmetics
+| Field | Type |
+|-------|------|
+| id | string (key) | UUID |
+| mod_id | string | Foreign key to mods |
+| display_name | string |
+| filename | string |
+| hash | string | SHA256 |
+| type | string |
+| internal_path | string |
+
+### Object Store: assets (Level 2)
+| Field | Type |
+|-------|------|
+| id | string (key) | UUID |
+| cosmetic_id | string |
+| mesh_data | Blob | GLTF binary |
+| texture_data | Blob | PNG/WebP |
+| preview_image | Blob | Generated preview |
+| preview_gif | Blob | Animated preview (optional) |
 
 ---
 
 ## 5. Core Features
-### Level 1
-- Import multiple mod ZIPs
-- Scan for `.hhh` files
-- Extract metadata
-- Store in SQLite
-- Search/filter UI
-- Display mod icons
-- No rendering required
 
-### Level 2
-- Parse `.hhh` Unity files
-- Extract textures and meshes
-- Render in viewer
-- Export assets
+### Level 1 - Browser-Based Catalog
+- Upload mod ZIP files via HTML5 file input
+- Unzip in browser using JSZip library
+- Scan for `.hhh` files and metadata
+- Extract metadata and compute SHA256 hashes
+- Store in IndexedDB
+- Search/filter UI with instant updates
+- Display mod icons from uploaded data
+- Export/import catalog data for backup
+
+### Level 2 - In-Browser Preview & Rendering
+- Parse `.hhh` Unity asset bundles in browser
+- Extract textures and meshes client-side
+- Render 3D previews using Three.js or Babylon.js
+- Generate static preview images (PNG/WebP)
+- Generate animated preview GIFs using canvas/WebGL capture
+- Download preview images individually or in bulk
+- Share preview URLs (with embedded data URLs)
+
+### Level 3 - API Integration (Optional)
+- Fetch mod metadata from Thunderstore API
+- Download mods via CORS proxy
+- Auto-import from mod URLs
+- Browse Thunderstore catalog without leaving app
 
 ---
 
 ## 6. Technical Considerations
-- `.hhh` uses UnityFS (Unity asset bundle format).
-- Compatible libraries:
-  - UnityPy (Python)
-  - AssetRipper (C#)
-  - uTinyRipper
-  - AssetStudio
 
-Rendering options:
-- Unity app: easiest rendering path.
-- Electron app: WebGL viewer requires GLTF export.
+### Browser ZIP Handling
+- Use **JSZip** for client-side ZIP extraction
+- Modern browsers support large file handling (2GB+ via File API)
+- Memory-efficient streaming for large ZIPs
+- Handle corrupt/incomplete uploads gracefully
+
+### UnityFS Parsing in Browser
+- `.hhh` uses UnityFS (Unity asset bundle format)
+- Browser-compatible parsers:
+  - **unity-asset-parser** (JavaScript port)
+  - WASM-compiled UnityPy (if available)
+  - Custom JavaScript UnityFS parser
+- Extract textures as TypedArrays → convert to PNG via Canvas API
+- Extract meshes → parse to GLTF JSON format
+
+### 3D Rendering Options
+- **Three.js** - Lightweight, well-documented, excellent GLTF support
+- **Babylon.js** - More feature-rich, slightly larger bundle
+- **WebGL native** - Maximum control, more complex
+- **Recommendation**: Three.js for balance of features and bundle size
+
+### Storage Constraints
+- IndexedDB typically limited to 50% of available disk space
+- Quota API available to request more storage
+- Users can clear storage if needed
+- Implement storage quota monitoring UI
+
+### Performance Considerations
+- Use Web Workers for ZIP extraction to avoid blocking UI
+- Use Web Workers for UnityFS parsing
+- Lazy-load 3D rendering library only when needed
+- Implement progressive loading for large catalogs
+- Cache parsed assets to avoid re-processing
+
+### GitHub Pages Deployment
+- Static site only (no server-side code)
+- Build process: Vite → dist/ → gh-pages branch
+- All processing happens client-side
+- Service worker for offline support (optional)
+- CDN automatically handles global distribution
 
 ---
 
 ## 7. Future Enhancements
-- Auto-download mods
-- Deduplicate cosmetics
-- Tagging
-- Favorites
-- Export cosmetic lists
+- **Thunderstore API integration** - Direct mod downloading
+- **CORS proxy server** - For fetching mods from Thunderstore
+- **Cosmetic comparison** - Side-by-side preview
+- **Tagging system** - User-created tags for organization
+- **Favorites/collections** - Bookmark favorite cosmetics
+- **Export cosmetic lists** - Share collections as JSON
+- **Social sharing** - Share preview images to Discord/Twitter
+- **PWA support** - Install as desktop/mobile app
+- **Cloud sync** - Optional account system for cross-device sync
 
 ---
 
 ## 8. Milestones
-### Milestone A (Level 1)
-- ZIP scanning
-- Database creation
-- Search UI
 
-### Milestone B (Level 2)
-- `.hhh` parsing
-- Asset extraction
+### Milestone A (Level 1) - MVP Web App
+- HTML5 file upload UI
+- JSZip integration for browser-based extraction
+- Metadata extraction from manifest.json
+- IndexedDB storage implementation
+- Search and filter UI
+- Display mod icons
 
-### Milestone C
-- 3D preview system
+### Milestone B (Level 2) - Preview System
+- `.hhh` UnityFS parsing in browser
+- Asset extraction (meshes, textures)
+- Three.js 3D preview viewer
+- Preview image generation (PNG/WebP)
+- Preview GIF generation (animated)
+- Download individual previews
+
+### Milestone C - Advanced Features
+- Bulk preview export
+- Thunderstore API integration
+- CORS proxy setup (optional backend)
+- PWA packaging
+- Performance optimizations
 
 ---
 
 ## 9. Deliverables
-- Source code
-- Documentation
-- Executable
-- Tests
+- Source code repository
+- GitHub Pages deployment (live site)
+- Documentation (README, user guide)
+- Developer setup instructions
+- Automated tests (unit + E2E)
+- Browser compatibility matrix
 

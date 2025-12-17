@@ -1,24 +1,29 @@
 # R.E.P.O. Cosmetic Catalog - AI Agent Instructions
 
 ## Project Overview
-This is a Windows desktop tool that scans Thunderstore mod ZIP files for R.E.P.O. game cosmetic mods, extracts metadata from `.hhh` UnityFS bundles, stores them in SQLite, and provides searchable UI.
+This is a browser-based web application hosted on GitHub Pages that lets users upload Thunderstore mod ZIP files for R.E.P.O., extract cosmetic metadata from `.hhh` UnityFS bundles, and preview cosmetics with 3D rendering - all client-side in the browser.
 
 ## Architecture Philosophy
 Two-level implementation approach:
-- **Level 1 (Required)**: ZIP scanning, metadata extraction, SQLite storage, search UI
-- **Level 2 (Optional)**: UnityFS parsing, asset extraction, 3D preview rendering
+- **Level 1 (Required)**: Browser ZIP upload, client-side extraction, IndexedDB storage, search UI
+- **Level 2 (Primary Goal)**: In-browser UnityFS parsing, asset extraction, 3D preview with Three.js, GIF generation
 
 ## Core Data Flow
-1. Import mod ZIPs → Scan for `manifest.json`, `icon.png`, `plugins/<plugin>/Decorations/*.hhh`
-2. Extract metadata → Store in SQLite (`mods`, `cosmetics`, `assets` tables)
-3. Present searchable catalog → Filter/search without requiring mod installation
+1. User uploads mod ZIPs → JSZip extracts in browser using Web Workers
+2. Scan for `manifest.json`, `icon.png`, `plugins/<plugin>/Decorations/*.hhh`
+3. Extract metadata → Store in IndexedDB (`mods`, `cosmetics`, `assets` stores)
+4. Parse `.hhh` files → Extract meshes/textures → Render with Three.js
+5. Generate preview images/GIFs → Download or share
 
 ## Technology Constraints
-- **Platform**: Windows 10+ only
-- **Framework Options**: Electron, Tauri, or Unity (choose one based on preview requirements)
-- **Database**: SQLite with specific schema (see `design_specifications.md`)
+- **Platform**: Modern browsers (Chrome, Firefox, Edge, Safari)
+- **Framework**: React + TypeScript + Vite
+- **ZIP Handling**: JSZip (client-side, no Node.js required)
+- **Storage**: IndexedDB (browser-native)
+- **3D Rendering**: Three.js + WebGL
+- **Deployment**: GitHub Pages (static site only)
 - **Asset Format**: `.hhh` files are UnityFS asset bundles
-- **Must work offline** and handle corrupt `.hhh` files gracefully
+- **Must work entirely client-side** and handle corrupt `.hhh` files gracefully
 
 ## Critical File Patterns
 - Cosmetic files: `plugins/<plugin>/Decorations/*.hhh`
@@ -45,22 +50,28 @@ Follow execution steps in `agentic_prompt.md`:
 9. Package Windows executable
 
 ## UnityFS Parsing (Level 2)
-If implementing preview features:
-- Compatible libraries: **UnityPy** (Python), **AssetRipper** (C#), uTinyRipper, AssetStudio
-- Extract textures → Convert to PNG
-- Extract meshes → Convert to GLTF (for Electron/Tauri) or use Unity native mesh format
-- Rendering: Unity provides easiest path; Electron requires WebGL viewer
+For browser-based preview implementation:
+- Compatible libraries: **unity-asset-parser** (JavaScript), WASM-compiled UnityPy (if available)
+- Custom JavaScript UnityFS parser for `.hhh` files
+- Extract textures → Convert to PNG using Canvas API
+- Extract meshes → Convert to GLTF JSON format
+- Rendering: Three.js provides excellent WebGL rendering with GLTF support
+- GIF generation: Canvas capture + GIF encoder library
 
 ## Acceptance Criteria
-- ZIPs import successfully without duplicates on rescan
-- All cosmetics populate database with correct metadata
+- Users can upload multiple ZIPs successfully
+- ZIPs extract in browser without freezing UI (Web Workers)
+- All cosmetics populate IndexedDB with correct metadata
 - Search works instantly with filters
-- Icons display correctly
+- Icons display correctly from uploaded data
+- Duplicate uploads don't create duplicate entries
 - Corrupt `.hhh` files do not crash the application
 - (Level 2) At least one `.hhh` mesh/texture extracted and previewed
+- (Level 2) Preview images and GIFs can be generated and downloaded
 
 ## Key Deliverables
-- Windows desktop executable (packaged installer)
-- SQLite schema + migration scripts
-- README with setup/build/run instructions
-- Automated tests for ZIP scanning and DB insertion
+- Live demo on GitHub Pages
+- IndexedDB schema implementation
+- README with user guide and developer setup
+- Automated tests for ZIP scanning and IndexedDB operations
+- Browser compatibility documentation
