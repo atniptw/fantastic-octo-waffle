@@ -61,6 +61,12 @@ npm run preview
 
 ## Deploy to GitHub Pages
 
+### Automatic Deployment (Recommended)
+The application automatically deploys to GitHub Pages when changes are pushed to the `main` branch via GitHub Actions. The live site will be available at:
+- https://atniptw.github.io/fantastic-octo-waffle/
+
+### Manual Deployment
+You can also manually deploy using:
 ```bash
 # Build and deploy to gh-pages branch
 npm run deploy
