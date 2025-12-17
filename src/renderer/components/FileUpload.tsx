@@ -35,7 +35,15 @@ function FileUpload({
 
   const isValidFileType = (file: File): boolean => {
     const validExtensions = accept.split(',').map(ext => ext.trim().toLowerCase());
-    const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase();
+    const fileName = file.name;
+    const lastDotIndex = fileName.lastIndexOf('.');
+    
+    // Handle files without extensions
+    if (lastDotIndex === -1) {
+      return false;
+    }
+    
+    const fileExtension = fileName.substring(lastDotIndex).toLowerCase();
     return validExtensions.includes(fileExtension);
   };
 
@@ -43,23 +51,26 @@ function FileUpload({
     const fileArray = Array.from(files);
     const validFiles: File[] = [];
     const newUploadedFiles: UploadedFile[] = [];
+    
+    // Get human-readable accepted types for error message
+    const acceptedTypes = accept.split(',').map(ext => ext.trim()).join(', ');
 
     fileArray.forEach(file => {
       if (!isValidFileType(file)) {
         const invalidFile: UploadedFile = {
-          id: `${Date.now()}-${Math.random()}`,
+          id: crypto.randomUUID(),
           file,
           filename: file.name,
           size: file.size,
           status: 'error',
           progress: 0,
-          errorMessage: 'Invalid file type. Only .zip files are allowed.',
+          errorMessage: `Invalid file type. Only ${acceptedTypes} files are allowed.`,
         };
         newUploadedFiles.push(invalidFile);
       } else {
         validFiles.push(file);
         const uploadedFile: UploadedFile = {
-          id: `${Date.now()}-${Math.random()}`,
+          id: crypto.randomUUID(),
           file,
           filename: file.name,
           size: file.size,
