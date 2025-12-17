@@ -9,14 +9,36 @@ export default defineConfig(({ mode }) => ({
   build: {
     outDir: '../dist',
     emptyOutDir: true,
+    sourcemap: mode === 'production', // Enable source maps for debugging
+    minify: 'esbuild', // Use esbuild for fast minification
     rollupOptions: {
       output: {
-        manualChunks: {
-          'three': ['three'],
-          'jszip': ['jszip'],
+        manualChunks: (id) => {
+          // Split vendor chunks for better caching
+          if (id.includes('node_modules')) {
+            if (id.includes('three')) {
+              return 'three';
+            }
+            if (id.includes('jszip')) {
+              return 'jszip';
+            }
+            if (id.includes('react') || id.includes('react-dom')) {
+              return 'react-vendor';
+            }
+            if (id.includes('idb') || id.includes('gif.js')) {
+              return 'utils';
+            }
+            return 'vendor';
+          }
         },
+        // Optimize chunk file names
+        chunkFileNames: 'assets/[name]-[hash].js',
+        entryFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash].[ext]',
       },
     },
+    // Chunk size warnings
+    chunkSizeWarningLimit: 500,
   },
   resolve: {
     alias: {
