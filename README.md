@@ -131,3 +131,15 @@ Requires modern browser with IndexedDB, Web Workers, and WebGL support.
 ## License
 
 ISC
+
+## Contributing & Community
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, guidelines, and the PR process.
+
+Community health files:
+- Code of Conduct: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+- Security Policy: [SECURITY.md](SECURITY.md)
+- Support: [SUPPORT.md](SUPPORT.md)
+- Changelog: [CHANGELOG.md](CHANGELOG.md)
+
+Note: This project is volunteer‑maintained. Response times and outcomes may vary and are not guaranteed.
