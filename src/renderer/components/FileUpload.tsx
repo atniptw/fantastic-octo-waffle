@@ -270,6 +270,6 @@ function FileUpload({
   );
 }
 
-// Export the component and the updateFileStatus capability
+// Export the component and its props type
 export default FileUpload;
 export type { FileUploadProps };
