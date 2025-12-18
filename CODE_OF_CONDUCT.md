@@ -11,7 +11,7 @@ This project follows the Contributor Covenant Code of Conduct, version 2.1.
 Instances of abusive, harassing, or otherwise unacceptable behavior may be reported without using email:
 
 - For security vulnerabilities, use GitHub Security Advisories: https://github.com/atniptw/fantastic-octo-waffle/security/advisories/new
-- For conduct or moderation concerns, use the repository’s Contact Link (if enabled) from the New Issue page, or open an issue labeled `code of conduct` with minimal public details; maintainers will follow up privately.
+- For conduct or moderation concerns, use the repository’s Contact Link (if enabled) from the New Issue page so that maintainers can follow up privately. Please do not include sensitive conduct details in public issues or discussions.
 
 Maintainers aim to review and investigate concerns subject to availability and at their discretion. Timelines or outcomes aren’t guaranteed.
 
