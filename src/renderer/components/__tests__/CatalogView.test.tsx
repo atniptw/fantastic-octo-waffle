@@ -2,6 +2,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import CatalogView from '../CatalogView';
 
+// Default props to ensure component renders without errors
+const defaultProps = {
+  mods: [],
+  cosmetics: [],
+};
+
 describe('CatalogView', () => {
   beforeEach(() => {
     // Clear any previous mocks
@@ -13,7 +19,7 @@ describe('CatalogView', () => {
   });
 
   it('should show placeholder when running outside Electron', () => {
-    render(<CatalogView />);
+    render(<CatalogView {...defaultProps} />);
     
     expect(screen.getByText(/catalog view is available in the desktop application/i)).toBeInTheDocument();
   });
@@ -27,7 +33,7 @@ describe('CatalogView', () => {
       importMods: vi.fn(),
     };
 
-    render(<CatalogView />);
+    render(<CatalogView {...defaultProps} />);
     
     expect(screen.getByText('Cosmetics Catalog')).toBeInTheDocument();
   });
@@ -43,7 +49,7 @@ describe('CatalogView', () => {
       importMods: vi.fn(),
     };
 
-    render(<CatalogView />);
+    render(<CatalogView {...defaultProps} />);
     
     await vi.waitFor(() => {
       expect(mockGetCatalog).toHaveBeenCalled();
@@ -59,7 +65,7 @@ describe('CatalogView', () => {
       importMods: vi.fn(),
     };
 
-    render(<CatalogView />);
+    render(<CatalogView {...defaultProps} />);
     
     await vi.waitFor(() => {
       expect(screen.getByText(/import mod zip files to populate the catalog/i)).toBeInTheDocument();
@@ -80,7 +86,12 @@ describe('CatalogView', () => {
       importMods: vi.fn(),
     };
 
-    render(<CatalogView />);
+    render(<CatalogView 
+      mods={[{ id: 1, mod_name: 'Test Mod', author: 'Author1', version: '1.0.0', icon_path: null, source_zip: 'test.zip' }]}
+      cosmetics={[
+        { id: 1, mod_id: 1, display_name: 'Cool Hat', filename: 'cool_hat.hhh', hash: 'abc123', type: 'decoration', internal_path: 'plugins/Test/Decorations/cool_hat.hhh' }
+      ]}
+    />);
     
     await vi.waitFor(() => {
       expect(screen.getByText('Cool Hat')).toBeInTheDocument();
@@ -99,7 +110,7 @@ describe('CatalogView', () => {
       importMods: vi.fn(),
     };
 
-    render(<CatalogView />);
+    render(<CatalogView {...defaultProps} />);
     
     expect(screen.getByPlaceholderText('Search cosmetics...')).toBeInTheDocument();
   });
@@ -115,7 +126,7 @@ describe('CatalogView', () => {
       importMods: vi.fn(),
     };
 
-    render(<CatalogView />);
+    render(<CatalogView {...defaultProps} />);
     
     const searchInput = screen.getByPlaceholderText('Search cosmetics...');
     const searchButton = screen.getByText('🔍 Search');
@@ -137,7 +148,7 @@ describe('CatalogView', () => {
       importMods: vi.fn(),
     };
 
-    render(<CatalogView />);
+    render(<CatalogView {...defaultProps} />);
     
     const searchInput = screen.getByPlaceholderText('Search cosmetics...');
     
@@ -162,7 +173,7 @@ describe('CatalogView', () => {
       importMods: vi.fn(),
     };
 
-    render(<CatalogView />);
+    render(<CatalogView {...defaultProps} />);
     
     const searchInput = screen.getByPlaceholderText('Search cosmetics...');
     
@@ -198,7 +209,17 @@ describe('CatalogView', () => {
       importMods: vi.fn(),
     };
 
-    render(<CatalogView />);
+    render(<CatalogView 
+      mods={[
+        { id: 1, mod_name: 'Mod1', author: 'A', version: '1.0.0', icon_path: null, source_zip: 'a.zip' },
+        { id: 2, mod_name: 'Mod2', author: 'B', version: '1.0.0', icon_path: null, source_zip: 'b.zip' },
+      ]}
+      cosmetics={[
+        { id: 1, mod_id: 1, display_name: 'C1', filename: 'c1.hhh', hash: 'h1', type: 'decoration', internal_path: 'p1' },
+        { id: 2, mod_id: 1, display_name: 'C2', filename: 'c2.hhh', hash: 'h2', type: 'decoration', internal_path: 'p2' },
+        { id: 3, mod_id: 2, display_name: 'C3', filename: 'c3.hhh', hash: 'h3', type: 'decoration', internal_path: 'p3' },
+      ]}
+    />);
     
     await vi.waitFor(() => {
       expect(screen.getByText('2 mod(s) • 3 cosmetic(s)')).toBeInTheDocument();
@@ -214,7 +235,7 @@ describe('CatalogView', () => {
       importMods: vi.fn(),
     };
 
-    render(<CatalogView />);
+    render(<CatalogView {...defaultProps} />);
     
     await vi.waitFor(() => {
       expect(screen.getByText(/Database error/i)).toBeInTheDocument();
@@ -230,7 +251,7 @@ describe('CatalogView', () => {
       importMods: vi.fn(),
     };
 
-    render(<CatalogView />);
+    render(<CatalogView {...defaultProps} />);
     
     const searchInput = screen.getByPlaceholderText('Search cosmetics...');
     const searchButton = screen.getByText('🔍 Search');

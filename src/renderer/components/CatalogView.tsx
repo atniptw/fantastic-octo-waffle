@@ -10,7 +10,7 @@ interface CosmeticWithMod extends Cosmetic {
   mod?: Mod;
 }
 
-function CatalogView({ mods, cosmetics }: CatalogViewProps) {
+function CatalogView({ mods = [], cosmetics = [] }: CatalogViewProps) {
   const [searchQuery, setSearchQuery] = useState('');
 
   const cosmeticsWithMods: CosmeticWithMod[] = useMemo(() => {
