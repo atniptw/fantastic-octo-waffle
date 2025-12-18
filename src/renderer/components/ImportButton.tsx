@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
-import { ImportFilesResult } from '../types/electron';
+import { useState, useEffect, useRef } from 'react';
+import { scanZipFile } from '@/lib/zipScanner';
+import type { Cosmetic, ImportFilesResult, ImportLogEntry, Mod } from '@/shared/types';
 
 interface ImportButtonProps {
   onImportStart?: () => void;
@@ -15,6 +16,17 @@ interface StatusState {
   message?: string;
 }
 
+async function iconToDataUrl(iconData: Uint8Array | null): Promise<string | null> {
+  if (!iconData) return null;
+  const blob = new Blob([iconData], { type: 'image/png' });
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => resolve(null);
+    reader.readAsDataURL(blob);
+  });
+}
+
 function ImportButton({
   onImportStart,
   onImportComplete,
@@ -22,6 +34,7 @@ function ImportButton({
   disabled = false,
 }: ImportButtonProps) {
   const [statusState, setStatusState] = useState<StatusState>({ status: 'idle' });
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Auto-clear success and error messages after 3 seconds
   useEffect(() => {
@@ -33,47 +46,122 @@ function ImportButton({
     }
   }, [statusState.status]);
 
-  const handleImport = async () => {
-    // Check if running in Electron
-    if (!window.electronAPI) {
-      console.log('Import button clicked - running outside Electron');
-      return;
+  const processFiles = async (files: FileList | File[]): Promise<void> => {
+    const fileArray = Array.from(files);
+    if (fileArray.length === 0) return;
+
+    setStatusState({ status: 'loading', message: 'Importing...' });
+    onImportStart?.();
+
+    const logs: ImportLogEntry[] = [];
+    const mods: Mod[] = [];
+    const cosmetics: Cosmetic[] = [];
+    let successCount = 0;
+    let warningCount = 0;
+    let errorCount = 0;
+
+    for (const file of fileArray) {
+      const timestamp = new Date().toISOString();
+      try {
+        const result = await scanZipFile(file);
+
+        if (result.errors.length > 0) {
+          result.errors.forEach(msg => {
+            logs.push({
+              timestamp,
+              filename: file.name,
+              status: 'warning',
+              message: msg,
+            });
+          });
+          warningCount += 1;
+        }
+
+        if (!result.manifest) {
+          logs.push({
+            timestamp,
+            filename: file.name,
+            status: 'error',
+            message: 'Invalid mod structure - manifest.json not found or invalid',
+          });
+          errorCount += 1;
+          continue;
+        }
+
+        const modId = crypto.randomUUID();
+        const iconData = await iconToDataUrl(result.iconData);
+        const mod: Mod = {
+          id: modId,
+          mod_name: result.manifest.name,
+          author: result.manifest.author,
+          version: result.manifest.version_number,
+          iconData,
+          source: file.name,
+        };
+        mods.push(mod);
+
+        result.cosmetics.forEach(cosmeticMeta => {
+          const cosmetic: Cosmetic = {
+            id: crypto.randomUUID(),
+            mod_id: modId,
+            display_name: cosmeticMeta.displayName,
+            filename: cosmeticMeta.filename,
+            hash: cosmeticMeta.hash,
+            type: cosmeticMeta.type,
+            internal_path: cosmeticMeta.internalPath,
+          };
+          cosmetics.push(cosmetic);
+        });
+
+        logs.push({
+          timestamp,
+          filename: file.name,
+          status: 'success',
+          message: `${result.cosmetics.length} cosmetic(s) found`,
+        });
+        successCount += 1;
+      } catch (error) {
+        logs.push({
+          timestamp,
+          filename: file.name,
+          status: 'error',
+          message: `Failed to process: ${error instanceof Error ? error.message : String(error)}`,
+        });
+        errorCount += 1;
+      }
     }
 
-    try {
-      // Open file dialog
-      const filePaths = await window.electronAPI.selectZipFiles();
-      
-      if (!filePaths || filePaths.length === 0) {
-        // User cancelled the dialog
-        return;
-      }
+    const result: ImportFilesResult = {
+      logs,
+      totalFiles: fileArray.length,
+      successCount,
+      errorCount,
+      warningCount,
+      mods,
+      cosmetics,
+    };
 
-      // Set loading state
-      setStatusState({ status: 'loading', message: 'Importing...' });
+    const successMsg = result.successCount === result.totalFiles
+      ? `${result.successCount} mod(s) imported successfully`
+      : `${result.successCount} mod(s) imported, ${result.totalFiles - result.successCount} skipped/failed`;
 
-      // Notify start
-      onImportStart?.();
+    setStatusState({ status: result.errorCount > 0 ? 'error' : 'success', message: successMsg });
+    onImportComplete?.(result);
+  };
 
-      // Process imports
-      const result = await window.electronAPI.importZipFiles(filePaths);
-      
-      // Set success state with summary
-      const successMsg = result.successCount === result.totalFiles
-        ? `${result.successCount} mod(s) imported successfully`
-        : `${result.successCount} mod(s) imported, ${result.totalFiles - result.successCount} skipped/failed`;
-      setStatusState({ status: 'success', message: successMsg });
+  const handleButtonClick = () => {
+    fileInputRef.current?.click();
+  };
 
-      // Notify completion
-      onImportComplete?.(result);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error('Import failed:', errorMessage);
-      
-      // Set error state
-      setStatusState({ status: 'error', message: errorMessage });
-      
-      onImportError?.(errorMessage);
+  const handleFileInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files && event.target.files.length > 0) {
+      processFiles(event.target.files).catch(err => {
+        const message = err instanceof Error ? err.message : String(err);
+        setStatusState({ status: 'error', message });
+        onImportError?.(message);
+      });
+      // Reset the input so the same file can be selected again
+      event.target.value = '';
     }
   };
 
@@ -113,14 +201,26 @@ function ImportButton({
   };
 
   return (
-    <button 
-      className={`import-button import-button--${statusState.status}`}
-      onClick={handleImport}
-      disabled={isDisabled}
-      aria-busy={statusState.status === 'loading'}
-    >
-      {renderButtonContent()}
-    </button>
+    <>
+      <input
+        type="file"
+        accept=".zip"
+        multiple
+        ref={fileInputRef}
+        data-testid="import-input"
+        style={{ display: 'none' }}
+        onChange={handleFileInputChange}
+      />
+      <button
+        className={`import-button import-button--${statusState.status}`}
+        onClick={handleButtonClick}
+        disabled={isDisabled}
+        aria-busy={statusState.status === 'loading'}
+        type="button"
+      >
+        {renderButtonContent()}
+      </button>
+    </>
   );
 }
 

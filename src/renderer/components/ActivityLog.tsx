@@ -1,4 +1,4 @@
-import { ImportLogEntry } from '../types/electron';
+import { ImportLogEntry } from '@/shared/types';
 
 interface ActivityLogProps {
   logs: ImportLogEntry[];

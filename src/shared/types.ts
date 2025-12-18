@@ -1,6 +1,5 @@
 /**
- * Shared type definitions for IPC communication between main and renderer processes.
- * This file is the single source of truth for all shared types.
+ * Shared, browser-friendly types used across the app.
  */
 
 export interface ImportLogEntry {
@@ -10,26 +9,18 @@ export interface ImportLogEntry {
   message: string;
 }
 
-export interface ImportFilesResult {
-  logs: ImportLogEntry[];
-  totalFiles: number;
-  successCount: number;
-  errorCount: number;
-  warningCount: number;
-}
-
 export interface Mod {
-  id?: number;
+  id: string;
   mod_name: string;
   author: string;
   version: string;
-  icon_path: string | null;
-  source_zip: string;
+  iconData: string | null;
+  source: string;
 }
 
 export interface Cosmetic {
-  id?: number;
-  mod_id: number;
+  id: string;
+  mod_id: string;
   display_name: string;
   filename: string;
   hash: string;
@@ -42,10 +33,12 @@ export interface CatalogData {
   cosmetics: Cosmetic[];
 }
 
-export interface ElectronAPI {
-  selectZipFiles: () => Promise<string[] | null>;
-  importZipFiles: (filePaths: string[]) => Promise<ImportFilesResult>;
-  getCatalog: () => Promise<CatalogData>;
-  searchCosmetics: (query: string) => Promise<Cosmetic[]>;
-  importMods: () => Promise<{ success: boolean; message: string }>;
+export interface ImportFilesResult {
+  logs: ImportLogEntry[];
+  totalFiles: number;
+  successCount: number;
+  errorCount: number;
+  warningCount: number;
+  mods: Mod[];
+  cosmetics: Cosmetic[];
 }

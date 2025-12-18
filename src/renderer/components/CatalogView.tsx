@@ -1,88 +1,42 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Cosmetic, Mod, CatalogData } from '../types/electron';
+import { useMemo, useState } from 'react';
+import type { Cosmetic, Mod } from '@/shared/types';
 
 interface CatalogViewProps {
-  refreshTrigger?: number;
+  mods: Mod[];
+  cosmetics: Cosmetic[];
 }
 
 interface CosmeticWithMod extends Cosmetic {
   mod?: Mod;
 }
 
-function CatalogView({ refreshTrigger }: CatalogViewProps) {
-  const [cosmetics, setCosmetics] = useState<CosmeticWithMod[]>([]);
-  const [mods, setMods] = useState<Mod[]>([]);
-  const [totalMods, setTotalMods] = useState(0);
-  const [totalCosmetics, setTotalCosmetics] = useState(0);
+function CatalogView({ mods, cosmetics }: CatalogViewProps) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  const loadCatalog = useCallback(async () => {
-    if (!window.electronAPI) {
-      // Running outside Electron (web browser), show placeholder
-      return;
-    }
+  const cosmeticsWithMods: CosmeticWithMod[] = useMemo(() => {
+    const modMap = new Map(mods.map(mod => [mod.id, mod]));
+    return cosmetics.map(cosmetic => ({
+      ...cosmetic,
+      mod: modMap.get(cosmetic.mod_id),
+    }));
+  }, [mods, cosmetics]);
 
-    setIsLoading(true);
-    setError(null);
+  const filteredCosmetics = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return cosmeticsWithMods;
+    return cosmeticsWithMods.filter(cosmetic => {
+      return (
+        cosmetic.display_name.toLowerCase().includes(query) ||
+        cosmetic.filename.toLowerCase().includes(query) ||
+        cosmetic.type.toLowerCase().includes(query) ||
+        cosmetic.mod?.mod_name.toLowerCase().includes(query) ||
+        cosmetic.mod?.author.toLowerCase().includes(query)
+      );
+    });
+  }, [cosmeticsWithMods, searchQuery]);
 
-    try {
-      const data: CatalogData = await window.electronAPI.getCatalog();
-      setMods(data.mods);
-      setTotalMods(data.mods.length);
-      setTotalCosmetics(data.cosmetics.length);
-      
-      // Enrich cosmetics with mod data
-      const cosmeticsWithMods: CosmeticWithMod[] = data.cosmetics.map(cosmetic => ({
-        ...cosmetic,
-        mod: data.mods.find(m => m.id === cosmetic.mod_id),
-      }));
-      setCosmetics(cosmeticsWithMods);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load catalog');
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  const handleSearch = async () => {
-    if (!window.electronAPI) return;
-    
-    if (!searchQuery.trim()) {
-      await loadCatalog();
-      return;
-    }
-
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      // Ensure mods are loaded before searching
-      let currentMods = mods;
-      if (mods.length === 0) {
-        const data: CatalogData = await window.electronAPI.getCatalog();
-        currentMods = data.mods;
-        setMods(data.mods);
-        setTotalMods(data.mods.length);
-        setTotalCosmetics(data.cosmetics.length);
-      }
-      const results = await window.electronAPI.searchCosmetics(searchQuery);
-      const cosmeticsWithMods: CosmeticWithMod[] = results.map(cosmetic => ({
-        ...cosmetic,
-        mod: currentMods.find(m => m.id === cosmetic.mod_id),
-      }));
-      setCosmetics(cosmeticsWithMods);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Search failed');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadCatalog();
-  }, [refreshTrigger, loadCatalog]);
+  const totalMods = mods.length;
+  const totalCosmetics = cosmetics.length;
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value);
@@ -90,24 +44,13 @@ function CatalogView({ refreshTrigger }: CatalogViewProps) {
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    handleSearch();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
-      handleSearch();
+      e.preventDefault();
     }
   };
-
-  if (!window.electronAPI) {
-    return (
-      <div className="catalog-placeholder">
-        <p className="placeholder-text">
-          Catalog view is available in the desktop application.
-        </p>
-      </div>
-    );
-  }
 
   return (
     <div className="catalog-view">
@@ -115,7 +58,7 @@ function CatalogView({ refreshTrigger }: CatalogViewProps) {
         <h2>Cosmetics Catalog</h2>
         <div className="catalog-stats">
           {searchQuery ? (
-            <>{cosmetics.length} of {totalCosmetics} cosmetic(s) • {totalMods} mod(s)</>
+            <>{filteredCosmetics.length} of {totalCosmetics} cosmetic(s) • {totalMods} mod(s)</>
           ) : (
             <>{totalMods} mod(s) • {totalCosmetics} cosmetic(s)</>
           )}
@@ -130,6 +73,7 @@ function CatalogView({ refreshTrigger }: CatalogViewProps) {
           onChange={handleSearchChange}
           onKeyDown={handleKeyDown}
           className="search-input"
+          aria-label="Search cosmetics"
         />
         <button type="submit" className="search-button">
           🔍 Search
@@ -138,39 +82,30 @@ function CatalogView({ refreshTrigger }: CatalogViewProps) {
           <button
             type="button"
             className="clear-button"
-            onClick={() => {
-              setSearchQuery('');
-              loadCatalog();
-            }}
+            onClick={() => setSearchQuery('')}
           >
             ✕ Clear
           </button>
         )}
       </form>
 
-      {isLoading && (
-        <div className="loading-indicator">Loading...</div>
-      )}
-
-      {error && (
-        <div className="error-message">
-          ❌ {error}
-        </div>
-      )}
-
-      {!isLoading && !error && cosmetics.length === 0 && (
+      {cosmeticsWithMods.length === 0 && (
         <div className="empty-catalog">
           <p className="placeholder-text">
-            {searchQuery 
-              ? 'No cosmetics match your search.' 
-              : 'Import mod ZIP files to populate the catalog.'}
+            Import mod ZIP files to populate the catalog.
           </p>
         </div>
       )}
 
-      {!isLoading && cosmetics.length > 0 && (
+      {cosmeticsWithMods.length > 0 && filteredCosmetics.length === 0 && (
+        <div className="empty-catalog">
+          <p className="placeholder-text">No cosmetics match your search.</p>
+        </div>
+      )}
+
+      {filteredCosmetics.length > 0 && (
         <div className="cosmetics-grid">
-          {cosmetics.map((cosmetic) => (
+          {filteredCosmetics.map((cosmetic) => (
             <div key={cosmetic.id} className="cosmetic-card">
               <div className="cosmetic-name">{cosmetic.display_name}</div>
               <div className="cosmetic-details">
