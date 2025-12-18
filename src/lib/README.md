@@ -9,6 +9,7 @@ This module provides browser-compatible ZIP file scanning with Web Worker suppor
 - ✅ **Error handling**: Gracefully handles corrupt ZIPs and missing files
 - ✅ **Comprehensive metadata**: Extracts manifest, icons, and cosmetic files with SHA256 hashing
 - ✅ **TypeScript**: Full type safety with detailed interfaces
+- ✅ **Powered by 7-Zip**: Uses sevenzip-wasm for robust ZIP extraction
 
 ## Quick Start
 

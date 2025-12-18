@@ -32,7 +32,6 @@
     "@playwright/test": "^1.57.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.0",
-    "@types/jszip": "^3.4.0",
     "@types/node": "^20.10.0",
     "@types/react": "^18.2.45",
     "@types/react-dom": "^18.2.18",
@@ -54,9 +53,9 @@
   "dependencies": {
     "gif.js": "^0.2.0",
     "idb": "^8.0.2",
-    "jszip": "^3.10.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "sevenzip-wasm": "^0.1.8",
     "three": "^0.170.0"
   }
 }

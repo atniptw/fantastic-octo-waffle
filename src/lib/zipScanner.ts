@@ -2,9 +2,10 @@
  * Browser-compatible ZIP Scanner module for scanning Thunderstore mod ZIP files.
  * Extracts manifest.json, icon.png, and .hhh cosmetic files with comprehensive metadata.
  * Uses Web Crypto API instead of Node.js crypto for browser compatibility.
+ * Uses sevenzip-wasm for ZIP extraction.
  */
 
-import JSZip from 'jszip';
+import SevenZipWasm, { type SevenZipModule } from 'sevenzip-wasm';
 
 /**
  * Metadata for a single cosmetic file extracted from a ZIP.
@@ -212,15 +213,71 @@ export async function scanZip(zipData: Uint8Array | ArrayBuffer): Promise<ZipSca
     hasFatalError: false,
   };
 
+  let sevenZip: SevenZipModule | null = null;
+
   try {
-    const zip = await JSZip.loadAsync(zipData);
+    // Convert to Uint8Array if needed
+    const data = zipData instanceof ArrayBuffer ? new Uint8Array(zipData) : zipData;
+    
+    // Initialize sevenzip-wasm
+    const outputLines: string[] = [];
+    sevenZip = await SevenZipWasm({
+      print: (line: string) => outputLines.push(line),
+      printErr: (line: string) => outputLines.push(line),
+    });
+
+    // Write ZIP file to virtual filesystem
+    sevenZip.FS.writeFile('/archive.zip', data);
+
+    // Extract the ZIP file to /extracted directory
+    sevenZip.FS.mkdir('/extracted');
+    const extractExitCode = sevenZip.callMain(['x', '/archive.zip', '-o/extracted', '-y']);
+    
+    // Check if extraction failed (non-zero exit code indicates error)
+    if (extractExitCode !== 0) {
+      result.errors.push(`7-Zip extraction failed with exit code ${extractExitCode}`);
+      result.hasFatalError = true;
+      return result;
+    }
+
+    // Helper function to recursively list all files
+    const listFiles = (path: string): string[] => {
+      const files: string[] = [];
+      try {
+        const entries = sevenZip.FS.readdir(path);
+        for (const entry of entries) {
+          if (entry === '.' || entry === '..') continue;
+          const fullPath = `${path}/${entry}`;
+          const stat = sevenZip.FS.stat(fullPath);
+          if (sevenZip.FS.isDir(stat.mode)) {
+            files.push(...listFiles(fullPath));
+          } else {
+            files.push(fullPath);
+          }
+        }
+      } catch {
+        // Directory doesn't exist or can't be read
+      }
+      return files;
+    };
+
+    // Get all extracted files
+    const extractedFiles = listFiles('/extracted');
+    
+    // Check if any files were extracted
+    if (extractedFiles.length === 0) {
+      result.errors.push('No files were extracted from the archive');
+      result.hasFatalError = true;
+      return result;
+    }
 
     // Extract manifest.json
-    const manifestFile = zip.file('manifest.json');
-    if (manifestFile) {
+    const manifestPath = extractedFiles.find(f => f.endsWith('/manifest.json') || f === '/extracted/manifest.json');
+    if (manifestPath) {
       try {
-        result.manifestContent = await manifestFile.async('string');
-        result.manifest = parseManifest(result.manifestContent);
+        const manifestData = sevenZip.FS.readFile(manifestPath, { encoding: 'utf8' });
+        result.manifestContent = manifestData;
+        result.manifest = parseManifest(manifestData);
         if (!result.manifest) {
           result.errors.push('Invalid manifest.json format');
         }
@@ -232,33 +289,56 @@ export async function scanZip(zipData: Uint8Array | ArrayBuffer): Promise<ZipSca
     }
 
     // Extract icon.png
-    const iconFile = zip.file('icon.png');
-    if (iconFile) {
+    const iconPath = extractedFiles.find(f => f.endsWith('/icon.png') || f === '/extracted/icon.png');
+    if (iconPath) {
       try {
-        result.iconData = await iconFile.async('uint8array');
+        result.iconData = sevenZip.FS.readFile(iconPath);
       } catch (e) {
         result.errors.push(`Error reading icon.png: ${e instanceof Error ? e.message : String(e)}`);
       }
     }
 
     // Extract .hhh files from plugins/<plugin>/Decorations/ directories
-    // Note: JSZip normalizes all paths to use forward slashes internally,
-    // even if the ZIP was created on Windows with backslashes
-    const cosmeticPattern = /^plugins\/[^/]+\/Decorations\/[^/]+\.hhh$/i;
+    const cosmeticPattern = /\/plugins\/[^/]+\/Decorations\/[^/]+\.hhh$/i;
     
-    for (const [path, file] of Object.entries(zip.files)) {
-      if (!file.dir && cosmeticPattern.test(path)) {
+    for (const filePath of extractedFiles) {
+      if (cosmeticPattern.test(filePath)) {
         try {
-          const content = await file.async('uint8array');
-          const metadata = await extractCosmeticMetadata(path, content);
+          const content = sevenZip.FS.readFile(filePath);
+          // Remove /extracted prefix from path for consistency
+          const relativePath = filePath.replace(/^\/extracted\//, '');
+          const metadata = await extractCosmeticMetadata(relativePath, content);
           result.cosmetics.push(metadata);
           
           // Maintain backward compatibility with old API
           result.cosmeticFiles.set(metadata.internalPath, content);
         } catch (e) {
-          result.errors.push(`Error reading ${path}: ${e instanceof Error ? e.message : String(e)}`);
+          result.errors.push(`Error reading ${filePath}: ${e instanceof Error ? e.message : String(e)}`);
         }
       }
+    }
+
+    // Cleanup virtual filesystem
+    try {
+      sevenZip.FS.unlink('/archive.zip');
+      // Recursively remove extracted directory
+      const removeDir = (path: string) => {
+        const entries = sevenZip.FS.readdir(path);
+        for (const entry of entries) {
+          if (entry === '.' || entry === '..') continue;
+          const fullPath = `${path}/${entry}`;
+          const stat = sevenZip.FS.stat(fullPath);
+          if (sevenZip.FS.isDir(stat.mode)) {
+            removeDir(fullPath);
+          } else {
+            sevenZip.FS.unlink(fullPath);
+          }
+        }
+        sevenZip.FS.rmdir(path);
+      };
+      removeDir('/extracted');
+    } catch {
+      // Cleanup errors are non-critical
     }
   } catch (e) {
     result.errors.push(`Error parsing ZIP file: ${e instanceof Error ? e.message : String(e)}`);

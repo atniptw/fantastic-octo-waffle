@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import JSZip from 'jszip';
+import SevenZipWasm from 'sevenzip-wasm';
 import {
   scanZip,
   scanZipFile,
@@ -14,14 +14,47 @@ import {
 } from '../zipScanner';
 
 /**
- * Helper function to create a mock ZIP file for testing.
+ * Helper function to create a mock ZIP file for testing using sevenzip-wasm.
  */
 async function createMockZip(files: Record<string, string | Uint8Array>): Promise<Uint8Array> {
-  const zip = new JSZip();
+  const sevenZip = await SevenZipWasm();
+  
+  // Create a temporary directory for files
+  sevenZip.FS.mkdir('/ziproot');
+  
+  // Write all files to the virtual filesystem
   for (const [path, content] of Object.entries(files)) {
-    zip.file(path, content);
+    const parts = path.split('/');
+    let currentPath = '/ziproot';
+    
+    // Create intermediate directories
+    for (let i = 0; i < parts.length - 1; i++) {
+      currentPath += '/' + parts[i];
+      try {
+        sevenZip.FS.mkdir(currentPath);
+      } catch {
+        // Directory might already exist
+      }
+    }
+    
+    // Write the file
+    const fullPath = '/ziproot/' + path;
+    if (typeof content === 'string') {
+      sevenZip.FS.writeFile(fullPath, content);
+    } else {
+      sevenZip.FS.writeFile(fullPath, content);
+    }
   }
-  return await zip.generateAsync({ type: 'uint8array' });
+  
+  // Change to ziproot directory to create archive without the directory prefix
+  sevenZip.FS.chdir('/ziproot');
+  sevenZip.callMain(['a', '-tzip', '/output.zip', '.']);
+  sevenZip.FS.chdir('/');
+  
+  // Read the created ZIP file
+  const zipData = sevenZip.FS.readFile('/output.zip');
+  
+  return zipData;
 }
 
 /**
@@ -164,7 +197,9 @@ describe('scanZip', () => {
 
     expect(result.manifest).toBeNull();
     expect(result.hasFatalError).toBe(true);
-    expect(result.errors.some(e => e.includes('Error parsing ZIP'))).toBe(true);
+    expect(result.errors.length).toBeGreaterThan(0);
+    // Error message can vary between implementations (JSZip vs sevenzip-wasm)
+    expect(result.errors.some(e => e.includes('7-Zip') || e.includes('Error parsing ZIP'))).toBe(true);
   });
 
   it('should set hasFatalError to false for non-fatal errors', async () => {

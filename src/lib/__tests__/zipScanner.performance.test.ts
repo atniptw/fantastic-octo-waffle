@@ -1,22 +1,25 @@
 import { describe, it, expect } from 'vitest';
-import JSZip from 'jszip';
+import SevenZipWasm from 'sevenzip-wasm';
 import { scanZip } from '../zipScanner';
 
 /**
  * Helper function to create a large mock ZIP file for testing performance.
  */
 async function createLargeZip(sizeInMB: number): Promise<Uint8Array> {
-  const zip = new JSZip();
+  const sevenZip = await SevenZipWasm();
+  
+  // Create temporary directory
+  sevenZip.FS.mkdir('/ziproot');
   
   // Add manifest
-  zip.file('manifest.json', JSON.stringify({
+  sevenZip.FS.writeFile('/ziproot/manifest.json', JSON.stringify({
     name: 'LargeMod',
     author: 'TestAuthor',
     version_number: '1.0.0',
   }));
   
   // Add icon
-  zip.file('icon.png', new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]));
+  sevenZip.FS.writeFile('/ziproot/icon.png', new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]));
   
   // Add cosmetic files
   // Create a large fake .hhh file to reach target size
@@ -24,20 +27,29 @@ async function createLargeZip(sizeInMB: number): Promise<Uint8Array> {
   const chunkSize = 1024 * 1024; // 1MB chunks
   const numChunks = Math.floor(targetBytes / chunkSize);
   
+  // Create Decorations directory
+  sevenZip.FS.mkdir('/ziproot/plugins');
+  sevenZip.FS.mkdir('/ziproot/plugins/LargeMod');
+  sevenZip.FS.mkdir('/ziproot/plugins/LargeMod/Decorations');
+  
   for (let i = 0; i < numChunks; i++) {
     const chunk = new Uint8Array(chunkSize);
     // Fill with some pseudo-random data
     for (let j = 0; j < chunk.length; j++) {
       chunk[j] = (i + j) % 256;
     }
-    zip.file(`plugins/LargeMod/Decorations/cosmetic_${i}.hhh`, chunk);
+    sevenZip.FS.writeFile(`/ziproot/plugins/LargeMod/Decorations/cosmetic_${i}.hhh`, chunk);
   }
   
-  return await zip.generateAsync({ 
-    type: 'uint8array',
-    compression: 'DEFLATE',
-    compressionOptions: { level: 1 }, // Fast compression for tests
-  });
+  // Create ZIP archive with compression, using chdir to avoid path prefix
+  sevenZip.FS.chdir('/ziproot');
+  sevenZip.callMain(['a', '-tzip', '-mx1', '/output.zip', '.']);
+  sevenZip.FS.chdir('/');
+  
+  // Read the created ZIP file
+  const zipData = sevenZip.FS.readFile('/output.zip');
+  
+  return zipData;
 }
 
 describe('Large File Handling', () => {
@@ -94,22 +106,33 @@ describe('Large File Handling', () => {
   }, 30000);
 
   it('should handle ZIP with many small cosmetic files', async () => {
-    const zip = new JSZip();
+    const sevenZip = await SevenZipWasm();
     
-    zip.file('manifest.json', JSON.stringify({
+    // Create temporary directory
+    sevenZip.FS.mkdir('/ziproot');
+    sevenZip.FS.writeFile('/ziproot/manifest.json', JSON.stringify({
       name: 'ManyCosmetics',
       author: 'TestAuthor',
       version_number: '1.0.0',
     }));
     
+    // Create directories
+    sevenZip.FS.mkdir('/ziproot/plugins');
+    sevenZip.FS.mkdir('/ziproot/plugins/ManyCosmetics');
+    sevenZip.FS.mkdir('/ziproot/plugins/ManyCosmetics/Decorations');
+    
     // Add 100 small cosmetic files
     for (let i = 0; i < 100; i++) {
       const content = new Uint8Array(1024); // 1KB each
       content.fill(i % 256);
-      zip.file(`plugins/ManyCosmetics/Decorations/cosmetic_${i}.hhh`, content);
+      sevenZip.FS.writeFile(`/ziproot/plugins/ManyCosmetics/Decorations/cosmetic_${i}.hhh`, content);
     }
     
-    const zipData = await zip.generateAsync({ type: 'uint8array' });
+    // Create ZIP using chdir
+    sevenZip.FS.chdir('/ziproot');
+    sevenZip.callMain(['a', '-tzip', '/output.zip', '.']);
+    sevenZip.FS.chdir('/');
+    const zipData = sevenZip.FS.readFile('/output.zip');
     
     const startTime = Date.now();
     const result = await scanZip(zipData);
@@ -126,14 +149,19 @@ describe('Large File Handling', () => {
   }, 15000);
 
   it('should handle empty ZIP gracefully', async () => {
-    const zip = new JSZip();
-    zip.file('manifest.json', JSON.stringify({
+    const sevenZip = await SevenZipWasm();
+    
+    sevenZip.FS.mkdir('/ziproot');
+    sevenZip.FS.writeFile('/ziproot/manifest.json', JSON.stringify({
       name: 'EmptyMod',
       author: 'TestAuthor',
       version_number: '1.0.0',
     }));
     
-    const zipData = await zip.generateAsync({ type: 'uint8array' });
+    sevenZip.FS.chdir('/ziproot');
+    sevenZip.callMain(['a', '-tzip', '/output.zip', '.']);
+    sevenZip.FS.chdir('/');
+    const zipData = sevenZip.FS.readFile('/output.zip');
     const result = await scanZip(zipData);
     
     expect(result.cosmetics).toHaveLength(0);
@@ -142,22 +170,31 @@ describe('Large File Handling', () => {
   });
 
   it('should calculate unique hashes for different files', async () => {
-    const zip = new JSZip();
+    const sevenZip = await SevenZipWasm();
     
-    zip.file('manifest.json', JSON.stringify({
+    sevenZip.FS.mkdir('/ziproot');
+    sevenZip.FS.writeFile('/ziproot/manifest.json', JSON.stringify({
       name: 'HashTest',
       author: 'TestAuthor',
       version_number: '1.0.0',
     }));
     
+    // Create directories
+    sevenZip.FS.mkdir('/ziproot/plugins');
+    sevenZip.FS.mkdir('/ziproot/plugins/HashTest');
+    sevenZip.FS.mkdir('/ziproot/plugins/HashTest/Decorations');
+    
     // Add 10 cosmetic files with different content
     for (let i = 0; i < 10; i++) {
       const content = new Uint8Array(1024);
       content.fill(i); // Different fill value for each
-      zip.file(`plugins/HashTest/Decorations/cosmetic_${i}.hhh`, content);
+      sevenZip.FS.writeFile(`/ziproot/plugins/HashTest/Decorations/cosmetic_${i}.hhh`, content);
     }
     
-    const zipData = await zip.generateAsync({ type: 'uint8array' });
+    sevenZip.FS.chdir('/ziproot');
+    sevenZip.callMain(['a', '-tzip', '/output.zip', '.']);
+    sevenZip.FS.chdir('/');
+    const zipData = sevenZip.FS.readFile('/output.zip');
     const result = await scanZip(zipData);
     
     expect(result.cosmetics).toHaveLength(10);
