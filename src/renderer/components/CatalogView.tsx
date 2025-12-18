@@ -2,8 +2,8 @@ import { useMemo, useState } from 'react';
 import type { Cosmetic, Mod } from '@/shared/types';
 
 interface CatalogViewProps {
-  mods: Mod[];
-  cosmetics: Cosmetic[];
+  mods?: Mod[];
+  cosmetics?: Cosmetic[];
 }
 
 interface CosmeticWithMod extends Cosmetic {
