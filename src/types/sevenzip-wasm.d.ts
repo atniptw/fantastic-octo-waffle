@@ -1,6 +1,6 @@
 // Type definitions for sevenzip-wasm
 declare module 'sevenzip-wasm' {
-  interface SevenZipFS {
+  export interface SevenZipFS {
     writeFile(path: string, data: string | Uint8Array): void;
     readFile(path: string): Uint8Array;
     readFile(path: string, options: { encoding: 'utf8' }): string;
@@ -13,12 +13,12 @@ declare module 'sevenzip-wasm' {
     chdir(path: string): void;
   }
 
-  interface SevenZipModule {
+  export interface SevenZipModule {
     callMain(args: string[]): number;
     FS: SevenZipFS;
   }
 
-  interface SevenZipOptions {
+  export interface SevenZipOptions {
     print?: (line: string) => void;
     printErr?: (line: string) => void;
   }

@@ -116,7 +116,7 @@ export function inferCosmeticType(filename: string): string {
     return 'glasses';
   } else if (/(?:^|[_\-. ])mask(?:[_\-. ]|$)/.test(lowerFilename)) {
     return 'mask';
-  } else if (/(?:^|[_\-. ])accessory(?:[_\-. ]|$)/.test(lowerFilename) || /acc_/.test(lowerFilename)) {
+  } else if (/(?:^|[_\-. ])accessory(?:[_\-. ]|$)/.test(lowerFilename) || /(?:^|[_\-. ])acc_(?:[_\-. ]|$)/.test(lowerFilename)) {
     return 'accessory';
   }
   
@@ -243,6 +243,8 @@ export async function scanZip(zipData: Uint8Array | ArrayBuffer): Promise<ZipSca
     // Helper function to recursively list all files
     const listFiles = (path: string): string[] => {
       const files: string[] = [];
+      if (!sevenZip) return files;
+      
       try {
         const entries = sevenZip.FS.readdir(path);
         for (const entry of entries) {
@@ -320,23 +322,27 @@ export async function scanZip(zipData: Uint8Array | ArrayBuffer): Promise<ZipSca
 
     // Cleanup virtual filesystem
     try {
-      sevenZip.FS.unlink('/archive.zip');
-      // Recursively remove extracted directory
-      const removeDir = (path: string) => {
-        const entries = sevenZip.FS.readdir(path);
-        for (const entry of entries) {
-          if (entry === '.' || entry === '..') continue;
-          const fullPath = `${path}/${entry}`;
-          const stat = sevenZip.FS.stat(fullPath);
-          if (sevenZip.FS.isDir(stat.mode)) {
-            removeDir(fullPath);
-          } else {
-            sevenZip.FS.unlink(fullPath);
+      if (sevenZip) {
+        sevenZip.FS.unlink('/archive.zip');
+        // Recursively remove extracted directory
+        const removeDir = (path: string) => {
+          if (!sevenZip) return;
+          
+          const entries = sevenZip.FS.readdir(path);
+          for (const entry of entries) {
+            if (entry === '.' || entry === '..') continue;
+            const fullPath = `${path}/${entry}`;
+            const stat = sevenZip.FS.stat(fullPath);
+            if (sevenZip.FS.isDir(stat.mode)) {
+              removeDir(fullPath);
+            } else {
+              sevenZip.FS.unlink(fullPath);
+            }
           }
-        }
-        sevenZip.FS.rmdir(path);
-      };
-      removeDir('/extracted');
+          sevenZip.FS.rmdir(path);
+        };
+        removeDir('/extracted');
+      }
     } catch {
       // Cleanup errors are non-critical
     }
@@ -464,4 +470,5 @@ export interface WorkerMessage {
   result?: ZipScanResult;
   error?: string;
   progress?: number;
+  scanId?: number;
 }

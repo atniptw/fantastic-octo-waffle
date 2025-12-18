@@ -3,7 +3,7 @@
  * Provides a clean API for scanning ZIP files without blocking the UI.
  */
 
-import { useRef, useCallback, useState } from 'react';
+import { useRef, useCallback, useState, useEffect } from 'react';
 import type { ZipScanResult, WorkerMessage } from './zipScanner';
 
 export interface ScanProgress {
@@ -31,6 +31,7 @@ export interface UseZipScannerResult {
 /**
  * Hook for scanning ZIP files using a Web Worker.
  * Handles worker lifecycle and provides a promise-based API.
+ * Tracks concurrent scans and properly cleans up the worker on unmount.
  *
  * @example
  * ```tsx
@@ -50,7 +51,19 @@ export interface UseZipScannerResult {
  */
 export function useZipScanner(): UseZipScannerResult {
   const workerRef = useRef<Worker | null>(null);
+  const activeScanCountRef = useRef(0);
   const [isScanning, setIsScanning] = useState(false);
+  const nextScanIdRef = useRef(0);
+
+  // Cleanup worker on unmount
+  useEffect(() => {
+    return () => {
+      if (workerRef.current) {
+        workerRef.current.terminate();
+        workerRef.current = null;
+      }
+    };
+  }, []);
 
   const scanFile = useCallback(
     async (
@@ -72,10 +85,19 @@ export function useZipScanner(): UseZipScannerResult {
         }
 
         const worker = workerRef.current;
+        const scanId = nextScanIdRef.current++;
+        
+        // Increment active scan count
+        activeScanCountRef.current++;
         setIsScanning(true);
 
         const handleMessage = (event: MessageEvent<WorkerMessage>) => {
-          const { type, result, error, progress, fileName } = event.data;
+          const { type, result, error, progress, fileName, scanId: responseScanId } = event.data;
+
+          // Only process messages for this specific scan
+          if (responseScanId !== scanId) {
+            return;
+          }
 
           switch (type) {
             case 'progress': {
@@ -87,7 +109,12 @@ export function useZipScanner(): UseZipScannerResult {
 
             case 'result': {
               if (result) {
-                setIsScanning(false);
+                // Decrement active scan count
+                activeScanCountRef.current--;
+                if (activeScanCountRef.current === 0) {
+                  setIsScanning(false);
+                }
+                
                 if (options?.onComplete) {
                   options.onComplete(result, file.name);
                 }
@@ -98,7 +125,12 @@ export function useZipScanner(): UseZipScannerResult {
             }
 
             case 'error': {
-              setIsScanning(false);
+              // Decrement active scan count
+              activeScanCountRef.current--;
+              if (activeScanCountRef.current === 0) {
+                setIsScanning(false);
+              }
+              
               const errorObj = { fileName: fileName || file.name, error: error || 'Unknown error' };
               if (options?.onError) {
                 options.onError(errorObj);
@@ -118,10 +150,16 @@ export function useZipScanner(): UseZipScannerResult {
             type: 'scan',
             file: arrayBuffer,
             fileName: file.name,
+            scanId,
           };
           worker.postMessage(message);
         }).catch(err => {
-          setIsScanning(false);
+          // Decrement active scan count on error
+          activeScanCountRef.current--;
+          if (activeScanCountRef.current === 0) {
+            setIsScanning(false);
+          }
+          
           const errorMsg = `Failed to read file: ${err instanceof Error ? err.message : String(err)}`;
           if (options?.onError) {
             options.onError({ fileName: file.name, error: errorMsg });
