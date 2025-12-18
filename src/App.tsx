@@ -3,7 +3,7 @@ import ImportButton from '@/renderer/components/ImportButton';
 import ActivityLog from '@/renderer/components/ActivityLog';
 import CatalogView from '@/renderer/components/CatalogView';
 import FileUploadDemo from '@/renderer/components/FileUploadDemo';
-import { ImportLogEntry, ImportFilesResult } from '@/renderer/types/electron';
+import { ImportLogEntry, ImportFilesResult, Mod, Cosmetic } from '@/shared/types';
 
 type ViewMode = 'import' | 'catalog' | 'demo';
 
@@ -11,7 +11,8 @@ function App() {
   const [currentView, setCurrentView] = useState<ViewMode>('import');
   const [logs, setLogs] = useState<ImportLogEntry[]>([]);
   const [isImporting, setIsImporting] = useState(false);
-  const [catalogVersion, setCatalogVersion] = useState(0);
+  const [mods, setMods] = useState<Mod[]>([]);
+  const [cosmetics, setCosmetics] = useState<Cosmetic[]>([]);
   const [lastImportSummary, setLastImportSummary] = useState<{
     total: number;
     success: number;
@@ -34,8 +35,9 @@ function App() {
       errors: result.errorCount,
       warnings: result.warningCount,
     });
-    // Trigger catalog refresh
-    setCatalogVersion(prev => prev + 1);
+    // Update catalog with new mods and cosmetics
+    setMods(prev => [...prev, ...result.mods]);
+    setCosmetics(prev => [...prev, ...result.cosmetics]);
   };
 
   const handleImportError = (error: string) => {
@@ -128,7 +130,7 @@ function App() {
         )}
 
         {currentView === 'catalog' && (
-          <CatalogView refreshTrigger={catalogVersion} />
+          <CatalogView mods={mods} cosmetics={cosmetics} />
         )}
 
         {currentView === 'demo' && (
