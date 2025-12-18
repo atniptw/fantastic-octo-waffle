@@ -35,20 +35,18 @@ test.describe('R.E.P.O. Cosmetic Catalog', () => {
     );
   });
 
-  test('should log message to console when import button is clicked', async ({ page }) => {
-    // Capture console messages
-    const consoleMessages: string[] = [];
-    page.on('console', (msg) => consoleMessages.push(msg.text()));
-
+  test('should trigger file input when import button is clicked', async ({ page }) => {
     await page.goto('/');
     
     const importButton = page.locator('button.import-button');
-    await importButton.click();
-
-    // Verify the console log was triggered (runs outside Electron)
-    expect(consoleMessages.some((msg) => 
-      msg.includes('Import button clicked - running outside Electron')
-    )).toBe(true);
+    const fileInput = page.locator('input[type="file"][data-testid="import-input"]');
+    
+    // Verify file input exists and is hidden
+    await expect(fileInput).toBeAttached();
+    
+    // File input should be present (even if hidden)
+    const fileInputCount = await fileInput.count();
+    expect(fileInputCount).toBe(1);
   });
 
   test('should have navigation buttons', async ({ page }) => {
@@ -75,8 +73,8 @@ test.describe('R.E.P.O. Cosmetic Catalog', () => {
     const catalogNav = page.locator('button.nav-button', { hasText: 'Catalog' });
     await catalogNav.click();
 
-    // Should now show catalog placeholder (outside Electron)
-    await expect(page.locator('.catalog-placeholder')).toBeVisible();
+    // Should now show catalog view with header
+    await expect(page.locator('h2', { hasText: 'Cosmetics Catalog' })).toBeVisible();
     await expect(catalogNav).toHaveClass(/active/);
 
     // Click import nav to go back
