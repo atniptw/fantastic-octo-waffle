@@ -15,7 +15,7 @@ interface AnalysisState {
   error?: string;
 }
 
-const client = new ThunderstoreClient();
+const client = new ThunderstoreClient({ baseUrl: config.thunderstoreBaseUrl });
 
 export default function ModDetail({ mod, onAnalyze }: ModDetailProps) {
   const [analysisState, setAnalysisState] = useState<AnalysisState>({
@@ -33,6 +33,14 @@ export default function ModDetail({ mod, onAnalyze }: ModDetailProps) {
   }
 
   const handleAnalyze = async () => {
+    // Notify parent that analysis was triggered, if provided
+    if (onAnalyze && mod) {
+      try {
+        onAnalyze(mod);
+      } catch (_) {
+        // no-op: parent callback errors shouldn't block analysis
+      }
+    }
     const namespace = 'namespace' in mod ? mod.namespace : ('owner' in mod ? mod.owner : '');
     if (!namespace) return;
     

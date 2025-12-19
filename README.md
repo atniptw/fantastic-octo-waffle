@@ -25,9 +25,9 @@ A browser-based web application that fetches R.E.P.O. mods from Thunderstore, ex
 - **Deployment**: GitHub Pages
 - **Linting**: ESLint
 
-## Live Demo
+## Live Site
 
-🚀 **[Try it now on GitHub Pages](https://atniptw.github.io/fantastic-octo-waffle/)**
+🚀 **[Open the site on GitHub Pages](https://atniptw.github.io/fantastic-octo-waffle/)**
 
 ## Prerequisites
 
@@ -90,36 +90,56 @@ npm run format
 
 ```
 ├── src/
-│   ├── components/         # React UI components
-│   │   ├── ThunderstoreDemo.tsx  # Thunderstore browsing UI
-│   │   ├── CatalogView.tsx # Cosmetics catalog
-│   │   └── PreviewViewer.tsx # 3D preview viewer
-│   ├── lib/                # Core libraries
-│   │   ├── thunderstore/   # Thunderstore API client
-│   │   ├── zipScanner.ts   # ZIP extraction logic
-│   │   ├── indexedDB.ts    # IndexedDB wrapper
-│   │   ├── unityParser.ts  # UnityFS .hhh parser
-│   │   └── previewGenerator.ts # Image/GIF generation
-│   ├── App.tsx             # Main React component
-│   ├── main.tsx            # React entry point
-│   └── index.html          # HTML entry point
-├── public/                 # Static assets
-├── dist/                   # Build output (GitHub Pages)
+│   ├── App.tsx                 # Main React component
+│   ├── main.tsx                # React entry point
+│   ├── index.html              # HTML entry point
+│   ├── styles.css              # Global styles (dark theme)
+│   ├── config.ts               # App configuration (proxy base URL)
+│   ├── renderer/
+│   │   └── components/         # UI components (master-detail layout)
+│   │       ├── AppLayout.tsx
+│   │       ├── Header.tsx
+│   │       ├── ModList.tsx
+│   │       ├── ModListItem.tsx
+│   │       ├── ModDetail.tsx
+│   │       ├── CatalogView.tsx
+│   ├── lib/
+│   │   ├── thunderstore/       # Thunderstore API client
+│   │   │   ├── client.ts
+│   │   │   ├── types.ts
+│   │   │   ├── cosmetic-filter.ts
+│   │   │   └── index.ts
+│   │   ├── useZipScanner.ts    # Web Worker-based ZIP scanning hook
+│   │   └── zipScanner.ts       # ZIP scanning utilities
+│   └── workers/
+│       └── zipWorker.ts        # Worker entry for ZIP processing
+├── workers/                    # Cloudflare Worker proxy (Thunderstore → Browser)
+│   ├── src/index.ts
+│   └── wrangler.toml
+├── dist/                       # Build output (GitHub Pages)
 ├── package.json
-├── tsconfig.json           # TypeScript configuration
-├── vite.config.ts          # Vite configuration
-└── eslint.config.js        # ESLint configuration
+├── tsconfig.json               # TypeScript configuration
+├── vite.config.ts              # Vite configuration
+└── eslint.config.js            # ESLint configuration
 ```
+
+## Configuration
+
+- Set Thunderstore proxy base URL via environment variable:
+
+```bash
+export VITE_THUNDERSTORE_PROXY_URL="https://<your-worker-subdomain>.workers.dev"
+```
+
+If unset, the app will attempt direct Thunderstore requests (may be blocked by CORS).
 
 ## How It Works
 
-1. **Upload**: Select mod ZIP files using the file picker or drag-and-drop
-2. **Extract**: JSZip extracts files in-browser using Web Workers
-3. **Scan**: App scans for `manifest.json`, `icon.png`, and `.hhh` cosmetic files
-4. **Parse**: UnityFS parser extracts meshes and textures from `.hhh` bundles
-5. **Store**: Metadata and assets stored in IndexedDB (local to your browser)
-6. **Preview**: Three.js renders 3D cosmetics with interactive controls
-7. **Export**: Generate and download preview images or animated GIFs
+1. **Analyze**: Click "Analyze Mod" to download the mod ZIP via the proxy
+2. **Extract**: ZIP is processed in-browser using a Web Worker
+3. **Scan**: Files are scanned for `manifest.json`, `icon.png`, and `plugins/*/Decorations/*.hhh`
+4. **Parse (Level 2)**: UnityFS `.hhh` bundles are parsed to extract meshes/textures
+5. **Preview (Level 2)**: Three.js renders 3D previews; images/GIFs can be generated
 
 ## Browser Compatibility
 

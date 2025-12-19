@@ -9,7 +9,7 @@ Two-level implementation approach:
 - **Level 2 (Primary Goal)**: In-browser UnityFS parsing, asset extraction, 3D preview with Three.js, GIF generation
 
 ## Core Data Flow
-1. User browses/searches Thunderstore mods → App fetches mod ZIPs from Thunderstore API → JSZip extracts in browser using Web Workers
+1. User browses/searches Thunderstore mods → App sends requests through Cloudflare Workers CORS proxy → Proxy fetches from Thunderstore API → JSZip extracts in browser using Web Workers
 2. Scan for `manifest.json`, `icon.png`, `plugins/<plugin>/Decorations/*.hhh`
 3. Extract metadata → Store in IndexedDB (`mods`, `cosmetics`, `assets` stores)
 4. Parse `.hhh` files → Extract meshes/textures → Render with Three.js
@@ -21,9 +21,10 @@ Two-level implementation approach:
 - **ZIP Handling**: JSZip (client-side, no Node.js required)
 - **Storage**: IndexedDB (browser-native)
 - **3D Rendering**: Three.js + WebGL
-- **Deployment**: GitHub Pages (static site only)
+- **Deployment**: GitHub Pages (static site) + Cloudflare Workers (CORS proxy)
+- **Proxy Server**: Cloudflare Worker to handle Thunderstore API CORS restrictions
 - **Asset Format**: `.hhh` files are UnityFS asset bundles
-- **Must work entirely client-side** and handle corrupt `.hhh` files gracefully
+- **Client-side processing**: All ZIP extraction, parsing, and rendering happens in the browser
 
 ## Critical File Patterns
 - Cosmetic files: `plugins/<plugin>/Decorations/*.hhh`

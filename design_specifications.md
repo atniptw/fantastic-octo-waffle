@@ -17,8 +17,8 @@ Players of **R.E.P.O.** use mods to add cosmetic heads and decorations. However:
 ## 2. Target Platform
 - **Browser-based** (Chrome, Firefox, Edge, Safari)
 - Static web application hosted on **GitHub Pages**
-- No backend server required for initial version
-- Client-side only (JavaScript/TypeScript)
+- Lightweight **Cloudflare Workers** proxy for CORS handling (no backend server)
+- Client-side processing (JavaScript/TypeScript) for ZIP extraction, parsing, and rendering
 - Cross-platform (Windows, macOS, Linux, mobile)
 
 ---
@@ -27,7 +27,7 @@ Players of **R.E.P.O.** use mods to add cosmetic heads and decorations. However:
 
 ### Level 1 – Thunderstore Integration & Metadata Extraction (Required)
 The application will:
-- Fetch mod packages from Thunderstore API
+- Fetch mod packages from Thunderstore API through Cloudflare Workers CORS proxy
 - Allow users to browse/search available R.E.P.O. mods
 - Download mod ZIP files from Thunderstore CDN
 - Unzip files entirely in the browser using JSZip

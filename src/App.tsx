@@ -4,11 +4,11 @@ import Header from '@/renderer/components/Header';
 import ModList from '@/renderer/components/ModList';
 import ModDetail from '@/renderer/components/ModDetail';
 import { ThunderstoreClient } from '@/lib/thunderstore/client';
+import { config } from '@/config';
 import { PackageExperimental, PackageListing, PackageIndexEntry } from '@/lib/thunderstore/types';
-import { filterREPOCosmetics } from '@/lib/thunderstore/cosmetic-filter';
 
-// Use default Thunderstore client; library endpoints aim to be browser-friendly
-const client = new ThunderstoreClient();
+// Use configured Thunderstore base URL (Cloudflare Worker proxy if set)
+const client = new ThunderstoreClient({ baseUrl: config.thunderstoreBaseUrl });
 
 function App() {
   const [allMods, setAllMods] = useState<Array<PackageExperimental | PackageListing | PackageIndexEntry>>([]);

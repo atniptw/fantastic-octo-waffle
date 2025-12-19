@@ -33,8 +33,12 @@ export default function ModListItem({ mod, isSelected, onClick }: ModListItemPro
         </p>
         <div className="mod-item-meta">
           {downloadCount > 0 && <span className="mod-meta-badge">↓ {formattedDownloads}</span>}
-          {mod.is_pinned && <span className="mod-meta-badge">📌 Pinned</span>}
-          {mod.is_deprecated && <span className="mod-meta-badge deprecated">⚠️ Deprecated</span>}
+          {('is_pinned' in mod && (mod as PackageExperimental).is_pinned) && (
+            <span className="mod-meta-badge">📌 Pinned</span>
+          )}
+          {('is_deprecated' in mod && (mod as PackageExperimental).is_deprecated) && (
+            <span className="mod-meta-badge deprecated">⚠️ Deprecated</span>
+          )}
         </div>
       </div>
     </div>
