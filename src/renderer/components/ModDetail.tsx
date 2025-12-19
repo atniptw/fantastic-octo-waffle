@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { PackageExperimental, PackageListing, PackageIndexEntry } from '@/lib/thunderstore/types';
+import { ThunderstoreClient } from '@/lib/thunderstore/client';
+import { useZipScanner } from '@/lib/useZipScanner';
 
 interface ModDetailProps {
   mod: PackageExperimental | PackageListing | PackageIndexEntry | null;
@@ -12,11 +14,14 @@ interface AnalysisState {
   error?: string;
 }
 
+const client = new ThunderstoreClient();
+
 export default function ModDetail({ mod, onAnalyze }: ModDetailProps) {
   const [analysisState, setAnalysisState] = useState<AnalysisState>({
     status: 'idle',
     message: '',
   });
+  const { scanFile, isScanning } = useZipScanner();
 
   if (!mod) {
     return (
@@ -56,6 +61,51 @@ export default function ModDetail({ mod, onAnalyze }: ModDetailProps) {
     }
   };
 
+  const handleDownload = async () => {
+    const namespace = 'namespace' in mod ? mod.namespace : ('owner' in mod ? mod.owner : '');
+    if (!namespace) return;
+    
+    setAnalysisState({ status: 'fetching', message: `Downloading ${mod.name}...` });
+    
+    try {
+      const downloadUrl = client.getPackageDownloadUrl(namespace, mod.name);
+      const response = await fetch(downloadUrl);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to download: ${response.statusText}`);
+      }
+      
+      const arrayBuffer = await response.arrayBuffer();
+      const file = new File([arrayBuffer], `${mod.name}.zip`, { type: 'application/zip' });
+      
+      setAnalysisState({ status: 'extracting', message: `Extracting ${mod.name}...` });
+      
+      const result = await scanFile(file, {
+        onProgress: (progress) => {
+          setAnalysisState({ 
+            status: 'extracting', 
+            message: `Extracting files... ${Math.round(progress.progress)}%` 
+          });
+        },
+      });
+      
+      setAnalysisState({ 
+        status: 'complete', 
+        message: `Successfully extracted ${result.cosmetics?.length || 0} cosmetic files` 
+      });
+      
+      console.log('ZIP extracted:', result);
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      setAnalysisState({
+        status: 'error',
+        message: 'Failed to import mod',
+        error: errorMsg,
+      });
+      console.error('Failed to download/extract mod:', error);
+    }
+  };
+
   const downloadCount = 'total_downloads' in mod ? parseInt(mod.total_downloads, 10) || 0 : 0;
   const formattedDownloads = downloadCount.toLocaleString();
 
@@ -64,7 +114,7 @@ export default function ModDetail({ mod, onAnalyze }: ModDetailProps) {
       <div className="mod-detail-header">
         <h2 className="mod-detail-title">{mod.name}</h2>
         <div className="mod-detail-metadata">
-          <span className="mod-detail-meta">by {mod.owner}</span>
+          <span className="mod-detail-meta">by {'owner' in mod ? mod.owner : mod.namespace}</span>
           {'latest' in mod && mod.latest?.version_number && (
             <span className="mod-detail-meta">v{mod.latest.version_number}</span>
           )}
@@ -86,6 +136,15 @@ export default function ModDetail({ mod, onAnalyze }: ModDetailProps) {
         <div className="mod-detail-actions">
           <button
             className="mod-detail-button mod-detail-button-primary"
+            onClick={handleDownload}
+            disabled={isScanning || analysisState.status === 'fetching' || analysisState.status === 'extracting'}
+          >
+            {isScanning || analysisState.status === 'fetching' || analysisState.status === 'extracting' 
+              ? 'Importing...' 
+              : 'Import Mod'}
+          </button>
+          <button
+            className="mod-detail-button mod-detail-button-primary"
             onClick={handleAnalyze}
             disabled={analysisState.status !== 'idle' && analysisState.status !== 'complete' && analysisState.status !== 'error'}
           >
@@ -105,7 +164,7 @@ export default function ModDetail({ mod, onAnalyze }: ModDetailProps) {
       {analysisState.status !== 'idle' && (
         <div className={`analysis-status analysis-status-${analysisState.status}`}>
           <div className="analysis-status-message">
-            {analysisState.status !== 'idle' && analysisState.status !== 'complete' && analysisState.status !== 'error' && (
+            {(analysisState.status === 'fetching' || analysisState.status === 'extracting' || analysisState.status === 'converting') && (
               <span className="analysis-spinner">⟳</span>
             )}
             {analysisState.message}

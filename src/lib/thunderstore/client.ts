@@ -345,8 +345,13 @@ export class ThunderstoreClient {
   /**
    * Build package download URL
    */
-  getPackageDownloadUrl(namespace: string, name: string, version: string): string {
-    return `${this.baseUrl}/package/download/${namespace}/${name}/${version}/`;
+  getPackageDownloadUrl(namespace: string, name: string): string;
+  getPackageDownloadUrl(namespace: string, name: string, version: string): string;
+  getPackageDownloadUrl(namespace: string, name: string, version?: string): string {
+    if (version) {
+      return `${this.baseUrl}/package/download/${namespace}/${name}/${version}/`;
+    }
+    return `${this.baseUrl}/package/download/${namespace}/${name}/`;
   }
 
   /**
