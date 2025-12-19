@@ -4,14 +4,16 @@
 R.E.P.O. Cosmetic Mod Preview Tool (Browser-Based)
 
 ## SUMMARY
-Build a browser-based web application hosted on GitHub Pages that allows users to upload Thunderstore mod ZIP files for R.E.P.O., extracts cosmetic metadata from `.hhh` UnityFS bundles, stores them in IndexedDB, and provides searchable UI with in-browser 3D preview rendering. Level 1 (ZIP upload & catalog) is required. Level 2 (3D preview/GIF generation) is the primary goal.
+Build a browser-based web application hosted on GitHub Pages that fetches R.E.P.O. mod ZIP files from Thunderstore API, extracts cosmetic metadata from `.hhh` UnityFS bundles, stores them in IndexedDB, and provides searchable UI with in-browser 3D preview rendering. Level 1 (Thunderstore integration & catalog) is required. Level 2 (3D preview/GIF generation) is the primary goal.
 
 ---
 
 ## LEVEL 1 – CORE REQUIREMENTS (MANDATORY)
 
-### 1. Browser ZIP Upload & Processing
-- HTML5 file input accepting multiple ZIP files
+### 1. Thunderstore Integration & ZIP Processing
+- Fetch package list from Thunderstore API (https://thunderstore.io/c/repo/api/v1/package/)
+- Browse and search R.E.P.O. mods in the UI
+- Download selected mod ZIPs from Thunderstore CDN
 - Unzip files in browser using JSZip library
 - Scan each ZIP for:
   - `manifest.json`
@@ -40,14 +42,15 @@ Object stores required:
 
 ### 4. UI Requirements
 - Browser-based single-page application (React/Vue/Svelte)
-- Upload button/drag-and-drop zone for ZIPs
-- Search bar with real-time filtering
+- Thunderstore mod browser with search/filters
+- Import button to fetch and process selected mods
+- Search bar with real-time filtering for cosmetics catalog
 - Data grid listing cosmetics with:
   - Cosmetic name
   - Mod name
   - Type
   - Preview button
-- Filters: by mod, by type, by upload date
+- Filters: by mod, by type, by import date
 - Responsive design (desktop + mobile)
 
 ---
@@ -94,8 +97,9 @@ Object stores required:
 ## ACCEPTANCE CRITERIA
 
 ### Level 1 Complete When:
-- Users can upload multiple ZIP files
-- ZIPs are extracted and scanned in browser
+- Users can browse and search Thunderstore mods
+- Users can select and import mods from Thunderstore
+- Mod ZIPs are fetched, extracted and scanned in browser
 - All cosmetics and mod info populate IndexedDB
 - Search works instantly with filters
 - Icons display correctly from uploaded data

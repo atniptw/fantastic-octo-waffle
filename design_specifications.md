@@ -10,7 +10,7 @@ Players of **R.E.P.O.** use mods to add cosmetic heads and decorations. However:
   ```
 - `.hhh` files are Unity asset bundles (UnityFS).
 
-**Goal:** Build a browser-based web application hosted on GitHub Pages that lets users upload mod ZIPs, extract cosmetic metadata, and preview cosmetics directly in the browser. Future: optionally fetch mods from Thunderstore API via proxy server.
+**Goal:** Build a browser-based web application hosted on GitHub Pages that fetches mod ZIPs from Thunderstore API, extracts cosmetic metadata, and previews cosmetics directly in the browser.
 
 ---
 
@@ -25,9 +25,11 @@ Players of **R.E.P.O.** use mods to add cosmetic heads and decorations. However:
 
 ## 3. Scope Levels
 
-### Level 1 – ZIP Upload & Metadata Extraction (Required)
+### Level 1 – Thunderstore Integration & Metadata Extraction (Required)
 The application will:
-- Allow users to upload Thunderstore mod ZIP files via file input
+- Fetch mod packages from Thunderstore API
+- Allow users to browse/search available R.E.P.O. mods
+- Download mod ZIP files from Thunderstore CDN
 - Unzip files entirely in the browser using JSZip
 - Scan each ZIP for:
   - `manifest.json`
@@ -44,12 +46,6 @@ The application will:
 - Convert meshes to GLTF or display using Three.js/Babylon.js
 - Render 3D previews directly in the browser
 - Generate preview images/GIFs for each cosmetic
-
-### Level 3 – Thunderstore API Integration (Future)
-- Optional proxy server to fetch mods from Thunderstore API
-- Users specify mod name/ID
-- Application downloads and processes automatically
-- Caches downloaded mods in IndexedDB
 
 ---
 
@@ -93,8 +89,9 @@ Browser-based storage using IndexedDB instead of SQLite:
 
 ## 5. Core Features
 
-### Level 1 - Browser-Based Catalog
-- Upload mod ZIP files via HTML5 file input
+### Level 1 - Thunderstore Integration & Browser-Based Catalog
+- Browse and search R.E.P.O. mods on Thunderstore
+- Fetch mod ZIPs directly from Thunderstore API/CDN
 - Unzip in browser using JSZip library
 - Scan for `.hhh` files and metadata
 - Extract metadata and compute SHA256 hashes

@@ -1,15 +1,15 @@
 # R.E.P.O. Cosmetic Catalog - AI Agent Instructions
 
 ## Project Overview
-This is a browser-based web application hosted on GitHub Pages that lets users upload Thunderstore mod ZIP files for R.E.P.O., extract cosmetic metadata from `.hhh` UnityFS bundles, and preview cosmetics with 3D rendering - all client-side in the browser.
+This is a browser-based web application hosted on GitHub Pages that fetches Thunderstore mod ZIP files for R.E.P.O. via the Thunderstore API, extracts cosmetic metadata from `.hhh` UnityFS bundles, and previews cosmetics with 3D rendering - all client-side in the browser.
 
 ## Architecture Philosophy
 Two-level implementation approach:
-- **Level 1 (Required)**: Browser ZIP upload, client-side extraction, IndexedDB storage, search UI
+- **Level 1 (Required)**: Thunderstore API integration, client-side ZIP extraction, IndexedDB storage, search UI
 - **Level 2 (Primary Goal)**: In-browser UnityFS parsing, asset extraction, 3D preview with Three.js, GIF generation
 
 ## Core Data Flow
-1. User uploads mod ZIPs → JSZip extracts in browser using Web Workers
+1. User browses/searches Thunderstore mods → App fetches mod ZIPs from Thunderstore API → JSZip extracts in browser using Web Workers
 2. Scan for `manifest.json`, `icon.png`, `plugins/<plugin>/Decorations/*.hhh`
 3. Extract metadata → Store in IndexedDB (`mods`, `cosmetics`, `assets` stores)
 4. Parse `.hhh` files → Extract meshes/textures → Render with Three.js
@@ -59,12 +59,13 @@ For browser-based preview implementation:
 - GIF generation: Canvas capture + GIF encoder library
 
 ## Acceptance Criteria
-- Users can upload multiple ZIPs successfully
+- Users can browse and search mods from Thunderstore
+- App successfully fetches mod ZIPs from Thunderstore API
 - ZIPs extract in browser without freezing UI (Web Workers)
 - All cosmetics populate IndexedDB with correct metadata
 - Search works instantly with filters
-- Icons display correctly from uploaded data
-- Duplicate uploads don't create duplicate entries
+- Icons display correctly from fetched mod data
+- Duplicate mod imports don't create duplicate entries
 - Corrupt `.hhh` files do not crash the application
 - (Level 2) At least one `.hhh` mesh/texture extracted and previewed
 - (Level 2) Preview images and GIFs can be generated and downloaded

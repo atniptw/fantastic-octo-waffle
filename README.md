@@ -1,10 +1,11 @@
 # R.E.P.O. Cosmetic Catalog
 
-A browser-based web application that lets users upload Thunderstore mod ZIP files for R.E.P.O., extract cosmetic metadata from `.hhh` Unity asset bundles, and preview cosmetics with 3D rendering and GIF generation - all running in your browser.
+A browser-based web application that fetches R.E.P.O. mods from Thunderstore, extracts cosmetic metadata from `.hhh` Unity asset bundles, and previews cosmetics with 3D rendering and GIF generation - all running in your browser.
 
 ## Features
 
-- 📦 **Upload mod ZIP files** directly in your browser
+- 🌩️ **Browse and fetch mods** directly from Thunderstore API
+- 📦 **Automatic ZIP download** and processing in your browser
 - 🔍 **Extract cosmetic metadata** from `.hhh` Unity asset bundles
 - 💾 **Store locally** in IndexedDB (privacy-friendly, no server needed)
 - 🔎 **Search and filter** cosmetics catalog
@@ -90,10 +91,11 @@ npm run format
 ```
 ├── src/
 │   ├── components/         # React UI components
-│   │   ├── FileUpload.tsx  # ZIP file upload
+│   │   ├── ThunderstoreDemo.tsx  # Thunderstore browsing UI
 │   │   ├── CatalogView.tsx # Cosmetics catalog
 │   │   └── PreviewViewer.tsx # 3D preview viewer
 │   ├── lib/                # Core libraries
+│   │   ├── thunderstore/   # Thunderstore API client
 │   │   ├── zipScanner.ts   # ZIP extraction logic
 │   │   ├── indexedDB.ts    # IndexedDB wrapper
 │   │   ├── unityParser.ts  # UnityFS .hhh parser
