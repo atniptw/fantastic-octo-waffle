@@ -155,9 +155,18 @@ export class ThunderstoreClient {
   /**
    * List all packages (V1 API)
    */
-  async listPackagesV1(communityId?: string): Promise<PackageListing[]> {
-    const path = communityId ? `/c/${communityId}/api/v1/package/` : '/api/v1/package/';
-    return this.get(path);
+  async listPackagesV1(communityId?: string, search?: string): Promise<PackageListing[]> {
+    const basePath = communityId ? `/c/${communityId}/api/v1/package/` : '/api/v1/package/';
+    if (search && search.trim().length > 0) {
+      const url = `${basePath}?search=${encodeURIComponent(search.trim())}`;
+      try {
+        return await this.get(url);
+      } catch (err) {
+        // Fallback to unfiltered list if server doesn't support search param
+        console.warn('Thunderstore V1 search parameter failed; falling back to full list');
+      }
+    }
+    return this.get(basePath);
   }
 
   /**
