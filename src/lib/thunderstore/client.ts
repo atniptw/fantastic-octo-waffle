@@ -1,6 +1,8 @@
 /**
  * Thunderstore API Client
  * Browser-compatible client for the Thunderstore API
+ *
+ * API Documentation: https://thunderstore.io/api/docs/
  */
 
 import type {

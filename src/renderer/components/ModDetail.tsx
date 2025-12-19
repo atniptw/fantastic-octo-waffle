@@ -4,7 +4,6 @@ import { PackageExperimental, PackageListing, PackageIndexEntry } from '@/lib/th
 interface ModDetailProps {
   mod: PackageExperimental | PackageListing | PackageIndexEntry | null;
   onAnalyze?: (mod: PackageExperimental | PackageListing | PackageIndexEntry) => void;
-  isLoadingDetails?: boolean;
 }
 
 interface AnalysisState {
@@ -13,7 +12,7 @@ interface AnalysisState {
   error?: string;
 }
 
-export default function ModDetail({ mod, onAnalyze, isLoadingDetails }: ModDetailProps) {
+export default function ModDetail({ mod, onAnalyze }: ModDetailProps) {
   const [analysisState, setAnalysisState] = useState<AnalysisState>({
     status: 'idle',
     message: '',
@@ -23,17 +22,6 @@ export default function ModDetail({ mod, onAnalyze, isLoadingDetails }: ModDetai
     return (
       <div className="mod-detail mod-detail-empty">
         <p>Select a mod to view details</p>
-      </div>
-    );
-  }
-
-  if (isLoadingDetails) {
-    return (
-      <div className="mod-detail">
-        <div className="mod-detail-loading">
-          <span className="analysis-spinner">⟳</span>
-          <p>Loading mod details...</p>
-        </div>
       </div>
     );
   }
@@ -92,7 +80,7 @@ export default function ModDetail({ mod, onAnalyze, isLoadingDetails }: ModDetai
             {mod.latest?.description || 'No description available.'}
           </p>
         ) : (
-          <p className="mod-detail-description">Loading detailed info...</p>
+          <p className="mod-detail-description">No description available.</p>
         )}
         
         <div className="mod-detail-actions">

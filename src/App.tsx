@@ -15,7 +15,6 @@ function App() {
   const [filteredMods, setFilteredMods] = useState<Array<PackageExperimental | PackageListing | PackageIndexEntry>>([]);
   const [selectedMod, setSelectedMod] = useState<PackageExperimental | PackageListing | PackageIndexEntry | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
@@ -78,25 +77,11 @@ function App() {
     setFilteredMods(filtered);
   };
 
-  const handleSelectMod = async (
+  const handleSelectMod = (
     mod: PackageExperimental | PackageListing | PackageIndexEntry
   ) => {
     setSelectedMod(mod);
-    setIsLoadingDetails(true);
-    // Lazy-load full details only for index entries (which lack description/downloads)
-    // PackageListing (V1) already has enough info; PackageExperimental has 'latest'
-    if (!('latest' in mod) && 'namespace' in mod) {
-      try {
-        const detailed = await client.getPackage(mod.namespace, mod.name);
-        setSelectedMod(detailed);
-      } catch (err) {
-        console.warn('Failed to fetch detailed package info:', err);
-      } finally {
-        setIsLoadingDetails(false);
-      }
-    } else {
-      setIsLoadingDetails(false);
-    }
+    setIsLoadingDetails(false);
   };
 
   const handleAnalyzeMod = async (mod: PackageExperimental | PackageListing | PackageIndexEntry) => {
@@ -118,7 +103,7 @@ function App() {
           onRetry={loadMods}
         />
       }
-      modDetail={<ModDetail mod={selectedMod} onAnalyze={handleAnalyzeMod} isLoadingDetails={isLoadingDetails} />}
+      modDetail={<ModDetail mod={selectedMod} onAnalyze={handleAnalyzeMod} />}
     />
   );
 }

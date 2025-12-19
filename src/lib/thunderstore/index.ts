@@ -4,6 +4,8 @@
  * A TypeScript client library for the Thunderstore API
  * Fully browser-compatible with no Node.js dependencies
  *
+ * API Documentation: https://thunderstore.io/api/docs/
+ *
  * @example
  * ```typescript
  * import { createThunderstoreClient } from './lib/thunderstore';
