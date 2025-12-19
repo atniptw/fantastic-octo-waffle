@@ -18,15 +18,15 @@ import {
  */
 async function createMockZip(files: Record<string, string | Uint8Array>): Promise<Uint8Array> {
   const sevenZip = await SevenZipWasm();
-  
+
   // Create a temporary directory for files
   sevenZip.FS.mkdir('/ziproot');
-  
+
   // Write all files to the virtual filesystem
   for (const [path, content] of Object.entries(files)) {
     const parts = path.split('/');
     let currentPath = '/ziproot';
-    
+
     // Create intermediate directories
     for (let i = 0; i < parts.length - 1; i++) {
       currentPath += '/' + parts[i];
@@ -36,7 +36,7 @@ async function createMockZip(files: Record<string, string | Uint8Array>): Promis
         // Directory might already exist
       }
     }
-    
+
     // Write the file
     const fullPath = '/ziproot/' + path;
     if (typeof content === 'string') {
@@ -45,15 +45,15 @@ async function createMockZip(files: Record<string, string | Uint8Array>): Promis
       sevenZip.FS.writeFile(fullPath, content);
     }
   }
-  
+
   // Change to ziproot directory to create archive without the directory prefix
   sevenZip.FS.chdir('/ziproot');
   sevenZip.callMain(['a', '-tzip', '/output.zip', '.']);
   sevenZip.FS.chdir('/');
-  
+
   // Read the created ZIP file
   const zipData = sevenZip.FS.readFile('/output.zip');
-  
+
   return zipData;
 }
 
@@ -199,7 +199,9 @@ describe('scanZip', () => {
     expect(result.hasFatalError).toBe(true);
     expect(result.errors.length).toBeGreaterThan(0);
     // Error message can vary between implementations (JSZip vs sevenzip-wasm)
-    expect(result.errors.some(e => e.includes('7-Zip') || e.includes('Error parsing ZIP'))).toBe(true);
+    expect(result.errors.some((e) => e.includes('7-Zip') || e.includes('Error parsing ZIP'))).toBe(
+      true
+    );
   });
 
   it('should set hasFatalError to false for non-fatal errors', async () => {
@@ -359,7 +361,7 @@ describe('scanZip - cosmetics metadata', () => {
     const result = await scanZip(zipData);
 
     expect(result.cosmetics).toHaveLength(1);
-    
+
     const cosmetic = result.cosmetics[0];
     expect(cosmetic.filename).toBe('cool_head.hhh');
     expect(cosmetic.displayName).toBe('Cool Head');
@@ -386,10 +388,10 @@ describe('scanZip - cosmetics metadata', () => {
     const result = await scanZip(zipData);
 
     expect(result.cosmetics).toHaveLength(3);
-    
-    const head = result.cosmetics.find(c => c.type === 'head');
-    const hat = result.cosmetics.find(c => c.type === 'hat');
-    const glasses = result.cosmetics.find(c => c.type === 'glasses');
+
+    const head = result.cosmetics.find((c) => c.type === 'head');
+    const hat = result.cosmetics.find((c) => c.type === 'hat');
+    const glasses = result.cosmetics.find((c) => c.type === 'glasses');
 
     expect(head?.displayName).toBe('Cool Head');
     expect(hat?.displayName).toBe('Awesome Hat');

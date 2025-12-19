@@ -26,7 +26,7 @@ describe('ActivityLog', () => {
     ];
 
     render(<ActivityLog logs={logs} />);
-    
+
     expect(screen.getByText('test-mod.zip')).toBeInTheDocument();
     expect(screen.getByText('Imported successfully')).toBeInTheDocument();
     expect(screen.getByText('✅')).toBeInTheDocument();
@@ -43,7 +43,7 @@ describe('ActivityLog', () => {
     ];
 
     render(<ActivityLog logs={logs} />);
-    
+
     expect(screen.getByText('warning-mod.zip')).toBeInTheDocument();
     expect(screen.getByText('Mod already imported')).toBeInTheDocument();
     expect(screen.getByText('⚠️')).toBeInTheDocument();
@@ -60,7 +60,7 @@ describe('ActivityLog', () => {
     ];
 
     render(<ActivityLog logs={logs} />);
-    
+
     expect(screen.getByText('error-mod.zip')).toBeInTheDocument();
     expect(screen.getByText('Failed to process')).toBeInTheDocument();
     expect(screen.getByText('❌')).toBeInTheDocument();
@@ -83,7 +83,7 @@ describe('ActivityLog', () => {
     ];
 
     render(<ActivityLog logs={logs} />);
-    
+
     expect(screen.getByText('mod1.zip')).toBeInTheDocument();
     expect(screen.getByText('mod2.zip')).toBeInTheDocument();
     expect(screen.getByText('Success 1')).toBeInTheDocument();
@@ -92,21 +92,41 @@ describe('ActivityLog', () => {
 
   it('should show starting message when importing with no logs', () => {
     render(<ActivityLog logs={[]} isImporting={true} />);
-    
+
     expect(screen.getByText('Starting import...')).toBeInTheDocument();
     expect(screen.getByText('⏳')).toBeInTheDocument();
   });
 
   it('should have correct CSS classes for different statuses', () => {
     const logs: ImportLogEntry[] = [
-      { timestamp: '2024-01-01T12:00:00.000Z', filename: 'success.zip', status: 'success', message: 'Success' },
-      { timestamp: '2024-01-01T12:00:00.000Z', filename: 'warning.zip', status: 'warning', message: 'Warning' },
-      { timestamp: '2024-01-01T12:00:00.000Z', filename: 'error.zip', status: 'error', message: 'Error' },
-      { timestamp: '2024-01-01T12:00:00.000Z', filename: 'info.zip', status: 'info', message: 'Info' },
+      {
+        timestamp: '2024-01-01T12:00:00.000Z',
+        filename: 'success.zip',
+        status: 'success',
+        message: 'Success',
+      },
+      {
+        timestamp: '2024-01-01T12:00:00.000Z',
+        filename: 'warning.zip',
+        status: 'warning',
+        message: 'Warning',
+      },
+      {
+        timestamp: '2024-01-01T12:00:00.000Z',
+        filename: 'error.zip',
+        status: 'error',
+        message: 'Error',
+      },
+      {
+        timestamp: '2024-01-01T12:00:00.000Z',
+        filename: 'info.zip',
+        status: 'info',
+        message: 'Info',
+      },
     ];
 
     const { container } = render(<ActivityLog logs={logs} />);
-    
+
     expect(container.querySelector('.log-success')).toBeInTheDocument();
     expect(container.querySelector('.log-warning')).toBeInTheDocument();
     expect(container.querySelector('.log-error')).toBeInTheDocument();

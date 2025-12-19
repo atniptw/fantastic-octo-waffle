@@ -36,7 +36,7 @@ export interface UseZipScannerResult {
  * @example
  * ```tsx
  * const { scanFile, isScanning } = useZipScanner();
- * 
+ *
  * const handleFileSelect = async (file: File) => {
  *   try {
  *     const result = await scanFile(file, {
@@ -78,15 +78,14 @@ export function useZipScanner(): UseZipScannerResult {
         // Create worker if it doesn't exist
         if (!workerRef.current) {
           // Vite handles worker imports with ?worker suffix
-          workerRef.current = new Worker(
-            new URL('../workers/zipWorker.ts', import.meta.url),
-            { type: 'module' }
-          );
+          workerRef.current = new Worker(new URL('../workers/zipWorker.ts', import.meta.url), {
+            type: 'module',
+          });
         }
 
         const worker = workerRef.current;
         const scanId = nextScanIdRef.current++;
-        
+
         // Increment active scan count
         activeScanCountRef.current++;
         setIsScanning(true);
@@ -114,7 +113,7 @@ export function useZipScanner(): UseZipScannerResult {
                 if (activeScanCountRef.current === 0) {
                   setIsScanning(false);
                 }
-                
+
                 if (options?.onComplete) {
                   options.onComplete(result, file.name);
                 }
@@ -130,7 +129,7 @@ export function useZipScanner(): UseZipScannerResult {
               if (activeScanCountRef.current === 0) {
                 setIsScanning(false);
               }
-              
+
               const errorObj = { fileName: fileName || file.name, error: error || 'Unknown error' };
               if (options?.onError) {
                 options.onError(errorObj);
@@ -145,27 +144,30 @@ export function useZipScanner(): UseZipScannerResult {
         worker.addEventListener('message', handleMessage);
 
         // Read file and send to worker
-        file.arrayBuffer().then(arrayBuffer => {
-          const message: WorkerMessage = {
-            type: 'scan',
-            file: arrayBuffer,
-            fileName: file.name,
-            scanId,
-          };
-          worker.postMessage(message);
-        }).catch(err => {
-          // Decrement active scan count on error
-          activeScanCountRef.current--;
-          if (activeScanCountRef.current === 0) {
-            setIsScanning(false);
-          }
-          
-          const errorMsg = `Failed to read file: ${err instanceof Error ? err.message : String(err)}`;
-          if (options?.onError) {
-            options.onError({ fileName: file.name, error: errorMsg });
-          }
-          reject(new Error(errorMsg));
-        });
+        file
+          .arrayBuffer()
+          .then((arrayBuffer) => {
+            const message: WorkerMessage = {
+              type: 'scan',
+              file: arrayBuffer,
+              fileName: file.name,
+              scanId,
+            };
+            worker.postMessage(message);
+          })
+          .catch((err) => {
+            // Decrement active scan count on error
+            activeScanCountRef.current--;
+            if (activeScanCountRef.current === 0) {
+              setIsScanning(false);
+            }
+
+            const errorMsg = `Failed to read file: ${err instanceof Error ? err.message : String(err)}`;
+            if (options?.onError) {
+              options.onError({ fileName: file.name, error: errorMsg });
+            }
+            reject(new Error(errorMsg));
+          });
       });
     },
     []

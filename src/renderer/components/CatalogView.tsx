@@ -14,8 +14,8 @@ function CatalogView({ mods = [], cosmetics = [] }: CatalogViewProps) {
   const [searchQuery, setSearchQuery] = useState('');
 
   const cosmeticsWithMods: CosmeticWithMod[] = useMemo(() => {
-    const modMap = new Map(mods.map(mod => [mod.id, mod]));
-    return cosmetics.map(cosmetic => ({
+    const modMap = new Map(mods.map((mod) => [mod.id, mod]));
+    return cosmetics.map((cosmetic) => ({
       ...cosmetic,
       mod: modMap.get(cosmetic.mod_id),
     }));
@@ -24,7 +24,7 @@ function CatalogView({ mods = [], cosmetics = [] }: CatalogViewProps) {
   const filteredCosmetics = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     if (!query) return cosmeticsWithMods;
-    return cosmeticsWithMods.filter(cosmetic => {
+    return cosmeticsWithMods.filter((cosmetic) => {
       return (
         cosmetic.display_name.toLowerCase().includes(query) ||
         cosmetic.filename.toLowerCase().includes(query) ||
@@ -58,9 +58,13 @@ function CatalogView({ mods = [], cosmetics = [] }: CatalogViewProps) {
         <h2>Cosmetics Catalog</h2>
         <div className="catalog-stats">
           {searchQuery ? (
-            <>{filteredCosmetics.length} of {totalCosmetics} cosmetic(s) • {totalMods} mod(s)</>
+            <>
+              {filteredCosmetics.length} of {totalCosmetics} cosmetic(s) • {totalMods} mod(s)
+            </>
           ) : (
-            <>{totalMods} mod(s) • {totalCosmetics} cosmetic(s)</>
+            <>
+              {totalMods} mod(s) • {totalCosmetics} cosmetic(s)
+            </>
           )}
         </div>
       </div>
@@ -79,11 +83,7 @@ function CatalogView({ mods = [], cosmetics = [] }: CatalogViewProps) {
           🔍 Search
         </button>
         {searchQuery && (
-          <button
-            type="button"
-            className="clear-button"
-            onClick={() => setSearchQuery('')}
-          >
+          <button type="button" className="clear-button" onClick={() => setSearchQuery('')}>
             ✕ Clear
           </button>
         )}
@@ -91,9 +91,7 @@ function CatalogView({ mods = [], cosmetics = [] }: CatalogViewProps) {
 
       {cosmeticsWithMods.length === 0 && (
         <div className="empty-catalog">
-          <p className="placeholder-text">
-            Import mod ZIP files to populate the catalog.
-          </p>
+          <p className="placeholder-text">Import mod ZIP files to populate the catalog.</p>
         </div>
       )}
 
@@ -110,11 +108,7 @@ function CatalogView({ mods = [], cosmetics = [] }: CatalogViewProps) {
               <div className="cosmetic-name">{cosmetic.display_name}</div>
               <div className="cosmetic-details">
                 <span className="cosmetic-type">{cosmetic.type}</span>
-                {cosmetic.mod && (
-                  <span className="cosmetic-mod">
-                    by {cosmetic.mod.author}
-                  </span>
-                )}
+                {cosmetic.mod && <span className="cosmetic-mod">by {cosmetic.mod.author}</span>}
               </div>
               <div className="cosmetic-filename">{cosmetic.filename}</div>
             </div>

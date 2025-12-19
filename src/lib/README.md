@@ -1,6 +1,17 @@
-# Browser-Based ZIP Scanner
+# Library Modules
 
-This module provides browser-compatible ZIP file scanning with Web Worker support for handling large files without blocking the UI.
+This directory contains reusable library modules for the R.E.P.O. Cosmetic Catalog application.
+
+## Available Modules
+
+- **[ZIP Scanner](./zipScanner.ts)** - Browser-based ZIP file scanning with Web Worker support
+- **[Thunderstore API Client](./thunderstore/)** - TypeScript client for the Thunderstore API
+
+---
+
+## ZIP Scanner
+
+Browser-compatible ZIP file scanning with Web Worker support for handling large files without blocking the UI.
 
 ## Features
 

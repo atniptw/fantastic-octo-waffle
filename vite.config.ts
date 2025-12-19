@@ -16,6 +16,13 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     base: basePath,
     root: './src',
+    resolve: {
+      conditions: ['browser', 'default'],
+      alias: {
+        '@': resolve(__dirname, 'src'),
+        'sevenzip-wasm': 'sevenzip-wasm/sevenzip-wasm.js'
+      }
+    },
     build: {
       outDir: '../dist',
       emptyOutDir: true,
@@ -59,11 +66,6 @@ export default defineConfig(({ mode }) => {
       },
       // Chunk size warnings
       chunkSizeWarningLimit: 500,
-    },
-    resolve: {
-      alias: {
-        '@': resolve(__dirname, 'src'),
-      },
     },
     optimizeDeps: {
       include: ['three', 'jszip', 'idb'],

@@ -21,7 +21,7 @@ async function iconToDataUrl(iconData: Uint8Array | null): Promise<string | null
   // Create a new Uint8Array to ensure proper ArrayBuffer type for Blob constructor
   const properlyTypedArray = new Uint8Array(iconData);
   const blob = new Blob([properlyTypedArray], { type: 'image/png' });
-  return new Promise(resolve => {
+  return new Promise((resolve) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result as string);
     reader.onerror = () => resolve(null);
@@ -68,7 +68,7 @@ function ImportButton({
         const result = await scanZipFile(file);
 
         if (result.errors.length > 0) {
-          result.errors.forEach(msg => {
+          result.errors.forEach((msg) => {
             logs.push({
               timestamp,
               filename: file.name,
@@ -102,7 +102,7 @@ function ImportButton({
         };
         mods.push(mod);
 
-        result.cosmetics.forEach(cosmeticMeta => {
+        result.cosmetics.forEach((cosmeticMeta) => {
           const cosmetic: Cosmetic = {
             id: crypto.randomUUID(),
             mod_id: modId,
@@ -143,9 +143,10 @@ function ImportButton({
       cosmetics,
     };
 
-    const successMsg = result.successCount === result.totalFiles
-      ? `${result.successCount} mod(s) imported successfully`
-      : `${result.successCount} mod(s) imported, ${result.totalFiles - result.successCount} skipped/failed`;
+    const successMsg =
+      result.successCount === result.totalFiles
+        ? `${result.successCount} mod(s) imported successfully`
+        : `${result.successCount} mod(s) imported, ${result.totalFiles - result.successCount} skipped/failed`;
 
     setStatusState({ status: result.errorCount > 0 ? 'error' : 'success', message: successMsg });
     onImportComplete?.(result);
@@ -157,7 +158,7 @@ function ImportButton({
 
   const handleFileInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files.length > 0) {
-      processFiles(event.target.files).catch(err => {
+      processFiles(event.target.files).catch((err) => {
         const message = err instanceof Error ? err.message : String(err);
         setStatusState({ status: 'error', message });
         onImportError?.(message);

@@ -83,10 +83,10 @@ export function parseManifest(content: string): ManifestData | null {
 export function generateDisplayName(filename: string): string {
   // Trim whitespace first
   const trimmed = filename.trim();
-  
+
   // Remove extension
   const nameWithoutExt = trimmed.replace(/\.hhh$/i, '');
-  
+
   // Replace underscores and hyphens with spaces
   // Capitalize first letter of each word
   return nameWithoutExt
@@ -105,21 +105,30 @@ export function generateDisplayName(filename: string): string {
  */
 export function inferCosmeticType(filename: string): string {
   const lowerFilename = filename.toLowerCase();
-  
+
   // Check for common type keywords using lookahead/lookbehind for word boundaries
   // Match whole words that are separated by underscores, hyphens, dots, or string boundaries
   if (/(?:^|[_\-. ])head(?:[_\-. ]|$)/.test(lowerFilename)) {
     return 'head';
-  } else if (/(?:^|[_\-. ])hat(?:[_\-. ]|$)/.test(lowerFilename) || /(?:^|[_\-. ])helmet(?:[_\-. ]|$)/.test(lowerFilename)) {
+  } else if (
+    /(?:^|[_\-. ])hat(?:[_\-. ]|$)/.test(lowerFilename) ||
+    /(?:^|[_\-. ])helmet(?:[_\-. ]|$)/.test(lowerFilename)
+  ) {
     return 'hat';
-  } else if (/(?:^|[_\-. ])glasses(?:[_\-. ]|$)/.test(lowerFilename) || /(?:^|[_\-. ])goggles(?:[_\-. ]|$)/.test(lowerFilename)) {
+  } else if (
+    /(?:^|[_\-. ])glasses(?:[_\-. ]|$)/.test(lowerFilename) ||
+    /(?:^|[_\-. ])goggles(?:[_\-. ]|$)/.test(lowerFilename)
+  ) {
     return 'glasses';
   } else if (/(?:^|[_\-. ])mask(?:[_\-. ]|$)/.test(lowerFilename)) {
     return 'mask';
-  } else if (/(?:^|[_\-. ])accessory(?:[_\-. ]|$)/.test(lowerFilename) || /(?:^|[_\-. ])acc_(?:[_\-. ]|$)/.test(lowerFilename)) {
+  } else if (
+    /(?:^|[_\-. ])accessory(?:[_\-. ]|$)/.test(lowerFilename) ||
+    /(?:^|[_\-. ])acc_(?:[_\-. ]|$)/.test(lowerFilename)
+  ) {
     return 'accessory';
   }
-  
+
   // Default to decoration
   return 'decoration';
 }
@@ -136,7 +145,7 @@ export async function calculateFileHash(content: Uint8Array): Promise<string> {
   // TypeScript's strict type checking requires assertion to handle ArrayBufferLike vs ArrayBuffer
   const hashBuffer = await crypto.subtle.digest('SHA-256', content as BufferSource);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  const hashHex = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
   return hashHex;
 }
 
@@ -155,7 +164,7 @@ export async function extractCosmeticMetadata(
   const normalizedPath = internalPath.replace(/\\/g, '/');
   const parts = normalizedPath.split('/');
   const filename = parts[parts.length - 1] || 'unknown.hhh';
-  
+
   return {
     internalPath: normalizedPath,
     filename,
@@ -186,9 +195,9 @@ export async function scanZipFile(file: File | Blob): Promise<ZipScanResult> {
     reader.onerror = () => reject(reader.error);
     reader.readAsArrayBuffer(file);
   });
-  
+
   const zipData = new Uint8Array(arrayBuffer);
-  
+
   return scanZip(zipData);
 }
 
@@ -218,7 +227,7 @@ export async function scanZip(zipData: Uint8Array | ArrayBuffer): Promise<ZipSca
   try {
     // Convert to Uint8Array if needed
     const data = zipData instanceof ArrayBuffer ? new Uint8Array(zipData) : zipData;
-    
+
     // Initialize sevenzip-wasm
     const outputLines: string[] = [];
     sevenZip = await SevenZipWasm({
@@ -232,7 +241,7 @@ export async function scanZip(zipData: Uint8Array | ArrayBuffer): Promise<ZipSca
     // Extract the ZIP file to /extracted directory
     sevenZip.FS.mkdir('/extracted');
     const extractExitCode = sevenZip.callMain(['x', '/archive.zip', '-o/extracted', '-y']);
-    
+
     // Check if extraction failed (non-zero exit code indicates error)
     if (extractExitCode !== 0) {
       result.errors.push(`7-Zip extraction failed with exit code ${extractExitCode}`);
@@ -244,7 +253,7 @@ export async function scanZip(zipData: Uint8Array | ArrayBuffer): Promise<ZipSca
     const listFiles = (path: string): string[] => {
       const files: string[] = [];
       if (!sevenZip) return files;
-      
+
       try {
         const entries = sevenZip.FS.readdir(path);
         for (const entry of entries) {
@@ -265,7 +274,7 @@ export async function scanZip(zipData: Uint8Array | ArrayBuffer): Promise<ZipSca
 
     // Get all extracted files
     const extractedFiles = listFiles('/extracted');
-    
+
     // Check if any files were extracted
     if (extractedFiles.length === 0) {
       result.errors.push('No files were extracted from the archive');
@@ -274,7 +283,9 @@ export async function scanZip(zipData: Uint8Array | ArrayBuffer): Promise<ZipSca
     }
 
     // Extract manifest.json
-    const manifestPath = extractedFiles.find(f => f.endsWith('/manifest.json') || f === '/extracted/manifest.json');
+    const manifestPath = extractedFiles.find(
+      (f) => f.endsWith('/manifest.json') || f === '/extracted/manifest.json'
+    );
     if (manifestPath) {
       try {
         const manifestData = sevenZip.FS.readFile(manifestPath, { encoding: 'utf8' });
@@ -284,14 +295,18 @@ export async function scanZip(zipData: Uint8Array | ArrayBuffer): Promise<ZipSca
           result.errors.push('Invalid manifest.json format');
         }
       } catch (e) {
-        result.errors.push(`Error reading manifest.json: ${e instanceof Error ? e.message : String(e)}`);
+        result.errors.push(
+          `Error reading manifest.json: ${e instanceof Error ? e.message : String(e)}`
+        );
       }
     } else {
       result.errors.push('manifest.json not found');
     }
 
     // Extract icon.png
-    const iconPath = extractedFiles.find(f => f.endsWith('/icon.png') || f === '/extracted/icon.png');
+    const iconPath = extractedFiles.find(
+      (f) => f.endsWith('/icon.png') || f === '/extracted/icon.png'
+    );
     if (iconPath) {
       try {
         result.iconData = sevenZip.FS.readFile(iconPath);
@@ -302,7 +317,7 @@ export async function scanZip(zipData: Uint8Array | ArrayBuffer): Promise<ZipSca
 
     // Extract .hhh files from plugins/<plugin>/Decorations/ directories
     const cosmeticPattern = /\/plugins\/[^/]+\/Decorations\/[^/]+\.hhh$/i;
-    
+
     for (const filePath of extractedFiles) {
       if (cosmeticPattern.test(filePath)) {
         try {
@@ -311,11 +326,13 @@ export async function scanZip(zipData: Uint8Array | ArrayBuffer): Promise<ZipSca
           const relativePath = filePath.replace(/^\/extracted\//, '');
           const metadata = await extractCosmeticMetadata(relativePath, content);
           result.cosmetics.push(metadata);
-          
+
           // Maintain backward compatibility with old API
           result.cosmeticFiles.set(metadata.internalPath, content);
         } catch (e) {
-          result.errors.push(`Error reading ${filePath}: ${e instanceof Error ? e.message : String(e)}`);
+          result.errors.push(
+            `Error reading ${filePath}: ${e instanceof Error ? e.message : String(e)}`
+          );
         }
       }
     }
@@ -327,7 +344,7 @@ export async function scanZip(zipData: Uint8Array | ArrayBuffer): Promise<ZipSca
         // Recursively remove extracted directory
         const removeDir = (path: string) => {
           if (!sevenZip) return;
-          
+
           const entries = sevenZip.FS.readdir(path);
           for (const entry of entries) {
             if (entry === '.' || entry === '..') continue;
@@ -371,7 +388,7 @@ export function isValidScanResult(scanResult: ZipScanResult): boolean {
  * @returns Array of cosmetic file paths
  */
 export function getCosmeticPaths(scanResult: ZipScanResult): string[] {
-  return scanResult.cosmetics.map(c => c.internalPath);
+  return scanResult.cosmetics.map((c) => c.internalPath);
 }
 
 /**

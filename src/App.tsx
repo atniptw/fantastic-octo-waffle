@@ -36,8 +36,8 @@ function App() {
       warnings: result.warningCount,
     });
     // Update catalog with new mods and cosmetics
-    setMods(prev => [...prev, ...result.mods]);
-    setCosmetics(prev => [...prev, ...result.cosmetics]);
+    setMods((prev) => [...prev, ...result.mods]);
+    setCosmetics((prev) => [...prev, ...result.cosmetics]);
   };
 
   const handleImportError = (error: string) => {
@@ -48,7 +48,7 @@ function App() {
       status: 'error',
       message: error,
     };
-    setLogs(prev => [...prev, errorLog]);
+    setLogs((prev) => [...prev, errorLog]);
   };
 
   return (
@@ -97,9 +97,7 @@ function App() {
               <section className="import-summary">
                 <div className="summary-title">Import Summary</div>
                 <div className="summary-stats">
-                  <span className="stat-item stat-total">
-                    Total: {lastImportSummary.total}
-                  </span>
+                  <span className="stat-item stat-total">Total: {lastImportSummary.total}</span>
                   <span className="stat-item stat-success">
                     ✅ Success: {lastImportSummary.success}
                   </span>
@@ -121,21 +119,15 @@ function App() {
 
             {logs.length === 0 && !isImporting && (
               <section className="catalog-section">
-                <p className="placeholder-text">
-                  Import mod ZIP files to populate the catalog.
-                </p>
+                <p className="placeholder-text">Import mod ZIP files to populate the catalog.</p>
               </section>
             )}
           </>
         )}
 
-        {currentView === 'catalog' && (
-          <CatalogView mods={mods} cosmetics={cosmetics} />
-        )}
+        {currentView === 'catalog' && <CatalogView mods={mods} cosmetics={cosmetics} />}
 
-        {currentView === 'demo' && (
-          <FileUploadDemo />
-        )}
+        {currentView === 'demo' && <FileUploadDemo />}
       </main>
     </div>
   );

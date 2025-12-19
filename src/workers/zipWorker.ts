@@ -1,7 +1,7 @@
 /**
  * Web Worker for processing ZIP files in the background.
  * This keeps the main thread responsive while extracting large ZIP files.
- * 
+ *
  * Note: Progress reporting currently uses approximated values rather than
  * actual file processing counts. The progress jumps from 10% to 90% when
  * scanning completes, then to 100% when results are sent. For smoother

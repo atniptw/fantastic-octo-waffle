@@ -36,21 +36,17 @@ interface FileUploadProps {
  * FileUpload component provides a user interface for uploading files via
  * drag-and-drop or file input button. Supports file type validation and
  * displays upload status for each file.
- * 
+ *
  * @example
  * ```tsx
- * <FileUpload 
+ * <FileUpload
  *   onFilesSelected={(files) => processFiles(files)}
  *   accept=".zip,.rar"
  *   multiple={true}
  * />
  * ```
  */
-function FileUpload({
-  onFilesSelected,
-  multiple = true,
-  accept = '.zip',
-}: FileUploadProps) {
+function FileUpload({ onFilesSelected, multiple = true, accept = '.zip' }: FileUploadProps) {
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -64,22 +60,22 @@ function FileUpload({
   };
 
   const isValidFileType = (file: File): boolean => {
-    const validExtensions = accept.split(',').map(ext => ext.trim().toLowerCase());
+    const validExtensions = accept.split(',').map((ext) => ext.trim().toLowerCase());
     const fileName = file.name;
     const lastDotIndex = fileName.lastIndexOf('.');
-    
+
     // Handle files without extensions
     if (lastDotIndex === -1) {
       return false;
     }
-    
+
     // Handle files that start with a dot (like .htaccess)
     // These have a lastDotIndex of 0, which means the filename is just the extension
     if (lastDotIndex === 0) {
       const fileExtension = fileName.toLowerCase();
       return validExtensions.includes(fileExtension);
     }
-    
+
     const fileExtension = fileName.substring(lastDotIndex).toLowerCase();
     return validExtensions.includes(fileExtension);
   };
@@ -88,11 +84,14 @@ function FileUpload({
     const fileArray = Array.from(files);
     const validFiles: File[] = [];
     const newUploadedFiles: UploadedFile[] = [];
-    
-    // Get human-readable accepted types for error message
-    const acceptedTypes = accept.split(',').map(ext => ext.trim()).join(', ');
 
-    fileArray.forEach(file => {
+    // Get human-readable accepted types for error message
+    const acceptedTypes = accept
+      .split(',')
+      .map((ext) => ext.trim())
+      .join(', ');
+
+    fileArray.forEach((file) => {
       if (!isValidFileType(file)) {
         const invalidFile: UploadedFile = {
           id: crypto.randomUUID(),
@@ -118,7 +117,7 @@ function FileUpload({
       }
     });
 
-    setUploadedFiles(prev => [...prev, ...newUploadedFiles]);
+    setUploadedFiles((prev) => [...prev, ...newUploadedFiles]);
 
     if (validFiles.length > 0) {
       onFilesSelected?.(validFiles);
@@ -221,7 +220,10 @@ function FileUpload({
         onDrop={handleDrop}
         role="button"
         tabIndex={0}
-        aria-label={`Drop zone for ${accept.split(',').map(ext => ext.trim()).join(', ')} files`}
+        aria-label={`Drop zone for ${accept
+          .split(',')
+          .map((ext) => ext.trim())
+          .join(', ')} files`}
       >
         <div className="drop-zone-content">
           <div className="drop-zone-icon">📦</div>
@@ -229,11 +231,7 @@ function FileUpload({
             {isDragging ? 'Drop ZIP files here' : 'Drag & drop ZIP files here'}
           </p>
           <p className="drop-zone-subtitle">or</p>
-          <button
-            className="browse-button"
-            onClick={handleBrowseClick}
-            type="button"
-          >
+          <button className="browse-button" onClick={handleBrowseClick} type="button">
             Browse Files
           </button>
           <input
@@ -252,51 +250,31 @@ function FileUpload({
         <div className="upload-list">
           <div className="upload-list-header">
             <h3>Uploaded Files ({uploadedFiles.length})</h3>
-            <button
-              className="clear-files-button"
-              onClick={handleClear}
-              type="button"
-            >
+            <button className="clear-files-button" onClick={handleClear} type="button">
               Clear All
             </button>
           </div>
 
           <div className="file-list">
-            {uploadedFiles.map(file => (
-              <div
-                key={file.id}
-                className={`file-item ${getStatusClass(file.status)}`}
-              >
+            {uploadedFiles.map((file) => (
+              <div key={file.id} className={`file-item ${getStatusClass(file.status)}`}>
                 <div className="file-item-icon">{getStatusIcon(file.status)}</div>
                 <div className="file-item-info">
                   <div className="file-item-name">{file.filename}</div>
-                  <div className="file-item-size">
-                    {formatFileSize(file.size)}
-                  </div>
+                  <div className="file-item-size">{formatFileSize(file.size)}</div>
                   {file.errorMessage && (
-                    <div className="file-item-error-message">
-                      {file.errorMessage}
-                    </div>
+                    <div className="file-item-error-message">{file.errorMessage}</div>
                   )}
                 </div>
                 <div className="file-item-status">
                   {file.status === 'processing' && (
                     <div className="progress-bar">
-                      <div
-                        className="progress-bar-fill"
-                        style={{ width: `${file.progress}%` }}
-                      />
+                      <div className="progress-bar-fill" style={{ width: `${file.progress}%` }} />
                     </div>
                   )}
-                  {file.status === 'complete' && (
-                    <span className="status-text">Complete</span>
-                  )}
-                  {file.status === 'pending' && (
-                    <span className="status-text">Pending</span>
-                  )}
-                  {file.status === 'error' && (
-                    <span className="status-text">Error</span>
-                  )}
+                  {file.status === 'complete' && <span className="status-text">Complete</span>}
+                  {file.status === 'pending' && <span className="status-text">Pending</span>}
+                  {file.status === 'error' && <span className="status-text">Error</span>}
                 </div>
               </div>
             ))}
