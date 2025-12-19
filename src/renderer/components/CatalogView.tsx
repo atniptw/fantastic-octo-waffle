@@ -2,15 +2,15 @@ import { useMemo, useState } from 'react';
 import type { Cosmetic, Mod } from '@/shared/types';
 
 interface CatalogViewProps {
-  mods: Mod[];
-  cosmetics: Cosmetic[];
+  mods?: Mod[];
+  cosmetics?: Cosmetic[];
 }
 
 interface CosmeticWithMod extends Cosmetic {
   mod?: Mod;
 }
 
-function CatalogView({ mods, cosmetics }: CatalogViewProps) {
+function CatalogView({ mods = [], cosmetics = [] }: CatalogViewProps) {
   const [searchQuery, setSearchQuery] = useState('');
 
   const cosmeticsWithMods: CosmeticWithMod[] = useMemo(() => {
