@@ -25,14 +25,20 @@ export default {
     const targetUrl = `${THUNDERSTORE_BASE}${path}${url.search}`;
     
     try {
+      // Forward only safe headers; never forward Host/Origin/Referer to Thunderstore
+      const forwardHeaders = new Headers();
+      forwardHeaders.set('User-Agent', 'thunderstore-proxy/1.0 (Cloudflare Worker)');
+      forwardHeaders.set('Accept', request.headers.get('Accept') ?? '*/*');
+      const contentType = request.headers.get('Content-Type');
+      if (contentType) forwardHeaders.set('Content-Type', contentType);
+      const auth = request.headers.get('Authorization');
+      if (auth) forwardHeaders.set('Authorization', auth);
+
       const response = await fetch(targetUrl, {
         method: request.method,
-        headers: {
-          // Remove host header to avoid conflicts
-          'User-Agent': 'thunderstore-proxy/1.0 (Cloudflare Worker)',
-          ...Object.fromEntries(request.headers),
-        },
-        body: request.method !== 'GET' ? await request.text() : undefined,
+        headers: forwardHeaders,
+        redirect: 'follow',
+        body: request.method !== 'GET' && request.method !== 'HEAD' ? await request.text() : undefined,
       });
       
       // Clone the response so we can modify headers

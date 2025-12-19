@@ -30,17 +30,20 @@ export interface ThunderstoreClientConfig {
   baseUrl?: string;
   sessionToken?: string;
   fetchImpl?: typeof fetch;
+  community?: string;
 }
 
 export class ThunderstoreClient {
   private readonly baseUrl: string;
   private sessionToken?: string;
   private readonly fetchImpl: typeof fetch;
+  private readonly community?: string;
 
   constructor(config: ThunderstoreClientConfig = {}) {
     this.baseUrl = config.baseUrl || 'https://thunderstore.io';
     this.sessionToken = config.sessionToken;
     this.fetchImpl = config.fetchImpl || fetch.bind(globalThis);
+    this.community = config.community;
   }
 
   /**
@@ -348,24 +351,27 @@ export class ThunderstoreClient {
   getPackageDownloadUrl(namespace: string, name: string): string;
   getPackageDownloadUrl(namespace: string, name: string, version: string): string;
   getPackageDownloadUrl(namespace: string, name: string, version?: string): string {
+    const communityPrefix = this.community ? `/c/${this.community}` : '';
     if (version) {
-      return `${this.baseUrl}/package/download/${namespace}/${name}/${version}/`;
+      return `${this.baseUrl}${communityPrefix}/package/download/${namespace}/${name}/${version}/`;
     }
-    return `${this.baseUrl}/package/download/${namespace}/${name}/`;
+    return `${this.baseUrl}${communityPrefix}/package/download/${namespace}/${name}/`;
   }
 
   /**
    * Build package page URL
    */
   getPackageUrl(namespace: string, name: string): string {
-    return `${this.baseUrl}/package/${namespace}/${name}/`;
+    const communityPrefix = this.community ? `/c/${this.community}` : '';
+    return `${this.baseUrl}${communityPrefix}/package/${namespace}/${name}/`;
   }
 
   /**
    * Build package version page URL
    */
   getPackageVersionUrl(namespace: string, name: string, version: string): string {
-    return `${this.baseUrl}/package/${namespace}/${name}/${version}/`;
+    const communityPrefix = this.community ? `/c/${this.community}` : '';
+    return `${this.baseUrl}${communityPrefix}/package/${namespace}/${name}/${version}/`;
   }
 }
 

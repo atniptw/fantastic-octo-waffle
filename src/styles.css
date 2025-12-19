@@ -468,9 +468,140 @@ body {
     font-size: 1.5rem;
   }
 }
+
 /* ============================================
-   LEGACY STYLES - TO BE REMOVED
+   DOWNLOAD PROGRESS
    ============================================ */
 
-/* These styles are kept temporarily for backwards compatibility 
-   with components not yet updated to the new design system */
+.download-progress {
+  margin: 1rem 0;
+  padding: 1rem;
+  background-color: #1a1a1a;
+  border-radius: 6px;
+  border: 1px solid #2a2a2a;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  background-color: #242424;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 0.5rem;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #5a5aff, #7a7aff);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.progress-indeterminate .progress-fill {
+  width: 30%;
+  animation: indeterminate 1.2s infinite ease-in-out;
+}
+
+@keyframes indeterminate {
+  0% {
+    transform: translateX(-50%);
+  }
+  50% {
+    transform: translateX(150%);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.progress-info {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  color: #999;
+}
+
+.progress-percentage {
+  font-weight: 600;
+  color: #5a5aff;
+}
+
+/* ============================================
+   CACHED DOWNLOADS
+   ============================================ */
+
+.cached-downloads {
+  margin-top: 2rem;
+  padding-top: 2rem;
+  border-top: 1px solid #2a2a2a;
+}
+
+.cached-downloads-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #b0b0b0;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 1rem;
+}
+
+.cached-downloads-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.cached-download-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem;
+  background-color: #1a1a1a;
+  border: 1px solid #2a2a2a;
+  border-radius: 4px;
+  transition: border-color 0.2s ease;
+}
+
+.cached-download-item:hover {
+  border-color: #3a3a3a;
+}
+
+.cached-item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.cached-item-name {
+  font-size: 0.95rem;
+  color: #e0e0e0;
+  margin-bottom: 0.25rem;
+  word-break: break-word;
+}
+
+.cached-item-meta {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.8rem;
+  color: #666;
+}
+
+.cached-item-size {
+  font-weight: 500;
+}
+
+.cached-item-delete {
+  background: none;
+  border: none;
+  color: #999;
+  cursor: pointer;
+  font-size: 1.2rem;
+  padding: 0.25rem 0.5rem;
+  margin-left: 0.5rem;
+  transition: color 0.2s ease;
+  flex-shrink: 0;
+}
+
+.cached-item-delete:hover {
+  color: #ff6b6b;
+}
+

@@ -4,16 +4,9 @@ A browser-based web application that fetches R.E.P.O. mods from Thunderstore, ex
 
 ## Features
 
-- 🌩️ **Browse and fetch mods** directly from Thunderstore API
-- 📦 **Automatic ZIP download** and processing in your browser
-- 🔍 **Extract cosmetic metadata** from `.hhh` Unity asset bundles
-- 💾 **Store locally** in IndexedDB (privacy-friendly, no server needed)
-- 🔎 **Search and filter** cosmetics catalog
-- 🎨 **3D preview rendering** using Three.js/WebGL
-- 🖼️ **Generate preview images** (PNG/WebP)
-- 🎬 **Create animated GIFs** of cosmetics
-- 📱 **Works on any device** with a modern browser
-- 🌐 **Hosted on GitHub Pages** - no installation required
+- ⚡ **Browser-side caching** - ZIPs cached in IndexedDB for instant re-access
+- 📊 **Download progress tracking** - Real-time progress display during mod downloads
+- 💾 **Offline support** - Access previously downloaded mods without internet
 
 ## Technology Stack
 
