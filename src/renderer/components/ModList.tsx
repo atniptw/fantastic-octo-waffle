@@ -1,10 +1,10 @@
-import { PackageExperimental, PackageListing, PackageIndexEntry } from '@/lib/thunderstore/types';
+import { ModPackage } from '@/lib/thunderstore/normalize';
 import ModListItem from './ModListItem';
 
 interface ModListProps {
-  mods: Array<PackageExperimental | PackageListing | PackageIndexEntry>;
+  mods: ModPackage[];
   selectedModId: string | null;
-  onSelectMod: (mod: PackageExperimental | PackageListing | PackageIndexEntry) => void;
+  onSelectMod: (mod: ModPackage) => void;
   isLoading?: boolean;
   error?: string;
   onRetry?: () => void;

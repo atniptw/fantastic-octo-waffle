@@ -20,7 +20,7 @@ Browser-compatible ZIP file scanning with Web Worker support for handling large 
 - ✅ **Error handling**: Gracefully handles corrupt ZIPs and missing files
 - ✅ **Comprehensive metadata**: Extracts manifest, icons, and cosmetic files with SHA256 hashing
 - ✅ **TypeScript**: Full type safety with detailed interfaces
-- ✅ **Powered by 7-Zip**: Uses sevenzip-wasm for robust ZIP extraction
+- ✅ **Pure JavaScript ZIP Processing**: Uses JSZip for cross-platform ZIP extraction
 
 ## Quick Start
 

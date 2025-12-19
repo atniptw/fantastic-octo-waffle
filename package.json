@@ -32,6 +32,7 @@
     "@playwright/test": "^1.57.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.0",
+    "@types/jszip": "^3.4.1",
     "@types/node": "^20.10.0",
     "@types/react": "^18.2.45",
     "@types/react-dom": "^18.2.18",
@@ -44,6 +45,7 @@
     "gh-pages": "^6.1.1",
     "globals": "^15.12.0",
     "jsdom": "^27.2.0",
+    "jszip": "^3.10.1",
     "prettier": "^3.1.1",
     "typescript": "^5.3.3",
     "typescript-eslint": "^8.15.0",
@@ -53,9 +55,9 @@
   "dependencies": {
     "gif.js": "^0.2.0",
     "idb": "^8.0.2",
+    "jszip": "^3.10.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "sevenzip-wasm": "^0.1.8",
     "three": "^0.170.0"
   }
 }

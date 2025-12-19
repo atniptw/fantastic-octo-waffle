@@ -2,29 +2,39 @@
  * Web Worker for processing ZIP files in the background.
  * This keeps the main thread responsive while extracting large ZIP files.
  *
- * Note: Progress reporting currently uses approximated values rather than
- * actual file processing counts. The progress jumps from 10% to 90% when
- * scanning completes, then to 100% when results are sent. For smoother
- * progress tracking, consider implementing granular progress based on the
- * number of files processed within the ZIP.
+ * Progress reporting streams the underlying scan progress reported by
+ * sevenzip/inspection rather than fixed jumps.
  */
 
 import { scanZip, type WorkerMessage, type ZipScanResult } from '../lib/zipScanner';
+
+const abortControllers = new Map<number, AbortController>();
 
 // Handle messages from the main thread
 self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
   const { type, file, fileName, scanId } = event.data;
 
+  if (type === 'cancel' && typeof scanId === 'number') {
+    const controller = abortControllers.get(scanId);
+    controller?.abort();
+    abortControllers.delete(scanId);
+    return;
+  }
+
   if (type === 'scan' && file) {
+    const abortController = new AbortController();
+    if (typeof scanId === 'number') {
+      abortControllers.set(scanId, abortController);
+    }
+
     try {
-      // Report initial progress (approximation)
-      postProgress(10, scanId);
-
-      // Scan the ZIP file
-      const result: ZipScanResult = await scanZip(file);
-
-      // Report near-complete progress (approximation)
-      postProgress(90, scanId);
+      // Scan the ZIP file with progress passthrough
+      const result: ZipScanResult = await scanZip(file, {
+        signal: abortController.signal,
+        onProgress: ({ percent, stage, detail, processed, total }) => {
+          postProgress(percent, scanId, stage, detail, processed, total);
+        },
+      });
 
       // Send result back to main thread
       const response: WorkerMessage = {
@@ -33,10 +43,13 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
         result,
         scanId,
       };
-      self.postMessage(response);
+      const transfer: Transferable[] = [];
+      if (result.iconData) {
+        transfer.push(result.iconData.buffer);
+      }
+      self.postMessage(response, transfer);
 
-      // Report completion
-      postProgress(100, scanId);
+      postProgress(100, scanId, 'complete', 'done');
     } catch (error) {
       // Send error back to main thread
       const response: WorkerMessage = {
@@ -47,13 +60,28 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
       };
       self.postMessage(response);
     }
+
+    if (typeof scanId === 'number') {
+      abortControllers.delete(scanId);
+    }
   }
 };
 
-function postProgress(progress: number, scanId?: number) {
+function postProgress(
+  progress: number,
+  scanId?: number,
+  stage?: WorkerMessage['stage'],
+  detail?: string,
+  processed?: number,
+  total?: number
+) {
   const response: WorkerMessage = {
     type: 'progress',
     progress,
+    stage,
+    detail,
+    processed,
+    total,
     scanId,
   };
   self.postMessage(response);

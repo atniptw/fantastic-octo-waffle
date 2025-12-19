@@ -2,10 +2,11 @@
  * Browser-compatible ZIP Scanner module for scanning Thunderstore mod ZIP files.
  * Extracts manifest.json, icon.png, and .hhh cosmetic files with comprehensive metadata.
  * Uses Web Crypto API instead of Node.js crypto for browser compatibility.
- * Uses sevenzip-wasm for ZIP extraction.
+ * Uses JSZip for cross-platform ZIP extraction.
  */
 
-import SevenZipWasm, { type SevenZipModule } from 'sevenzip-wasm';
+import { debugLog, isDebugEnabled } from './logger';
+import JSZip from 'jszip';
 
 /**
  * Metadata for a single cosmetic file extracted from a ZIP.
@@ -21,8 +22,8 @@ export interface CosmeticMetadata {
   type: string;
   /** SHA256 hash of the file content */
   hash: string;
-  /** Raw file content */
-  content: Uint8Array;
+  /** File size in bytes */
+  size: number;
 }
 
 export interface ManifestData {
@@ -39,11 +40,36 @@ export interface ZipScanResult {
   iconData: Uint8Array | null;
   /** Array of cosmetic metadata */
   cosmetics: CosmeticMetadata[];
-  /** Deprecated: Use cosmetics array instead */
-  cosmeticFiles: Map<string, Uint8Array>;
   errors: string[];
   /** True if there was a fatal error parsing the ZIP file */
   hasFatalError: boolean;
+}
+
+export interface ScanProgressUpdate {
+  /** Percentage 0-100 */
+  percent: number;
+  /** Stage label */
+  stage: 'prepare' | 'extract' | 'inspect' | 'complete';
+  /** Optional human-readable detail */
+  detail?: string;
+  /** Processed files count (for inspect stage) */
+  processed?: number;
+  /** Total files (for inspect stage) */
+  total?: number;
+}
+
+export interface ZipScanOptions {
+  onProgress?: (progress: ScanProgressUpdate) => void;
+  signal?: AbortSignal;
+  debug?: boolean;
+}
+
+const DEBUG = isDebugEnabled();
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    throw new DOMException('Scan aborted', 'AbortError');
+  }
 }
 
 /**
@@ -171,7 +197,7 @@ export async function extractCosmeticMetadata(
     displayName: generateDisplayName(filename),
     type: inferCosmeticType(filename),
     hash: await calculateFileHash(content),
-    content,
+    size: content.byteLength,
   };
 }
 
@@ -180,14 +206,14 @@ export async function extractCosmeticMetadata(
  * Looks for:
  * - manifest.json at root
  * - icon.png at root
- * - *.hhh files in plugins/<plugin>/Decorations/ directories
+ * - *.hhh files anywhere in the ZIP (searches entire archive)
  *
  * This is the browser-compatible version that works with File objects.
  *
  * @param file - The ZIP file as a File or Blob object
  * @returns ZipScanResult containing extracted data and any errors
  */
-export async function scanZipFile(file: File | Blob): Promise<ZipScanResult> {
+export async function scanZipFile(file: File | Blob, options?: ZipScanOptions): Promise<ZipScanResult> {
   // Read the file as ArrayBuffer using FileReader for better compatibility
   const arrayBuffer = await new Promise<ArrayBuffer>((resolve, reject) => {
     const reader = new FileReader();
@@ -198,7 +224,7 @@ export async function scanZipFile(file: File | Blob): Promise<ZipScanResult> {
 
   const zipData = new Uint8Array(arrayBuffer);
 
-  return scanZip(zipData);
+  return scanZip(zipData, options);
 }
 
 /**
@@ -206,89 +232,71 @@ export async function scanZipFile(file: File | Blob): Promise<ZipScanResult> {
  * Looks for:
  * - manifest.json at root
  * - icon.png at root
- * - *.hhh files in plugins/<plugin>/Decorations/ directories
+ * - *.hhh files anywhere in the ZIP (searches entire archive)
  *
  * @param zipData - The ZIP file as a Uint8Array or ArrayBuffer
  * @returns ZipScanResult containing extracted data and any errors
  */
-export async function scanZip(zipData: Uint8Array | ArrayBuffer): Promise<ZipScanResult> {
+export async function scanZip(
+  zipData: Uint8Array | ArrayBuffer,
+  options?: ZipScanOptions
+): Promise<ZipScanResult> {
   const result: ZipScanResult = {
     manifestContent: null,
     manifest: null,
     iconData: null,
     cosmetics: [],
-    cosmeticFiles: new Map(),
     errors: [],
     hasFatalError: false,
   };
 
-  let sevenZip: SevenZipModule | null = null;
+  const reportProgress = (percent: number, stage: ScanProgressUpdate['stage'], detail?: string, processed?: number, total?: number) => {
+    options?.onProgress?.({ percent, stage, detail, processed, total });
+  };
+
+  const debugEnabled = options?.debug ?? DEBUG;
 
   try {
+    throwIfAborted(options?.signal);
+
     // Convert to Uint8Array if needed
     const data = zipData instanceof ArrayBuffer ? new Uint8Array(zipData) : zipData;
 
-    // Initialize sevenzip-wasm
-    const outputLines: string[] = [];
-    sevenZip = await SevenZipWasm({
-      print: (line: string) => outputLines.push(line),
-      printErr: (line: string) => outputLines.push(line),
+    reportProgress(2, 'prepare', 'Loading ZIP file');
+
+    // Load and parse ZIP file
+    const zip = new JSZip();
+    await zip.loadAsync(data);
+
+    reportProgress(25, 'extract', 'Archive loaded');
+
+    // Get list of all files
+    const files: { name: string; file: JSZip.JSZipObject }[] = [];
+    zip.forEach((relativePath, file) => {
+      if (!file.dir) {
+        files.push({ name: relativePath, file });
+      }
     });
 
-    // Write ZIP file to virtual filesystem
-    sevenZip.FS.writeFile('/archive.zip', data);
+    if (debugEnabled) {
+      debugLog(`[ZIP Scanner] Loaded ZIP with ${files.length} files`);
+    }
 
-    // Extract the ZIP file to /extracted directory
-    sevenZip.FS.mkdir('/extracted');
-    const extractExitCode = sevenZip.callMain(['x', '/archive.zip', '-o/extracted', '-y']);
-
-    // Check if extraction failed (non-zero exit code indicates error)
-    if (extractExitCode !== 0) {
-      result.errors.push(`7-Zip extraction failed with exit code ${extractExitCode}`);
+    if (files.length === 0) {
+      result.errors.push('No files found in archive');
       result.hasFatalError = true;
       return result;
     }
 
-    // Helper function to recursively list all files
-    const listFiles = (path: string): string[] => {
-      const files: string[] = [];
-      if (!sevenZip) return files;
-
-      try {
-        const entries = sevenZip.FS.readdir(path);
-        for (const entry of entries) {
-          if (entry === '.' || entry === '..') continue;
-          const fullPath = `${path}/${entry}`;
-          const stat = sevenZip.FS.stat(fullPath);
-          if (sevenZip.FS.isDir(stat.mode)) {
-            files.push(...listFiles(fullPath));
-          } else {
-            files.push(fullPath);
-          }
-        }
-      } catch {
-        // Directory doesn't exist or can't be read
-      }
-      return files;
-    };
-
-    // Get all extracted files
-    const extractedFiles = listFiles('/extracted');
-
-    // Check if any files were extracted
-    if (extractedFiles.length === 0) {
-      result.errors.push('No files were extracted from the archive');
-      result.hasFatalError = true;
-      return result;
-    }
+    reportProgress(30, 'inspect', 'Scanning files', 0, files.length);
 
     // Extract manifest.json
-    const manifestPath = extractedFiles.find(
-      (f) => f.endsWith('/manifest.json') || f === '/extracted/manifest.json'
+    const manifestFile = files.find(
+      (f) => f.name === 'manifest.json' || f.name.endsWith('/manifest.json')
     );
-    if (manifestPath) {
+    if (manifestFile) {
       try {
-        const manifestData = sevenZip.FS.readFile(manifestPath, { encoding: 'utf8' });
+        const manifestData = await manifestFile.file.async('string');
         result.manifestContent = manifestData;
         result.manifest = parseManifest(manifestData);
         if (!result.manifest) {
@@ -304,70 +312,60 @@ export async function scanZip(zipData: Uint8Array | ArrayBuffer): Promise<ZipSca
     }
 
     // Extract icon.png
-    const iconPath = extractedFiles.find(
-      (f) => f.endsWith('/icon.png') || f === '/extracted/icon.png'
+    const iconFile = files.find(
+      (f) => f.name === 'icon.png' || f.name.endsWith('/icon.png')
     );
-    if (iconPath) {
+    if (iconFile) {
       try {
-        result.iconData = sevenZip.FS.readFile(iconPath);
+        result.iconData = await iconFile.file.async('uint8array');
       } catch (e) {
         result.errors.push(`Error reading icon.png: ${e instanceof Error ? e.message : String(e)}`);
       }
     }
 
-    // Extract .hhh files from plugins/<plugin>/Decorations/ directories
-    const cosmeticPattern = /\/plugins\/[^/]+\/Decorations\/[^/]+\.hhh$/i;
+    // Extract ALL .hhh files from anywhere in the ZIP
+    // Note: Not all mods follow the plugins/<plugin>/Decorations/ convention
+    const cosmeticPattern = /\.hhh$/i;
 
-    for (const filePath of extractedFiles) {
+    if (debugEnabled) {
+      debugLog(`[ZIP Scanner] Scanning for .hhh files in ${files.length} files`);
+    }
+
+    for (let idx = 0; idx < files.length; idx++) {
+      const { name: filePath, file } = files[idx];
+      throwIfAborted(options?.signal);
       if (cosmeticPattern.test(filePath)) {
+        if (debugEnabled) {
+          debugLog('[ZIP Scanner] Found .hhh file:', filePath);
+        }
         try {
-          const content = sevenZip.FS.readFile(filePath);
-          // Remove /extracted prefix from path for consistency
-          const relativePath = filePath.replace(/^\/extracted\//, '');
-          const metadata = await extractCosmeticMetadata(relativePath, content);
+          const content = await file.async('uint8array');
+          const metadata = await extractCosmeticMetadata(filePath, content);
           result.cosmetics.push(metadata);
-
-          // Maintain backward compatibility with old API
-          result.cosmeticFiles.set(metadata.internalPath, content);
         } catch (e) {
           result.errors.push(
             `Error reading ${filePath}: ${e instanceof Error ? e.message : String(e)}`
           );
         }
       }
+
+      const percent = 30 + Math.min(60, Math.floor(((idx + 1) / files.length) * 60));
+      reportProgress(percent, 'inspect', filePath, idx + 1, files.length);
     }
 
-    // Cleanup virtual filesystem
-    try {
-      if (sevenZip) {
-        sevenZip.FS.unlink('/archive.zip');
-        // Recursively remove extracted directory
-        const removeDir = (path: string) => {
-          if (!sevenZip) return;
-
-          const entries = sevenZip.FS.readdir(path);
-          for (const entry of entries) {
-            if (entry === '.' || entry === '..') continue;
-            const fullPath = `${path}/${entry}`;
-            const stat = sevenZip.FS.stat(fullPath);
-            if (sevenZip.FS.isDir(stat.mode)) {
-              removeDir(fullPath);
-            } else {
-              sevenZip.FS.unlink(fullPath);
-            }
-          }
-          sevenZip.FS.rmdir(path);
-        };
-        removeDir('/extracted');
-      }
-    } catch {
-      // Cleanup errors are non-critical
+    if (debugEnabled) {
+      debugLog(`[ZIP Scanner] Found ${result.cosmetics.length} cosmetic files`);
     }
+    reportProgress(95, 'inspect', 'Metadata collected', files.length, files.length);
   } catch (e) {
+    if (e instanceof DOMException && e.name === 'AbortError') {
+      throw e;
+    }
     result.errors.push(`Error parsing ZIP file: ${e instanceof Error ? e.message : String(e)}`);
     result.hasFatalError = true;
   }
 
+  reportProgress(100, 'complete', 'Scan complete');
   return result;
 }
 
@@ -481,11 +479,15 @@ export async function scanMultipleZipFiles(
  * Data structure for communicating with Web Worker
  */
 export interface WorkerMessage {
-  type: 'scan' | 'result' | 'error' | 'progress';
+  type: 'scan' | 'result' | 'error' | 'progress' | 'cancel';
   file?: ArrayBuffer;
   fileName?: string;
   result?: ZipScanResult;
   error?: string;
   progress?: number;
+  stage?: ScanProgressUpdate['stage'];
+  detail?: string;
+  processed?: number;
+  total?: number;
   scanId?: number;
 }

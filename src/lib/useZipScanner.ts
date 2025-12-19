@@ -9,6 +9,10 @@ import type { ZipScanResult, WorkerMessage } from './zipScanner';
 export interface ScanProgress {
   fileName: string;
   progress: number;
+  stage?: WorkerMessage['stage'];
+  detail?: string;
+  processed?: number;
+  total?: number;
 }
 
 export interface ScanError {
@@ -18,14 +22,16 @@ export interface ScanError {
 
 export interface UseZipScannerResult {
   scanFile: (
-    file: File,
+    file: File | { buffer: ArrayBuffer; fileName: string },
     options?: {
       onProgress?: (progress: ScanProgress) => void;
       onComplete?: (result: ZipScanResult, fileName: string) => void;
       onError?: (error: ScanError) => void;
+      signal?: AbortSignal;
     }
   ) => Promise<ZipScanResult>;
   isScanning: boolean;
+  cancelScan: (scanId?: number) => void;
 }
 
 /**
@@ -54,10 +60,13 @@ export function useZipScanner(): UseZipScannerResult {
   const activeScanCountRef = useRef(0);
   const [isScanning, setIsScanning] = useState(false);
   const nextScanIdRef = useRef(0);
+  const abortControllersRef = useRef(new Map<number, AbortController>());
+  const unmountedRef = useRef(false);
 
   // Cleanup worker on unmount
   useEffect(() => {
     return () => {
+      unmountedRef.current = true;
       if (workerRef.current) {
         workerRef.current.terminate();
         workerRef.current = null;
@@ -67,11 +76,12 @@ export function useZipScanner(): UseZipScannerResult {
 
   const scanFile = useCallback(
     async (
-      file: File,
+      file: File | { buffer: ArrayBuffer; fileName: string },
       options?: {
         onProgress?: (progress: ScanProgress) => void;
         onComplete?: (result: ZipScanResult, fileName: string) => void;
         onError?: (error: ScanError) => void;
+        signal?: AbortSignal;
       }
     ): Promise<ZipScanResult> => {
       return new Promise((resolve, reject) => {
@@ -85,6 +95,37 @@ export function useZipScanner(): UseZipScannerResult {
 
         const worker = workerRef.current;
         const scanId = nextScanIdRef.current++;
+        const abortController = new AbortController();
+
+        const cleanup = () => {
+          worker.removeEventListener('message', handleMessage);
+          abortControllersRef.current.delete(scanId);
+        };
+
+        const cancelWorkerScan = () => {
+          worker.postMessage({ type: 'cancel', scanId } satisfies WorkerMessage);
+          abortController.abort();
+        };
+
+        const handleAbort = () => {
+          cancelWorkerScan();
+          activeScanCountRef.current = Math.max(0, activeScanCountRef.current - 1);
+          if (activeScanCountRef.current === 0) {
+            setIsScanning(false);
+          }
+          cleanup();
+          reject(new DOMException('Scan aborted', 'AbortError'));
+        };
+
+        if (options?.signal) {
+          if (options.signal.aborted) {
+            handleAbort();
+            return;
+          }
+          options.signal.addEventListener('abort', handleAbort, { once: true });
+        }
+
+        abortControllersRef.current.set(scanId, abortController);
 
         // Increment active scan count
         activeScanCountRef.current++;
@@ -101,7 +142,14 @@ export function useZipScanner(): UseZipScannerResult {
           switch (type) {
             case 'progress': {
               if (progress !== undefined && options?.onProgress) {
-                options.onProgress({ fileName: file.name, progress });
+                options.onProgress({
+                  fileName: file instanceof File ? file.name : file.fileName,
+                  progress,
+                  stage: event.data.stage,
+                  detail: event.data.detail,
+                  processed: event.data.processed,
+                  total: event.data.total,
+                });
               }
               break;
             }
@@ -115,9 +163,9 @@ export function useZipScanner(): UseZipScannerResult {
                 }
 
                 if (options?.onComplete) {
-                  options.onComplete(result, file.name);
+                  options.onComplete(result, file instanceof File ? file.name : file.fileName);
                 }
-                worker.removeEventListener('message', handleMessage);
+                cleanup();
                 resolve(result);
               }
               break;
@@ -130,11 +178,14 @@ export function useZipScanner(): UseZipScannerResult {
                 setIsScanning(false);
               }
 
-              const errorObj = { fileName: fileName || file.name, error: error || 'Unknown error' };
+                const errorObj = {
+                  fileName: fileName || (file instanceof File ? file.name : file.fileName),
+                  error: error || 'Unknown error',
+                };
               if (options?.onError) {
                 options.onError(errorObj);
               }
-              worker.removeEventListener('message', handleMessage);
+                cleanup();
               reject(new Error(errorObj.error));
               break;
             }
@@ -143,31 +194,46 @@ export function useZipScanner(): UseZipScannerResult {
 
         worker.addEventListener('message', handleMessage);
 
-        // Read file and send to worker
-        file
-          .arrayBuffer()
-          .then((arrayBuffer) => {
-            const message: WorkerMessage = {
-              type: 'scan',
-              file: arrayBuffer,
-              fileName: file.name,
-              scanId,
-            };
-            worker.postMessage(message);
-          })
-          .catch((err) => {
-            // Decrement active scan count on error
-            activeScanCountRef.current--;
-            if (activeScanCountRef.current === 0) {
-              setIsScanning(false);
-            }
+        const sendScan = (arrayBuffer: ArrayBuffer, fileName: string) => {
+          const message: WorkerMessage = {
+            type: 'scan',
+            file: arrayBuffer,
+            fileName,
+            scanId,
+          };
+          worker.postMessage(message, [arrayBuffer]);
+        };
 
-            const errorMsg = `Failed to read file: ${err instanceof Error ? err.message : String(err)}`;
-            if (options?.onError) {
-              options.onError({ fileName: file.name, error: errorMsg });
-            }
-            reject(new Error(errorMsg));
-          });
+        if (file instanceof File) {
+          file
+            .arrayBuffer()
+            .then((arrayBuffer) => {
+              if (abortController.signal.aborted || unmountedRef.current) {
+                handleAbort();
+                return;
+              }
+              sendScan(arrayBuffer, file.name);
+            })
+            .catch((err) => {
+              activeScanCountRef.current--;
+              if (activeScanCountRef.current === 0) {
+                setIsScanning(false);
+              }
+
+              const errorMsg = `Failed to read file: ${err instanceof Error ? err.message : String(err)}`;
+              if (options?.onError) {
+                options.onError({ fileName: file.name, error: errorMsg });
+              }
+              cleanup();
+              reject(new Error(errorMsg));
+            });
+        } else {
+          if (abortController.signal.aborted || unmountedRef.current) {
+            handleAbort();
+          } else {
+            sendScan(file.buffer, file.fileName);
+          }
+        }
       });
     },
     []
@@ -176,5 +242,18 @@ export function useZipScanner(): UseZipScannerResult {
   return {
     scanFile,
     isScanning,
+    cancelScan: (scanId?: number) => {
+      if (!workerRef.current) return;
+      if (typeof scanId === 'number') {
+        workerRef.current.postMessage({ type: 'cancel', scanId } satisfies WorkerMessage);
+      } else {
+        // Cancel all active scans
+        abortControllersRef.current.forEach((_controller, id) => {
+          workerRef.current?.postMessage({ type: 'cancel', scanId: id } satisfies WorkerMessage);
+        });
+        abortControllersRef.current.clear();
+      }
+      setIsScanning(false);
+    },
   };
 }

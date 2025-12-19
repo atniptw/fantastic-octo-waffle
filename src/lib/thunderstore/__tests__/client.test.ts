@@ -6,24 +6,33 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ThunderstoreClient, createThunderstoreClient } from '../client';
 import type { Community } from '../types';
 
+// Helper to create mock Response objects
+const mockResponse = (data: unknown, ok = true, status = 200, statusText = 'OK'): Partial<Response> => ({
+  ok,
+  status,
+  statusText,
+  json: async () => data,
+  text: async () => (typeof data === 'string' ? data : JSON.stringify(data)),
+} as Partial<Response>);
+
 describe('ThunderstoreClient', () => {
-  let mockFetch: ReturnType<typeof vi.fn<typeof fetch>>;
+  let mockFetch: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
-    mockFetch = vi.fn<typeof fetch>();
+    mockFetch = vi.fn();
   });
 
   describe('constructor', () => {
     it('should create client with default config', () => {
-      const client = new ThunderstoreClient();
+      const client = new ThunderstoreClient({ proxyUrl: 'https://thunderstore.io' });
       expect(client).toBeInstanceOf(ThunderstoreClient);
     });
 
     it('should create client with custom config', () => {
       const client = new ThunderstoreClient({
-        baseUrl: 'https://custom.thunderstore.io',
+        proxyUrl: 'https://custom.thunderstore.io',
         sessionToken: 'test-token',
-        fetchImpl: mockFetch,
+        fetchImpl: mockFetch as any,
       });
       expect(client).toBeInstanceOf(ThunderstoreClient);
     });
@@ -34,12 +43,13 @@ describe('ThunderstoreClient', () => {
     });
   });
 
-  describe('setSessionToken', () => {
-    it('should update session token', () => {
-      const client = new ThunderstoreClient();
-      client.setSessionToken('new-token');
+  describe('withSessionToken', () => {
+    it('should return new client with updated session token', () => {
+      const client = new ThunderstoreClient({ proxyUrl: 'https://thunderstore.io' });
+      const newClient = client.withSessionToken('new-token');
       // Token is private, but we can verify through API calls
-      expect(client).toBeInstanceOf(ThunderstoreClient);
+      expect(newClient).toBeInstanceOf(ThunderstoreClient);
+      expect(newClient).not.toBe(client);
     });
   });
 
@@ -53,16 +63,16 @@ describe('ThunderstoreClient', () => {
         ],
       };
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockData,
-      });
+      mockFetch.mockResolvedValueOnce(mockResponse(mockData));
 
-      const client = new ThunderstoreClient({ fetchImpl: mockFetch });
+      const client = new ThunderstoreClient({ 
+        proxyUrl: 'https://thunderstore.io',
+        fetchImpl: mockFetch as any 
+      });
       const result = await client.listCommunities();
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://thunderstore.io/api/experimental/community/?',
+        expect.stringContaining('/api/experimental/community/?'),
         expect.objectContaining({
           method: 'GET',
           headers: expect.objectContaining({
@@ -82,12 +92,12 @@ describe('ThunderstoreClient', () => {
         require_package_listing_approval: false,
       };
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockData,
-      });
+      mockFetch.mockResolvedValueOnce(mockResponse(mockData));
 
-      const client = new ThunderstoreClient({ fetchImpl: mockFetch });
+      const client = new ThunderstoreClient({ 
+        proxyUrl: 'https://thunderstore.io',
+        fetchImpl: mockFetch as any 
+      });
       const result = await client.getCurrentCommunity();
 
       expect(result).toEqual(mockData);
@@ -104,16 +114,16 @@ describe('ThunderstoreClient', () => {
         total_package_count: 500,
       };
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockData,
-      });
+      mockFetch.mockResolvedValueOnce(mockResponse(mockData));
 
-      const client = new ThunderstoreClient({ fetchImpl: mockFetch });
+      const client = new ThunderstoreClient({ 
+        proxyUrl: 'https://thunderstore.io',
+        fetchImpl: mockFetch as any 
+      });
       const result = await client.getCommunity('valheim');
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://thunderstore.io/api/cyberstorm/community/valheim/',
+        expect.stringContaining('/api/cyberstorm/community/valheim/'),
         expect.any(Object)
       );
       expect(result).toEqual(mockData);
@@ -129,12 +139,12 @@ describe('ThunderstoreClient', () => {
         ],
       };
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockData,
-      });
+      mockFetch.mockResolvedValueOnce(mockResponse(mockData));
 
-      const client = new ThunderstoreClient({ fetchImpl: mockFetch });
+      const client = new ThunderstoreClient({ 
+        proxyUrl: 'https://thunderstore.io',
+        fetchImpl: mockFetch as any 
+      });
       const result = await client.listCommunityCategories('valheim');
 
       expect(result.results).toHaveLength(2);
@@ -146,12 +156,12 @@ describe('ThunderstoreClient', () => {
       const mockData = `{"namespace":"BepInEx","name":"BepInExPack","version_number":"5.4.21","file_format":"zip","file_size":12345678,"dependencies":""}
 {"namespace":"Test","name":"TestMod","version_number":"1.0.0","file_format":"zip","file_size":1024,"dependencies":"BepInEx-BepInExPack-5.4.21"}`;
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        text: async () => mockData,
-      });
+      mockFetch.mockResolvedValueOnce(mockResponse(mockData));
 
-      const client = new ThunderstoreClient({ fetchImpl: mockFetch });
+      const client = new ThunderstoreClient({ 
+        proxyUrl: 'https://thunderstore.io',
+        fetchImpl: mockFetch as any 
+      });
       const result = await client.getPackageIndex();
 
       expect(result).toHaveLength(2);
@@ -197,12 +207,12 @@ describe('ThunderstoreClient', () => {
         community_listings: [],
       };
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockData,
-      });
+      mockFetch.mockResolvedValueOnce(mockResponse(mockData));
 
-      const client = new ThunderstoreClient({ fetchImpl: mockFetch });
+      const client = new ThunderstoreClient({ 
+        proxyUrl: 'https://thunderstore.io',
+        fetchImpl: mockFetch as any 
+      });
       const result = await client.getPackage('BepInEx', 'BepInExPack');
 
       expect(result).toEqual(mockData);
@@ -226,12 +236,12 @@ describe('ThunderstoreClient', () => {
         is_active: true,
       };
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockData,
-      });
+      mockFetch.mockResolvedValueOnce(mockResponse(mockData));
 
-      const client = new ThunderstoreClient({ fetchImpl: mockFetch });
+      const client = new ThunderstoreClient({ 
+        proxyUrl: 'https://thunderstore.io',
+        fetchImpl: mockFetch as any 
+      });
       const result = await client.getPackageVersion('BepInEx', 'BepInExPack', '5.4.21');
 
       expect(result.version_number).toBe('5.4.21');
@@ -242,12 +252,12 @@ describe('ThunderstoreClient', () => {
         markdown: '# Changelog\n\n## 5.4.21\n- Bug fixes',
       };
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockData,
-      });
+      mockFetch.mockResolvedValueOnce(mockResponse(mockData));
 
-      const client = new ThunderstoreClient({ fetchImpl: mockFetch });
+      const client = new ThunderstoreClient({ 
+        proxyUrl: 'https://thunderstore.io',
+        fetchImpl: mockFetch as any 
+      });
       const result = await client.getPackageVersionChangelog('BepInEx', 'BepInExPack', '5.4.21');
 
       expect(result.markdown).toContain('Changelog');
@@ -258,12 +268,12 @@ describe('ThunderstoreClient', () => {
         markdown: '# BepInExPack\n\nA modding framework',
       };
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockData,
-      });
+      mockFetch.mockResolvedValueOnce(mockResponse(mockData));
 
-      const client = new ThunderstoreClient({ fetchImpl: mockFetch });
+      const client = new ThunderstoreClient({ 
+        proxyUrl: 'https://thunderstore.io',
+        fetchImpl: mockFetch as any 
+      });
       const result = await client.getPackageVersionReadme('BepInEx', 'BepInExPack', '5.4.21');
 
       expect(result.markdown).toContain('BepInExPack');
@@ -278,12 +288,12 @@ describe('ThunderstoreClient', () => {
         latest_version: '5.4.21',
       };
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockData,
-      });
+      mockFetch.mockResolvedValueOnce(mockResponse(mockData));
 
-      const client = new ThunderstoreClient({ fetchImpl: mockFetch });
+      const client = new ThunderstoreClient({ 
+        proxyUrl: 'https://thunderstore.io',
+        fetchImpl: mockFetch as any 
+      });
       const result = await client.getPackageMetrics('BepInEx', 'BepInExPack');
 
       expect(result.downloads).toBe(1000000);
@@ -295,12 +305,12 @@ describe('ThunderstoreClient', () => {
         downloads: 500000,
       };
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockData,
-      });
+      mockFetch.mockResolvedValueOnce(mockResponse(mockData));
 
-      const client = new ThunderstoreClient({ fetchImpl: mockFetch });
+      const client = new ThunderstoreClient({ 
+        proxyUrl: 'https://thunderstore.io',
+        fetchImpl: mockFetch as any 
+      });
       const result = await client.getPackageVersionMetrics('BepInEx', 'BepInExPack', '5.4.21');
 
       expect(result.downloads).toBe(500000);
@@ -328,12 +338,12 @@ describe('ThunderstoreClient', () => {
         has_more: false,
       };
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockData,
-      });
+      mockFetch.mockResolvedValueOnce(mockResponse(mockData));
 
-      const client = new ThunderstoreClient({ fetchImpl: mockFetch });
+      const client = new ThunderstoreClient({ 
+        proxyUrl: 'https://thunderstore.io',
+        fetchImpl: mockFetch as any 
+      });
       const result = await client.listPackageWikis();
 
       expect(result.results).toHaveLength(1);
@@ -358,12 +368,12 @@ describe('ThunderstoreClient', () => {
         ],
       };
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockData,
-      });
+      mockFetch.mockResolvedValueOnce(mockResponse(mockData));
 
-      const client = new ThunderstoreClient({ fetchImpl: mockFetch });
+      const client = new ThunderstoreClient({ 
+        proxyUrl: 'https://thunderstore.io',
+        fetchImpl: mockFetch as any 
+      });
       const result = await client.getPackageWiki('BepInEx', 'BepInExPack');
 
       expect(result.pages).toHaveLength(1);
@@ -379,12 +389,12 @@ describe('ThunderstoreClient', () => {
         markdown_content: '# Getting Started\n\nWelcome!',
       };
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockData,
-      });
+      mockFetch.mockResolvedValueOnce(mockResponse(mockData));
 
-      const client = new ThunderstoreClient({ fetchImpl: mockFetch });
+      const client = new ThunderstoreClient({ 
+        proxyUrl: 'https://thunderstore.io',
+        fetchImpl: mockFetch as any 
+      });
       const result = await client.getWikiPage(1);
 
       expect(result.markdown_content).toContain('Getting Started');
@@ -397,12 +407,12 @@ describe('ThunderstoreClient', () => {
         html: '<h1>Hello <strong>World</strong></h1>',
       };
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockData,
-      });
+      mockFetch.mockResolvedValueOnce(mockResponse(mockData));
 
-      const client = new ThunderstoreClient({ fetchImpl: mockFetch });
+      const client = new ThunderstoreClient({ 
+        proxyUrl: 'https://thunderstore.io',
+        fetchImpl: mockFetch as any 
+      });
       const result = await client.renderMarkdown({
         markdown: '# Hello **World**',
       });
@@ -414,21 +424,21 @@ describe('ThunderstoreClient', () => {
 
   describe('Helper Methods', () => {
     it('should build package download URL', () => {
-      const client = new ThunderstoreClient();
-      const url = client.getPackageDownloadUrl('BepInEx', 'BepInExPack', '5.4.21');
+      const client = new ThunderstoreClient({ proxyUrl: 'https://thunderstore.io' });
+      const url = client.getPackageDownloadUrl('BepInEx', 'BepInExPack', { version: '5.4.21' });
 
       expect(url).toBe('https://thunderstore.io/package/download/BepInEx/BepInExPack/5.4.21/');
     });
 
     it('should build package URL', () => {
-      const client = new ThunderstoreClient();
+      const client = new ThunderstoreClient({ proxyUrl: 'https://thunderstore.io' });
       const url = client.getPackageUrl('BepInEx', 'BepInExPack');
 
       expect(url).toBe('https://thunderstore.io/package/BepInEx/BepInExPack/');
     });
 
     it('should build package version URL', () => {
-      const client = new ThunderstoreClient();
+      const client = new ThunderstoreClient({ proxyUrl: 'https://thunderstore.io' });
       const url = client.getPackageVersionUrl('BepInEx', 'BepInExPack', '5.4.21');
 
       expect(url).toBe('https://thunderstore.io/package/BepInEx/BepInExPack/5.4.21/');
@@ -437,13 +447,12 @@ describe('ThunderstoreClient', () => {
 
   describe('Error Handling', () => {
     it('should throw error on failed GET request', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 404,
-        statusText: 'Not Found',
-      });
+      mockFetch.mockResolvedValueOnce(mockResponse(null, false, 404, 'Not Found'));
 
-      const client = new ThunderstoreClient({ fetchImpl: mockFetch });
+      const client = new ThunderstoreClient({ 
+        proxyUrl: 'https://thunderstore.io',
+        fetchImpl: mockFetch as any 
+      });
 
       await expect(client.getPackage('Invalid', 'Package')).rejects.toThrow(
         'API request failed: 404 Not Found'
@@ -451,13 +460,12 @@ describe('ThunderstoreClient', () => {
     });
 
     it('should throw error on failed POST request', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 400,
-        statusText: 'Bad Request',
-      });
+      mockFetch.mockResolvedValueOnce(mockResponse(null, false, 400, 'Bad Request'));
 
-      const client = new ThunderstoreClient({ fetchImpl: mockFetch });
+      const client = new ThunderstoreClient({ 
+        proxyUrl: 'https://thunderstore.io',
+        fetchImpl: mockFetch as any 
+      });
 
       await expect(client.renderMarkdown({ markdown: '' })).rejects.toThrow(
         'API request failed: 400 Bad Request'
@@ -467,13 +475,11 @@ describe('ThunderstoreClient', () => {
 
   describe('Authentication', () => {
     it('should include session token in headers', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ results: [] }),
-      });
+      mockFetch.mockResolvedValueOnce(mockResponse({ results: [] }));
 
       const client = new ThunderstoreClient({
-        fetchImpl: mockFetch,
+        proxyUrl: 'https://thunderstore.io',
+        fetchImpl: mockFetch as any,
         sessionToken: 'test-token',
       });
 

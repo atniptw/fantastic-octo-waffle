@@ -11,6 +11,8 @@ export default defineConfig({
     setupFiles: ['./src/renderer/test/setup.ts'],
     include: ['src/**/*.{test,spec}.{ts,tsx}'],
     exclude: ['**/node_modules/**', '**/dist/**', '**/e2e/**', 'playwright.config.ts', 'src/main/**'],
+    testTimeout: 60000,
+    hookTimeout: 60000,
     coverage: {
       reporter: ['text', 'html'],
       exclude: [

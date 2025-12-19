@@ -16,12 +16,22 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     base: basePath,
     root: './src',
+    publicDir: resolve(__dirname, 'public'),
     resolve: {
       conditions: ['browser', 'default'],
       alias: {
         '@': resolve(__dirname, 'src'),
-        'sevenzip-wasm': 'sevenzip-wasm/sevenzip-wasm.js'
       }
+    },
+    // Configure WASM handling
+    assetsInclude: ['**/*.wasm'],
+    optimizeDeps: {
+      esbuildOptions: {
+        target: 'esnext',
+      },
+    },
+    worker: {
+      format: 'es',
     },
     build: {
       outDir: '../dist',
@@ -68,7 +78,7 @@ export default defineConfig(({ mode }) => {
       chunkSizeWarningLimit: 500,
     },
     optimizeDeps: {
-      include: ['three', 'jszip', 'idb'],
+      include: ['three', 'idb', 'jszip'],
     },
   };
 });
