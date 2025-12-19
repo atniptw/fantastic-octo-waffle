@@ -38,7 +38,6 @@ test.describe('R.E.P.O. Cosmetic Catalog', () => {
   test('should trigger file input when import button is clicked', async ({ page }) => {
     await page.goto('/');
     
-    const importButton = page.locator('button.import-button');
     const fileInput = page.locator('input[type="file"][data-testid="import-input"]');
     
     // Verify file input exists and is hidden
