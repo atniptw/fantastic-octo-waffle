@@ -18,7 +18,7 @@ interface StatusState {
 
 async function iconToDataUrl(iconData: Uint8Array | null): Promise<string | null> {
   if (!iconData) return null;
-  const blob = new Blob([iconData as BlobPart], { type: 'image/png' });
+  const blob = new Blob([iconData], { type: 'image/png' });
   return new Promise(resolve => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result as string);
