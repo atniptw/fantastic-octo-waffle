@@ -32,36 +32,6 @@ export default function ModDetail({ mod, onAnalyze }: ModDetailProps) {
   }
 
   const handleAnalyze = async () => {
-    if (!onAnalyze) return;
-
-    setAnalysisState({ status: 'fetching', message: 'Fetching mod archive...' });
-
-    try {
-      // Simulate analysis process
-      await new Promise(resolve => setTimeout(resolve, 500));
-      setAnalysisState({ status: 'extracting', message: 'Extracting files...' });
-      
-      await new Promise(resolve => setTimeout(resolve, 500));
-      setAnalysisState({ status: 'converting', message: 'Converting cosmetic assets...' });
-      
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      onAnalyze(mod);
-      
-      setAnalysisState({ 
-        status: 'complete', 
-        message: 'Analysis complete! No cosmetic assets found in this mod.' 
-      });
-    } catch (error) {
-      setAnalysisState({
-        status: 'error',
-        message: 'Analysis failed',
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
-    }
-  };
-
-  const handleDownload = async () => {
     const namespace = 'namespace' in mod ? mod.namespace : ('owner' in mod ? mod.owner : '');
     if (!namespace) return;
     
@@ -99,7 +69,7 @@ export default function ModDetail({ mod, onAnalyze }: ModDetailProps) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
       setAnalysisState({
         status: 'error',
-        message: 'Failed to import mod',
+        message: 'Failed to analyze mod',
         error: errorMsg,
       });
       console.error('Failed to download/extract mod:', error);
@@ -136,19 +106,12 @@ export default function ModDetail({ mod, onAnalyze }: ModDetailProps) {
         <div className="mod-detail-actions">
           <button
             className="mod-detail-button mod-detail-button-primary"
-            onClick={handleDownload}
+            onClick={handleAnalyze}
             disabled={isScanning || analysisState.status === 'fetching' || analysisState.status === 'extracting'}
           >
             {isScanning || analysisState.status === 'fetching' || analysisState.status === 'extracting' 
-              ? 'Importing...' 
-              : 'Import Mod'}
-          </button>
-          <button
-            className="mod-detail-button mod-detail-button-primary"
-            onClick={handleAnalyze}
-            disabled={analysisState.status !== 'idle' && analysisState.status !== 'complete' && analysisState.status !== 'error'}
-          >
-            Analyze Mod
+              ? 'Analyzing...' 
+              : 'Analyze Mod'}
           </button>
           <a
             href={'package_url' in mod ? mod.package_url : `https://thunderstore.io/package/${mod.namespace}/${mod.name}/`}
