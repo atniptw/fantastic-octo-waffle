@@ -11,12 +11,8 @@ export default function AppLayout({ header, modList, modDetail }: AppLayoutProps
     <div className="app-layout">
       {header}
       <div className="app-content">
-        <aside className="mod-list-pane">
-          {modList}
-        </aside>
-        <main className="mod-detail-pane">
-          {modDetail}
-        </main>
+        <aside className="mod-list-pane">{modList}</aside>
+        <main className="mod-detail-pane">{modDetail}</main>
       </div>
     </div>
   );

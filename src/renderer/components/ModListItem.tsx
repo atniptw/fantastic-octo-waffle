@@ -8,9 +8,8 @@ interface ModListItemProps {
 
 export default function ModListItem({ mod, isSelected, onClick }: ModListItemProps) {
   const downloadCount = 'total_downloads' in mod ? parseInt(mod.total_downloads, 10) || 0 : 0;
-  const formattedDownloads = downloadCount >= 1000
-    ? `${(downloadCount / 1000).toFixed(1)}k`
-    : downloadCount.toString();
+  const formattedDownloads =
+    downloadCount >= 1000 ? `${(downloadCount / 1000).toFixed(1)}k` : downloadCount.toString();
 
   return (
     <div
@@ -33,10 +32,10 @@ export default function ModListItem({ mod, isSelected, onClick }: ModListItemPro
         </p>
         <div className="mod-item-meta">
           {downloadCount > 0 && <span className="mod-meta-badge">↓ {formattedDownloads}</span>}
-          {('is_pinned' in mod && (mod as PackageExperimental).is_pinned) && (
+          {'is_pinned' in mod && (mod as PackageExperimental).is_pinned && (
             <span className="mod-meta-badge">📌 Pinned</span>
           )}
-          {('is_deprecated' in mod && (mod as PackageExperimental).is_deprecated) && (
+          {'is_deprecated' in mod && (mod as PackageExperimental).is_deprecated && (
             <span className="mod-meta-badge deprecated">⚠️ Deprecated</span>
           )}
         </div>

@@ -163,7 +163,7 @@ export class ThunderstoreClient {
       const url = `${basePath}?search=${encodeURIComponent(search.trim())}`;
       try {
         return await this.get(url);
-      } catch (err) {
+      } catch {
         // Fallback to unfiltered list if server doesn't support search param
         console.warn('Thunderstore V1 search parameter failed; falling back to full list');
       }

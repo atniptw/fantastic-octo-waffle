@@ -11,9 +11,15 @@ import { PackageExperimental, PackageListing, PackageIndexEntry } from '@/lib/th
 const client = new ThunderstoreClient({ baseUrl: config.thunderstoreBaseUrl });
 
 function App() {
-  const [allMods, setAllMods] = useState<Array<PackageExperimental | PackageListing | PackageIndexEntry>>([]);
-  const [filteredMods, setFilteredMods] = useState<Array<PackageExperimental | PackageListing | PackageIndexEntry>>([]);
-  const [selectedMod, setSelectedMod] = useState<PackageExperimental | PackageListing | PackageIndexEntry | null>(null);
+  const [allMods, setAllMods] = useState<
+    Array<PackageExperimental | PackageListing | PackageIndexEntry>
+  >([]);
+  const [filteredMods, setFilteredMods] = useState<
+    Array<PackageExperimental | PackageListing | PackageIndexEntry>
+  >([]);
+  const [selectedMod, setSelectedMod] = useState<
+    PackageExperimental | PackageListing | PackageIndexEntry | null
+  >(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -34,8 +40,8 @@ function App() {
         const catsStr = Array.isArray(pkg.categories)
           ? pkg.categories.join(',').toLowerCase()
           : typeof pkg.categories === 'string'
-          ? pkg.categories.toLowerCase()
-          : '';
+            ? pkg.categories.toLowerCase()
+            : '';
         const isCosmetic =
           name.includes('decoration') ||
           name.includes('cosmetic') ||
@@ -69,21 +75,22 @@ function App() {
       const nameMatch = mod.name.toLowerCase().includes(lowerQuery);
       const ownerOrNamespace = 'owner' in mod ? mod.owner : mod.namespace;
       const ownerMatch = ownerOrNamespace.toLowerCase().includes(lowerQuery);
-      const descMatch = 'latest' in mod && mod.latest?.description
-        ? mod.latest.description.toLowerCase().includes(lowerQuery)
-        : false;
+      const descMatch =
+        'latest' in mod && mod.latest?.description
+          ? mod.latest.description.toLowerCase().includes(lowerQuery)
+          : false;
       return nameMatch || ownerMatch || descMatch;
     });
     setFilteredMods(filtered);
   };
 
-  const handleSelectMod = (
-    mod: PackageExperimental | PackageListing | PackageIndexEntry
-  ) => {
+  const handleSelectMod = (mod: PackageExperimental | PackageListing | PackageIndexEntry) => {
     setSelectedMod(mod);
   };
 
-  const handleAnalyzeMod = async (mod: PackageExperimental | PackageListing | PackageIndexEntry) => {
+  const handleAnalyzeMod = async (
+    mod: PackageExperimental | PackageListing | PackageIndexEntry
+  ) => {
     // Placeholder for actual analysis logic
     const id = 'full_name' in mod ? mod.full_name : `${mod.namespace}/${mod.name}`;
     console.log('Analyzing mod:', id);
@@ -95,7 +102,13 @@ function App() {
       modList={
         <ModList
           mods={filteredMods}
-          selectedModId={selectedMod ? ('full_name' in selectedMod ? selectedMod.full_name : `${selectedMod.namespace}/${selectedMod.name}`) : null}
+          selectedModId={
+            selectedMod
+              ? 'full_name' in selectedMod
+                ? selectedMod.full_name
+                : `${selectedMod.namespace}/${selectedMod.name}`
+              : null
+          }
           onSelectMod={handleSelectMod}
           isLoading={isLoading}
           error={errorMsg || undefined}

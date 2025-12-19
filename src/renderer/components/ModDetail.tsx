@@ -37,15 +37,15 @@ export default function ModDetail({ mod, onAnalyze }: ModDetailProps) {
     if (onAnalyze && mod) {
       try {
         onAnalyze(mod);
-      } catch (_) {
+      } catch {
         // no-op: parent callback errors shouldn't block analysis
       }
     }
-    const namespace = 'namespace' in mod ? mod.namespace : ('owner' in mod ? mod.owner : '');
+    const namespace = 'namespace' in mod ? mod.namespace : 'owner' in mod ? mod.owner : '';
     if (!namespace) return;
-    
+
     setAnalysisState({ status: 'fetching', message: `Downloading ${mod.name}...` });
-    
+
     try {
       const downloadUrl = client.getPackageDownloadUrl(namespace, mod.name);
       // Use proxy URL (Cloudflare Worker or fallback) by forwarding path only
@@ -53,30 +53,30 @@ export default function ModDetail({ mod, onAnalyze }: ModDetailProps) {
       const proxyUrl = `${config.thunderstoreBaseUrl}${url.pathname}`;
 
       const response = await fetch(proxyUrl);
-      
+
       if (!response.ok) {
         throw new Error(`Failed to download: ${response.statusText}`);
       }
-      
+
       const arrayBuffer = await response.arrayBuffer();
       const file = new File([arrayBuffer], `${mod.name}.zip`, { type: 'application/zip' });
-      
+
       setAnalysisState({ status: 'extracting', message: `Extracting ${mod.name}...` });
-      
+
       const result = await scanFile(file, {
         onProgress: (progress) => {
-          setAnalysisState({ 
-            status: 'extracting', 
-            message: `Extracting files... ${Math.round(progress.progress)}%` 
+          setAnalysisState({
+            status: 'extracting',
+            message: `Extracting files... ${Math.round(progress.progress)}%`,
           });
         },
       });
-      
-      setAnalysisState({ 
-        status: 'complete', 
-        message: `Successfully extracted ${result.cosmetics?.length || 0} cosmetic files` 
+
+      setAnalysisState({
+        status: 'complete',
+        message: `Successfully extracted ${result.cosmetics?.length || 0} cosmetic files`,
       });
-      
+
       console.log('ZIP extracted:', result);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
@@ -115,19 +115,29 @@ export default function ModDetail({ mod, onAnalyze }: ModDetailProps) {
         ) : (
           <p className="mod-detail-description">No description available.</p>
         )}
-        
+
         <div className="mod-detail-actions">
           <button
             className="mod-detail-button mod-detail-button-primary"
             onClick={handleAnalyze}
-            disabled={isScanning || analysisState.status === 'fetching' || analysisState.status === 'extracting'}
+            disabled={
+              isScanning ||
+              analysisState.status === 'fetching' ||
+              analysisState.status === 'extracting'
+            }
           >
-            {isScanning || analysisState.status === 'fetching' || analysisState.status === 'extracting' 
-              ? 'Analyzing...' 
+            {isScanning ||
+            analysisState.status === 'fetching' ||
+            analysisState.status === 'extracting'
+              ? 'Analyzing...'
               : 'Analyze Mod'}
           </button>
           <a
-            href={'package_url' in mod ? mod.package_url : `https://thunderstore.io/package/${mod.namespace}/${mod.name}/`}
+            href={
+              'package_url' in mod
+                ? mod.package_url
+                : `https://thunderstore.io/package/${mod.namespace}/${mod.name}/`
+            }
             target="_blank"
             rel="noopener noreferrer"
             className="mod-detail-button mod-detail-button-secondary"
@@ -140,14 +150,12 @@ export default function ModDetail({ mod, onAnalyze }: ModDetailProps) {
       {analysisState.status !== 'idle' && (
         <div className={`analysis-status analysis-status-${analysisState.status}`}>
           <div className="analysis-status-message">
-            {(analysisState.status === 'fetching' || analysisState.status === 'extracting' || analysisState.status === 'converting') && (
-              <span className="analysis-spinner">⟳</span>
-            )}
+            {(analysisState.status === 'fetching' ||
+              analysisState.status === 'extracting' ||
+              analysisState.status === 'converting') && <span className="analysis-spinner">⟳</span>}
             {analysisState.message}
           </div>
-          {analysisState.error && (
-            <div className="analysis-error">{analysisState.error}</div>
-          )}
+          {analysisState.error && <div className="analysis-error">{analysisState.error}</div>}
         </div>
       )}
 

@@ -17,9 +17,7 @@ export function isREPOCosmeticMod(pkg: PackageIndexEntry): boolean {
 
   // Must depend on R.E.P.O.
   const hasREPODep =
-    lowerDeps.includes('repo') ||
-    lowerDeps.includes('r.e.p.o') ||
-    lowerDeps.includes('bepinex');
+    lowerDeps.includes('repo') || lowerDeps.includes('r.e.p.o') || lowerDeps.includes('bepinex');
 
   if (!hasREPODep) {
     return false;
@@ -45,8 +43,6 @@ export function isREPOCosmeticMod(pkg: PackageIndexEntry): boolean {
 /**
  * Filter a list of packages to only R.E.P.O. cosmetic mods
  */
-export function filterREPOCosmetics(
-  packages: PackageIndexEntry[]
-): PackageIndexEntry[] {
+export function filterREPOCosmetics(packages: PackageIndexEntry[]): PackageIndexEntry[] {
   return packages.filter(isREPOCosmeticMod);
 }

@@ -10,7 +10,14 @@ interface ModListProps {
   onRetry?: () => void;
 }
 
-export default function ModList({ mods, selectedModId, onSelectMod, isLoading, error, onRetry }: ModListProps) {
+export default function ModList({
+  mods,
+  selectedModId,
+  onSelectMod,
+  isLoading,
+  error,
+  onRetry,
+}: ModListProps) {
   if (isLoading) {
     return (
       <div className="mod-list">
@@ -26,7 +33,9 @@ export default function ModList({ mods, selectedModId, onSelectMod, isLoading, e
           <div className="mod-list-error-title">Unable to load mods</div>
           <div className="mod-list-error-message">{error}</div>
           {onRetry && (
-            <button className="mod-list-retry-button" onClick={onRetry}>Retry</button>
+            <button className="mod-list-retry-button" onClick={onRetry}>
+              Retry
+            </button>
           )}
         </div>
       </div>
@@ -47,7 +56,9 @@ export default function ModList({ mods, selectedModId, onSelectMod, isLoading, e
         <ModListItem
           key={'full_name' in mod ? mod.full_name : `${mod.namespace}/${mod.name}`}
           mod={mod}
-          isSelected={selectedModId === ('full_name' in mod ? mod.full_name : `${mod.namespace}/${mod.name}`)}
+          isSelected={
+            selectedModId === ('full_name' in mod ? mod.full_name : `${mod.namespace}/${mod.name}`)
+          }
           onClick={() => onSelectMod(mod)}
         />
       ))}
