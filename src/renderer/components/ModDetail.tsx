@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { PackageExperimental, PackageListing, PackageIndexEntry } from '@/lib/thunderstore/types';
 import { ThunderstoreClient } from '@/lib/thunderstore/client';
 import { useZipScanner } from '@/lib/useZipScanner';
+import { config } from '@/config';
 
 interface ModDetailProps {
   mod: PackageExperimental | PackageListing | PackageIndexEntry | null;
@@ -39,10 +40,10 @@ export default function ModDetail({ mod, onAnalyze }: ModDetailProps) {
     
     try {
       const downloadUrl = client.getPackageDownloadUrl(namespace, mod.name);
-      // Use CORS proxy to bypass CORS restrictions
-      const corsProxyUrl = `https://cors-anywhere.herokuapp.com/${downloadUrl}`;
+      // Use proxy URL (Cloudflare Worker or fallback)
+      const proxyUrl = `${config.thunderstoreBaseUrl}${downloadUrl}`;
       
-      const response = await fetch(corsProxyUrl);
+      const response = await fetch(proxyUrl);
       
       if (!response.ok) {
         throw new Error(`Failed to download: ${response.statusText}`);
@@ -72,7 +73,7 @@ export default function ModDetail({ mod, onAnalyze }: ModDetailProps) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
       setAnalysisState({
         status: 'error',
-        message: 'Failed to analyze mod (CORS blocked - try downloading manually)',
+        message: 'Failed to analyze mod',
         error: errorMsg,
       });
       console.error('Failed to download/extract mod:', error);
