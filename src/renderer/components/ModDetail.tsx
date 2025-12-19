@@ -39,7 +39,10 @@ export default function ModDetail({ mod, onAnalyze }: ModDetailProps) {
     
     try {
       const downloadUrl = client.getPackageDownloadUrl(namespace, mod.name);
-      const response = await fetch(downloadUrl);
+      // Use CORS proxy to bypass CORS restrictions
+      const corsProxyUrl = `https://cors-anywhere.herokuapp.com/${downloadUrl}`;
+      
+      const response = await fetch(corsProxyUrl);
       
       if (!response.ok) {
         throw new Error(`Failed to download: ${response.statusText}`);
@@ -69,7 +72,7 @@ export default function ModDetail({ mod, onAnalyze }: ModDetailProps) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
       setAnalysisState({
         status: 'error',
-        message: 'Failed to analyze mod',
+        message: 'Failed to analyze mod (CORS blocked - try downloading manually)',
         error: errorMsg,
       });
       console.error('Failed to download/extract mod:', error);

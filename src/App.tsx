@@ -81,7 +81,6 @@ function App() {
     mod: PackageExperimental | PackageListing | PackageIndexEntry
   ) => {
     setSelectedMod(mod);
-    setIsLoadingDetails(false);
   };
 
   const handleAnalyzeMod = async (mod: PackageExperimental | PackageListing | PackageIndexEntry) => {
