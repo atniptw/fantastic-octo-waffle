@@ -40,9 +40,10 @@ export default function ModDetail({ mod, onAnalyze }: ModDetailProps) {
     
     try {
       const downloadUrl = client.getPackageDownloadUrl(namespace, mod.name);
-      // Use proxy URL (Cloudflare Worker or fallback)
-      const proxyUrl = `${config.thunderstoreBaseUrl}${downloadUrl}`;
-      
+      // Use proxy URL (Cloudflare Worker or fallback) by forwarding path only
+      const url = new URL(downloadUrl);
+      const proxyUrl = `${config.thunderstoreBaseUrl}${url.pathname}`;
+
       const response = await fetch(proxyUrl);
       
       if (!response.ok) {
