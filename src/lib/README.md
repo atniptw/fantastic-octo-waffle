@@ -296,3 +296,9 @@ npm test -- src/lib/__tests__/zipScanner.test.ts
 ```
 
 All tests use browser-compatible APIs and mocked File objects.
+
+
+## Constants
+
+All application-wide constants (timing, progress values, file limits, and patterns)
+are centralized in `src/lib/constants.ts` to improve readability and maintainability.

@@ -9,6 +9,7 @@
  * number of files processed within the ZIP.
  */
 
+import { PROGRESS } from '@/lib/constants';
 import { scanZip, type WorkerMessage, type ZipScanResult } from '../lib/zipScanner';
 
 // Handle messages from the main thread
@@ -18,13 +19,13 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
   if (type === 'scan' && file) {
     try {
       // Report initial progress (approximation)
-      postProgress(10, scanId);
+      postProgress(PROGRESS.SCAN_START, scanId);
 
       // Scan the ZIP file
       const result: ZipScanResult = await scanZip(file);
 
       // Report near-complete progress (approximation)
-      postProgress(90, scanId);
+      postProgress(PROGRESS.SCAN_COMPLETE, scanId);
 
       // Send result back to main thread
       const response: WorkerMessage = {
@@ -36,7 +37,7 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
       self.postMessage(response);
 
       // Report completion
-      postProgress(100, scanId);
+      postProgress(PROGRESS.RESULT_SENT, scanId);
     } catch (error) {
       // Send error back to main thread
       const response: WorkerMessage = {
