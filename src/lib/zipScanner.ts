@@ -4,7 +4,7 @@
  * Uses Web Crypto API instead of Node.js crypto for browser compatibility.
  * Uses sevenzip-wasm for ZIP extraction.
  */
-
+import { PATTERNS } from '@/lib/constants';
 import SevenZipWasm, { type SevenZipModule } from 'sevenzip-wasm';
 
 /**
@@ -316,7 +316,7 @@ export async function scanZip(zipData: Uint8Array | ArrayBuffer): Promise<ZipSca
     }
 
     // Extract .hhh files from plugins/<plugin>/Decorations/ directories
-    const cosmeticPattern = /\/plugins\/[^/]+\/Decorations\/[^/]+\.hhh$/i;
+    const cosmeticPattern = PATTERNS.COSMETIC_PATH;
 
     for (const filePath of extractedFiles) {
       if (cosmeticPattern.test(filePath)) {
