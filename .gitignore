@@ -36,3 +36,11 @@ test-results/
 
 # TypeScript cache
 *.tsbuildinfo
+
+# Cloudflare Workers
+workers/.wrangler/
+.wrangler/
+wrangler.toml.local
+
+# Package lock (only if using yarn, remove if using npm)
+# package-lock.json
