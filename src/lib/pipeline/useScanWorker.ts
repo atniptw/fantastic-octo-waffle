@@ -4,7 +4,7 @@
  */
 
 import { useRef, useCallback, useState, useEffect } from 'react';
-import type { ZipScanResult, WorkerMessage } from './zipScanner';
+import type { ZipScanResult, WorkerMessage } from './core/scanner';
 
 export interface ScanProgress {
   fileName: string;
@@ -41,7 +41,7 @@ export interface UseZipScannerResult {
  *
  * @example
  * ```tsx
- * const { scanFile, isScanning } = useZipScanner();
+ * const { scanFile, isScanning } = useScanWorker();
  *
  * const handleFileSelect = async (file: File) => {
  *   try {
@@ -55,7 +55,7 @@ export interface UseZipScannerResult {
  * };
  * ```
  */
-export function useZipScanner(): UseZipScannerResult {
+export function useScanWorker(): UseZipScannerResult {
   const workerRef = useRef<Worker | null>(null);
   const activeScanCountRef = useRef(0);
   const [isScanning, setIsScanning] = useState(false);
@@ -88,7 +88,7 @@ export function useZipScanner(): UseZipScannerResult {
         // Create worker if it doesn't exist
         if (!workerRef.current) {
           // Vite handles worker imports with ?worker suffix
-          workerRef.current = new Worker(new URL('../workers/zipWorker.ts', import.meta.url), {
+          workerRef.current = new Worker(new URL('../../workers/zipWorker.ts', import.meta.url), {
             type: 'module',
           });
         }
@@ -257,3 +257,6 @@ export function useZipScanner(): UseZipScannerResult {
     },
   };
 }
+
+// Alias for backward compatibility
+export const useZipScanner = useScanWorker;

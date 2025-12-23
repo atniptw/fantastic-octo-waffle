@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import JSZip from 'jszip';
-import { scanZip } from '../zipScanner';
+import { scanZip } from '../pipeline';
 
 /**
  * Helper function to create a large mock ZIP file for testing performance.

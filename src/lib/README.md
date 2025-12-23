@@ -4,17 +4,21 @@ This directory contains reusable library modules for the R.E.P.O. Cosmetic Catal
 
 ## Available Modules
 
-- **[ZIP Scanner](./zipScanner.ts)** - Browser-based ZIP file scanning with Web Worker support
+- **[Pipeline](./pipeline/)** - ZIP download, scanning, and processing pipeline
+  - `downloader.ts` - ZIP download with caching
+  - `scanner.ts` - ZIP file parsing and metadata extraction
+  - `useScanWorker.ts` - Web Worker hook for non-blocking scans
 - **[Thunderstore API Client](./thunderstore/)** - TypeScript client for the Thunderstore API
 
 ---
 
-## ZIP Scanner
+## Pipeline Package
 
-Browser-compatible ZIP file scanning with Web Worker support for handling large files without blocking the UI.
+Complete pipeline for downloading mod ZIPs, extracting metadata, and processing cosmetics.
 
-## Features
+### Features
 
+- ✅ **Download & Cache**: Fetch mod ZIPs with automatic IndexedDB caching
 - ✅ **Browser-compatible**: Uses Web Crypto API instead of Node.js crypto
 - ✅ **Web Worker support**: Non-blocking ZIP extraction for large files (100MB+)
 - ✅ **Error handling**: Gracefully handles corrupt ZIPs and missing files
@@ -27,7 +31,7 @@ Browser-compatible ZIP file scanning with Web Worker support for handling large 
 ### Basic Usage (Main Thread)
 
 ```typescript
-import { scanZipFile } from '@/lib/zipScanner';
+import { scanZipFile } from '@/lib/pipeline';
 
 const handleFileUpload = async (file: File) => {
   try {
@@ -49,10 +53,10 @@ const handleFileUpload = async (file: File) => {
 ### Using Web Worker (Recommended for Large Files)
 
 ```typescript
-import { useZipScanner } from '@/lib/useZipScanner';
+import { useScanWorker } from '@/lib/pipeline';
 
 function MyComponent() {
-  const { scanFile } = useZipScanner();
+  const { scanFile, isScanning } = useScanWorker();
   
   const handleFileSelect = async (file: File) => {
     try {
@@ -81,7 +85,7 @@ function MyComponent() {
 ### Batch Scanning Multiple Files
 
 ```typescript
-import { scanMultipleZipFiles } from '@/lib/zipScanner';
+import { scanMultipleZipFiles } from '@/lib/pipeline';
 
 const files: File[] = [...]; // Array of File objects
 

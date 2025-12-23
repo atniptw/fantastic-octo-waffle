@@ -1,11 +1,9 @@
 import { useState, useEffect } from 'react';
 import { ModPackage } from '@/lib/thunderstore/normalize';
 import { ThunderstoreClient } from '@/lib/thunderstore/client';
-import { useZipScanner } from '@/lib/useZipScanner';
-import { useZipDownloader } from '@/lib/useZipDownloader';
+import { useScanWorker, useZipDownloader, type ZipScanResult } from '@/lib/pipeline';
 import { CachedZipMetadata } from '@/lib/storage/zipCache';
 import { config } from '@/config';
-import type { ZipScanResult } from '@/lib/zipScanner';
 import { debugLog } from '@/lib/logger';
 
 if (config.debugLogging) {
@@ -38,7 +36,7 @@ export default function ModDetail({ mod, onAnalyze }: ModDetailProps) {
     status: 'idle',
     message: '',
   });
-  const { scanFile, isScanning } = useZipScanner();
+  const { scanFile, isScanning } = useScanWorker();
   const { download, listCached, deleteCached, isDownloading, progress } = useZipDownloader();
   const [cachedZips, setCachedZips] = useState<CachedZipMetadata[]>([]);
   const [lastResult, setLastResult] = useState<ZipScanResult | null>(null);

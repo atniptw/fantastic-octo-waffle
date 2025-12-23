@@ -5,8 +5,9 @@
  * Uses JSZip for cross-platform ZIP extraction.
  */
 
-import { debugLog, isDebugEnabled } from './logger';
+import { debugLog, isDebugEnabled } from '../logger';
 import JSZip from 'jszip';
+import { generateDisplayName, inferCosmeticType } from './core/cosmetic';
 
 /**
  * Metadata for a single cosmetic file extracted from a ZIP.
@@ -97,67 +98,8 @@ export function parseManifest(content: string): ManifestData | null {
   }
 }
 
-/**
- * Generates a display name from a filename by removing extension and formatting.
- * Example: "my_cool_hat.hhh" -> "My Cool Hat"
- * Note: This function expects .hhh files. If a filename doesn't end with .hhh,
- * the extension will remain in the display name.
- *
- * @param filename - The filename to convert (expected to end with .hhh)
- * @returns Human-readable display name
- */
-export function generateDisplayName(filename: string): string {
-  // Trim whitespace first
-  const trimmed = filename.trim();
-
-  // Remove extension
-  const nameWithoutExt = trimmed.replace(/\.hhh$/i, '');
-
-  // Replace underscores and hyphens with spaces
-  // Capitalize first letter of each word
-  return nameWithoutExt
-    .replace(/[_-]/g, ' ')
-    .replace(/\b\w/g, (char) => char.toUpperCase())
-    .trim();
-}
-
-/**
- * Infers cosmetic type from filename.
- * Looks for common patterns like "head", "hat", "accessory", etc.
- * Uses word boundary matching to avoid false positives from substrings.
- *
- * @param filename - The filename to analyze
- * @returns Inferred type string
- */
-export function inferCosmeticType(filename: string): string {
-  const lowerFilename = filename.toLowerCase();
-
-  // Check for common type keywords using lookahead/lookbehind for word boundaries
-  // Match whole words that are separated by underscores, hyphens, dots, or string boundaries
-  if (/(?:^|[_\-. ])head(?:[_\-. ]|$)/.test(lowerFilename)) {
-    return 'head';
-  } else if (
-    /(?:^|[_\-. ])hat(?:[_\-. ]|$)/.test(lowerFilename) ||
-    /(?:^|[_\-. ])helmet(?:[_\-. ]|$)/.test(lowerFilename)
-  ) {
-    return 'hat';
-  } else if (
-    /(?:^|[_\-. ])glasses(?:[_\-. ]|$)/.test(lowerFilename) ||
-    /(?:^|[_\-. ])goggles(?:[_\-. ]|$)/.test(lowerFilename)
-  ) {
-    return 'glasses';
-  } else if (/(?:^|[_\-. ])mask(?:[_\-. ]|$)/.test(lowerFilename)) {
-    return 'mask';
-  } else if (
-    /(?:^|[_\-. ])accessory(?:[_\-. ]|$)/.test(lowerFilename) ||
-    /(?:^|[_\-. ])acc_(?:[_\-. ]|$)/.test(lowerFilename)
-  ) {
-    return 'accessory';
-  }
-
-  // Default to decoration
-  return 'decoration';
-}
+// Re-export cosmetic utilities from core/cosmetic
+export { generateDisplayName, inferCosmeticType } from './core/cosmetic';
 
 /**
  * Calculates SHA256 hash for file content using Web Crypto API.

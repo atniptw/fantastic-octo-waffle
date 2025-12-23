@@ -6,7 +6,7 @@
  * sevenzip/inspection rather than fixed jumps.
  */
 
-import { scanZip, type WorkerMessage, type ZipScanResult } from '../lib/zipScanner';
+import { scanZip, type WorkerMessage, type ZipScanResult } from '../lib/pipeline/core';
 
 const abortControllers = new Map<number, AbortController>();
 
@@ -45,9 +45,9 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
       };
       const transfer: Transferable[] = [];
       if (result.iconData) {
-        transfer.push(result.iconData.buffer);
+        transfer.push(result.iconData.buffer as ArrayBuffer);
       }
-      self.postMessage(response, transfer);
+      self.postMessage(response, { transfer });
 
       postProgress(100, scanId, 'complete', 'done');
     } catch (error) {

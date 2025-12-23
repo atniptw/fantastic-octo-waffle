@@ -11,7 +11,7 @@ import {
   extractCosmeticMetadata,
   scanMultipleZipFiles,
   parseManifest,
-} from '../zipScanner';
+} from '../pipeline';
 
 // ============================================================================
 // Test Fixtures
