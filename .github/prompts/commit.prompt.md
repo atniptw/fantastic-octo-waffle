@@ -6,9 +6,11 @@ Analyze my staged git changes and commit them with an appropriate message follow
 
 **Task:**
 
-1. Use `get_changed_files` with `sourceControlState: ['staged']` to retrieve all staged changes
-2. Review the diffs to understand what was changed and why
-3. Generate a conventional commit message following this structure:
+1. First run `git status` using `run_in_terminal` to refresh git state
+2. Use `get_changed_files` with `sourceControlState: ['staged']` to retrieve all staged changes
+3. If no staged changes are found with `get_changed_files`, fall back to using `run_in_terminal` with `git diff --cached` to get staged changes
+4. Review the diffs to understand what was changed and why
+5. Generate a conventional commit message following this structure:
 
    ```
    <type>[optional scope][optional !]: <description>
@@ -18,7 +20,7 @@ Analyze my staged git changes and commit them with an appropriate message follow
    [optional footer(s)]
    ```
 
-4. Commit the staged changes using `run_in_terminal` with appropriate git commit command
+6. Commit the staged changes using `run_in_terminal` with appropriate git commit command
 
 **Commit Message Format:**
 
