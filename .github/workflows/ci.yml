@@ -10,52 +10,52 @@ jobs:
   test-lint:
     name: Test & Lint
     runs-on: ubuntu-latest
-    
+
     strategy:
       matrix:
         node-version: [24.x]
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 10.28.0
-      
+
       - name: Setup Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
           cache: 'pnpm'
-      
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      
+
       - name: Format check
         run: pnpm format:check
-      
+
       - name: Lint
         run: pnpm lint
-      
+
       - name: Type check
         run: pnpm typecheck
-      
+
       - name: Dead code detection
         run: pnpm deadcode
-      
+
       - name: Run unit tests
         run: pnpm test:unit
-      
+
       - name: Run integration tests
         run: pnpm test:integration || echo "Integration tests not yet implemented"
         continue-on-error: true
-      
+
       - name: Build
         run: pnpm build
         continue-on-error: true
-      
+
       # Phase 1: E2E tests placeholder (to be implemented in Phase 1)
       # Skipped for now as E2E infrastructure is not yet set up
       - name: Run E2E tests (Phase 1 placeholder)

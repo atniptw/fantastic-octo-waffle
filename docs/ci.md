@@ -19,6 +19,7 @@ This project uses GitHub Actions for continuous integration. The CI pipeline ens
 **File:** `.github/workflows/ci.yml`
 
 **Triggers:**
+
 - Push to `main` branch
 - Pull requests targeting `main` branch
 
@@ -82,11 +83,13 @@ export default defineConfig({
 **Tool:** `ts-prune` v0.10.3
 
 **Usage:**
+
 ```bash
 pnpm deadcode  # Runs: ts-prune --error
 ```
 
 **Features:**
+
 - Detects unused exports across the codebase
 - Fast execution with minimal configuration
 - Fails CI on any unused exports (--error flag)
@@ -100,6 +103,7 @@ Add `// ts-prune-ignore-next` comment above exports that are intentionally unuse
 **Tool:** `knip` (to be added)
 
 **Planned Features:**
+
 - Unused files detection
 - Unused dependencies in package.json
 - Unused imports (not just exports)
@@ -107,6 +111,7 @@ Add `// ts-prune-ignore-next` comment above exports that are intentionally unuse
 - More comprehensive analysis
 
 **Why Later:**
+
 - Requires tuning for monorepo entrypoints
 - More complex configuration needed
 - Best added once build structure is stable
@@ -114,6 +119,7 @@ Add `// ts-prune-ignore-next` comment above exports that are intentionally unuse
 ## Caching Strategy
 
 The workflow uses GitHub Actions caching:
+
 - **Cache Type:** pnpm store (via `setup-node` action)
 - **Cache Key:** Based on `pnpm-lock.yaml`
 - **Benefits:**
@@ -174,28 +180,33 @@ pnpm build
 ## Troubleshooting
 
 ### Format Check Failures
+
 ```bash
 pnpm format  # Auto-fix all formatting issues
 ```
 
 ### Lint Failures
+
 ```bash
 pnpm lint:fix  # Auto-fix simple issues
 # Review and manually fix remaining issues
 ```
 
 ### Type Check Failures
+
 - Fix TypeScript errors in the reported files
 - Ensure all types are properly imported/exported
 - Check for typos in property names
 
 ### Dead Code Detection
+
 ```bash
 pnpm deadcode  # See unused exports
 # Remove unused exports OR add ts-prune-ignore comment if intentional
 ```
 
 ### Build Failures
+
 - Ensure all entry points exist (e.g., index.html for web app)
 - Check that all dependencies are installed
 - Review error messages for missing files or type errors
@@ -225,11 +236,13 @@ The following items are **deferred to Phase 1** or later:
 ### Deploy Workflows
 
 **GitHub Pages (apps/web):**
+
 - Trigger: Push to `main`
 - Build web app and deploy to GitHub Pages
 - Use `actions/deploy-pages` action
 
 **Cloudflare Worker (apps/worker):**
+
 - Trigger: Manual dispatch or tag
 - Deploy worker with wrangler
 - Requires secrets: `CF_API_TOKEN`, `CF_ACCOUNT_ID`

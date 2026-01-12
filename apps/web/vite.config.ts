@@ -10,7 +10,7 @@ export default defineConfig({
     target: 'esnext',
     minify: 'esbuild',
     rollupOptions: {
-      onwarn(warning, warn) {
+      onwarn(warning) {
         // Treat warnings as errors in CI
         throw new Error(warning.message);
       },
