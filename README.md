@@ -32,13 +32,13 @@ See [docs/architecture.md](./docs/architecture.md) for detailed diagrams and dat
 
 ## Features (Roadmap)
 
-| Phase | Status | Features |
-|-------|--------|----------|
-| 1 | Planned | Worker proxy, mod list, search |
-| 2 | Planned | Zip download, UnityFS parsing, mesh rendering |
-| 3 | Planned | Textures, materials, PBR rendering |
-| 4 | Planned | Caching, telemetry, error handling |
-| 5 | Planned | Multi-game support, mod inspector, UI polish |
+| Phase | Status  | Features                                      |
+| ----- | ------- | --------------------------------------------- |
+| 1     | Planned | Worker proxy, mod list, search                |
+| 2     | Planned | Zip download, UnityFS parsing, mesh rendering |
+| 3     | Planned | Textures, materials, PBR rendering            |
+| 4     | Planned | Caching, telemetry, error handling            |
+| 5     | Planned | Multi-game support, mod inspector, UI polish  |
 
 ## Tech Stack
 

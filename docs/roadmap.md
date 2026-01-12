@@ -13,13 +13,15 @@ Each phase includes acceptance criteria and estimated effort.
 **Goal:** Establish baseline tooling, structure, and automation so later phases move fast without rework.
 
 **Deliverables:**
-- Monorepo scaffold (apps/web, apps/worker, packages/*) with pnpm workspaces.
+
+- Monorepo scaffold (apps/web, apps/worker, packages/\*) with pnpm workspaces.
 - Tooling baseline: TypeScript strict, ESLint + Prettier, Vitest, Playwright, Vite config for Preact, Wrangler/Miniflare config for Worker.
 - GitHub Pages wiring plan (gh-pages branch or Pages action) and Cloudflare deploy plan (wrangler config + secrets list).
 - CI skeleton: install, format check, lint, typecheck, unit/integration tests, build steps defined (even if tests are minimal now).
 - Documentation refreshed: README, docs/README, architecture, parser/worker specs, CI design, fixture policy.
 
 **Acceptance Criteria:**
+
 - [ ] Repo installs cleanly on Node 24 with `pnpm install`.
 - [ ] `pnpm format:check`, `pnpm lint`, `pnpm typecheck`, `pnpm test` run (tests can be placeholder but pipelines exist).
 - [ ] Vite dev server runs (`pnpm dev` in apps/web) and shows stub UI.
@@ -41,11 +43,13 @@ Each phase includes acceptance criteria and estimated effort.
 **Goal:** Validate the tech stack; deliver a working mod browser backed by Thunderstore API.
 
 **Deliverables:**
+
 - Cloudflare Worker: allowlisted proxy for `/api/mods` and `/api/mod/.../versions`.
 - Web app: Vite + Preact scaffold; list mods for REPO community; basic search/sort UI.
 - Local dev: Miniflare for Worker; Vite dev server; simple GitHub Actions CI.
 
 **Acceptance Criteria:**
+
 - [ ] Worker deploys to Cloudflare without errors.
 - [ ] `/api/mods?community=repo` proxies Thunderstore and returns normalized JSON.
 - [ ] Web app loads in < 2s; displays 20+ mods on load.
@@ -68,6 +72,7 @@ Each phase includes acceptance criteria and estimated effort.
 **Goal:** Download and parse real `.hhh` bundles; render meshes with placeholder materials.
 
 **Deliverables:**
+
 - Zip download via Worker `/proxy?url=...`; stream to browser with progress UI.
 - Web Worker offload for UnityFS parsing.
 - Binary readers, block decompression (LZ4 + LZMA), object directory parsing.
@@ -75,6 +80,7 @@ Each phase includes acceptance criteria and estimated effort.
 - Golden test fixtures; integration tests for real small bundles.
 
 **Acceptance Criteria:**
+
 - [ ] `/proxy?url=https://cdn.thunderstore.io/...` downloads zip; CORS + Range support.
 - [ ] Zip unzipped in browser via fflate; `.hhh` files extracted.
 - [ ] Web Worker parses UnityFS header + blocks for real bundle (e.g., Masaicker/MoreHead).
@@ -98,6 +104,7 @@ Each phase includes acceptance criteria and estimated effort.
 **Goal:** Render textured meshes with PBR-ish materials; improve visual fidelity.
 
 **Deliverables:**
+
 - Texture2D deserializer; RGBA32/DXT format support; PNG/JPEG decode in Web Worker.
 - Material deserializer; Unity Standard → three.js MeshStandardMaterial mapping.
 - Metallic/smoothness maps; normal map support.
@@ -105,6 +112,7 @@ Each phase includes acceptance criteria and estimated effort.
 - Performance optimization: buffer geometry batching, texture atlasing (optional Phase 4).
 
 **Acceptance Criteria:**
+
 - [ ] Texture2D objects parsed; PNG/JPEG formats decoded without blocking main thread.
 - [ ] DXT textures recognized; GPU decompression via three.js CompressedTexture.
 - [ ] Materials mapped correctly; base color, normal, metallic, roughness applied.
@@ -127,6 +135,7 @@ Each phase includes acceptance criteria and estimated effort.
 **Goal:** Optimize parse speed, caching, and resilience; polish error UX.
 
 **Deliverables:**
+
 - IndexedDB caching of parsed bundles (keyed by mod version hash).
 - Local Storage for recent mods.
 - Local-only debug log exporter (opt-in): capture parse time, bundle size, error types; user can download JSON when filing GitHub issues. No remote telemetry.
@@ -134,6 +143,7 @@ Each phase includes acceptance criteria and estimated effort.
 - Browser memory profiler integration (debugging aid).
 
 **Acceptance Criteria:**
+
 - [ ] Parsed bundle cached in IndexedDB; re-visit < 100ms (skip parse).
 - [ ] Recent mods listed; deep linking to mod/version works.
 - [ ] Local debug log export available (JSON), capturing parse durations, bundle sizes, error types; no data leaves the browser unless user attaches it to an issue.
@@ -155,6 +165,7 @@ Each phase includes acceptance criteria and estimated effort.
 **Goal:** Multi-community support; rich UI; cosmetic mod inspector.
 
 **Deliverables:**
+
 - Community selector dropdown (v2, ROUNDS, etc.).
 - Mod detail page: description, author, changelog, dependencies.
 - Cosmetic inspector: toggle visibility of submeshes, inspect material names, download model as glTF.
@@ -162,6 +173,7 @@ Each phase includes acceptance criteria and estimated effort.
 - Accessibility audit (WCAG 2.1 AA).
 
 **Acceptance Criteria:**
+
 - [ ] User can select different communities (v2, ROUNDS, etc.); list refreshes.
 - [ ] Each game community uses correct asset parser (Unity version + format may vary).
 - [ ] Mod detail page loads; displays README (markdown rendered), download stats.
@@ -193,12 +205,12 @@ Each phase includes acceptance criteria and estimated effort.
 ## Timeline Estimate
 
 | Phase | Duration | Cumulative | Dependencies |
-|-------|----------|------------|-|
-| 1 | 2 weeks | 2 weeks | None |
-| 2 | 4 weeks | 6 weeks | Phase 1 |
-| 3 | 3 weeks | 9 weeks | Phase 2 |
-| 4 | 2 weeks | 11 weeks | Phase 3 |
-| 5 | 3 weeks | 14 weeks | Phase 4 |
+| ----- | -------- | ---------- | ------------ |
+| 1     | 2 weeks  | 2 weeks    | None         |
+| 2     | 4 weeks  | 6 weeks    | Phase 1      |
+| 3     | 3 weeks  | 9 weeks    | Phase 2      |
+| 4     | 2 weeks  | 11 weeks   | Phase 3      |
+| 5     | 3 weeks  | 14 weeks   | Phase 4      |
 
 **Concurrent work:** Phases 1 & 2 can overlap (API + parser in parallel).
 
@@ -212,5 +224,3 @@ Each phase includes acceptance criteria and estimated effort.
 - **Server-side caching:** Cache parsed glTF on CDN to skip parse on popular mods.
 - **AR preview:** ARCore/ARKit integration for previewing cosmetics in real-world context.
 - **Community contributions:** Accept user-submitted cosmetic reviews/screenshots.
-
-

@@ -3,6 +3,7 @@
 ## Purpose
 
 The Cloudflare Worker acts as a **CORS-safe proxy** for the Thunderstore API and mod download endpoints. It handles:
+
 - Listing mods by community (with search, pagination, sorting).
 - Fetching mod version metadata and download URLs.
 - Proxying zip file downloads with range-request and size-limit support.
@@ -34,6 +35,7 @@ GET /api/mods
 **Proxy to:** `https://new.thunderstore.io/api/cyberstacks/repo/packages/?query=...&page=...&ordering=...`
 
 **Response (200 OK):**
+
 ```json
 {
   "count": 42,
@@ -82,6 +84,7 @@ GET /api/mod/:namespace/:name/versions
 **Proxy to:** `https://new.thunderstore.io/api/cyberstacks/repo/packages/:namespace/:name/`
 
 **Response (200 OK):**
+
 ```json
 {
   "namespace": "Author",
@@ -116,6 +119,7 @@ GET /proxy?url=https://cdn.thunderstore.io/file/Author-Mod-1.0.0.zip
 **Purpose:** CORS-safe proxy for downloading mod zip files. Validates URL against allowlist and enforces size limits.
 
 **Allowlist:** Only these hosts are proxied:
+
 - `cdn.thunderstore.io` (primary CDN)
 - `thunderstore.io` (fallback)
 - Other known CDN hosts (e.g., Fastly, Cloudflare origin; to be configured per region).
@@ -123,11 +127,13 @@ GET /proxy?url=https://cdn.thunderstore.io/file/Author-Mod-1.0.0.zip
 **Size limit:** 200 MB per request. Return `413 Payload Too Large` if exceeded.
 
 **Validation:**
+
 - URL must use HTTPS.
 - URL must match allowlist regex.
 - No redirects outside allowlist are followed.
 
 **Response (200 OK / 206 Partial Content):**
+
 ```
 Content-Type: application/zip
 Content-Length: 5000000
@@ -147,6 +153,7 @@ Cache-Control: public, immutable, max-age=31536000   (1 year; immutable once ver
 ## Headers and CORS
 
 **All responses include:**
+
 ```
 Access-Control-Allow-Origin: *
 Access-Control-Allow-Methods: GET, OPTIONS
@@ -156,6 +163,7 @@ Vary: Origin
 ```
 
 **Security headers:**
+
 ```
 X-Content-Type-Options: nosniff
 X-Frame-Options: DENY
@@ -163,6 +171,7 @@ Referrer-Policy: no-referrer
 ```
 
 **Caching:**
+
 - API endpoints: `Cache-Control: public, max-age=300, stale-while-revalidate=600`
 - Download proxies: `Cache-Control: public, immutable, max-age=31536000`
 
@@ -171,10 +180,12 @@ Referrer-Policy: no-referrer
 ## Rate Limiting
 
 **Per IP address:**
+
 - **API endpoints:** 100 requests per minute.
 - **Download proxies:** 20 requests per minute (to prevent abuse).
 
 **Behavior on limit exceeded:**
+
 - Return `429 Too Many Requests`.
 - Include `Retry-After: 60` header.
 - Log event for monitoring.
@@ -186,6 +197,7 @@ Referrer-Policy: no-referrer
 ## Error Responses
 
 **Standard error format:**
+
 ```json
 {
   "error": "invalid_community",
@@ -195,6 +207,7 @@ Referrer-Policy: no-referrer
 ```
 
 **Status codes:**
+
 - `200`: Success.
 - `206`: Partial content (Range request).
 - `400`: Bad request (invalid params, unsupported host).
@@ -211,11 +224,13 @@ Referrer-Policy: no-referrer
 ### Example: Search for "head" mods in REPO community
 
 **Request:**
+
 ```
 GET /api/mods?community=repo&query=head&page=1&sort=downloads
 ```
 
 **Response:**
+
 ```json
 {
   "count": 15,
@@ -241,12 +256,14 @@ GET /api/mods?community=repo&query=head&page=1&sort=downloads
 ### Example: Download a mod with resumable range
 
 **Request 1:**
+
 ```
 GET /proxy?url=https://cdn.thunderstore.io/file/Author-Mod-1.0.0.zip
 Range: bytes=0-999999
 ```
 
 **Response 1:**
+
 ```
 206 Partial Content
 Content-Length: 1000000
@@ -254,12 +271,14 @@ Content-Range: bytes 0-999999/5000000
 ```
 
 **Request 2 (resume):**
+
 ```
 GET /proxy?url=https://cdn.thunderstore.io/file/Author-Mod-1.0.0.zip
 Range: bytes=1000000-
 ```
 
 **Response 2:**
+
 ```
 206 Partial Content
 Content-Length: 4000000
@@ -271,6 +290,7 @@ Content-Range: bytes 1000000-4999999/5000000
 ## Deployment & Configuration
 
 **Environment variables (wrangler.toml):**
+
 ```toml
 [env.production]
 vars = { COMMUNITY = "repo", MAX_FILE_SIZE_MB = 200 }
@@ -280,6 +300,7 @@ vars = { COMMUNITY = "repo", MAX_FILE_SIZE_MB = 500 }
 ```
 
 **Allowed hosts (configurable per region):**
+
 ```toml
 ALLOWED_HOSTS = ["cdn.thunderstore.io", "thunderstore.io", "fastly-cdn.example.com"]
 ```
@@ -298,5 +319,3 @@ ALLOWED_HOSTS = ["cdn.thunderstore.io", "thunderstore.io", "fastly-cdn.example.c
 - [ ] Error responses follow standard format with correct status codes.
 - [ ] Miniflare local dev environment runs without errors.
 - [ ] Deploy to Cloudflare with `wrangler deploy` succeeds.
-
-

@@ -80,11 +80,13 @@ pnpm dev
 ```
 
 **Web app must be configured to point to Worker:**
+
 - `.env.development` or `vite.config.ts`:
   ```typescript
-  const API_URL = import.meta.env.MODE === 'development'
-    ? 'http://localhost:8787'
-    : 'https://worker.your-domain.workers.dev';
+  const API_URL =
+    import.meta.env.MODE === 'development'
+      ? 'http://localhost:8787'
+      : 'https://worker.your-domain.workers.dev';
   ```
 
 ## Building
@@ -174,12 +176,14 @@ pnpm lint:fix
 ### Web App
 
 **`.env.development`:**
+
 ```
 VITE_API_URL=http://localhost:8787
 VITE_LOG_LEVEL=debug
 ```
 
 **`.env.production`:**
+
 ```
 VITE_API_URL=https://worker.your-domain.workers.dev
 VITE_LOG_LEVEL=warn
@@ -188,6 +192,7 @@ VITE_LOG_LEVEL=warn
 ### Worker
 
 **`wrangler.toml`:**
+
 ```toml
 [env.development]
 vars = { LOG_LEVEL = "debug" }
@@ -212,16 +217,18 @@ wrangler deploy
 
 1. Build: `cd apps/web && pnpm build`
 2. Push `dist/` to GitHub Pages:
+
    ```bash
    # Option A: Deploy via GitHub Actions (automated)
    # Configure .github/workflows/deploy.yml to run pnpm build && deploy to gh-pages branch
-   
+
    # Option B: Manual deploy
    git checkout -b gh-pages
    rm -rf dist-old && mv dist dist-old
    git add dist-old && git commit -m "deploy: static build"
    git push origin gh-pages
    ```
+
 3. Enable GitHub Pages in repo settings:
    - Settings → Pages → Build and deployment
    - Source: Deploy from a branch
@@ -272,16 +279,16 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) (to be added) for coding standards.
 
 ## Useful Commands Summary
 
-| Task | Command |
-|------|---------|
-| Install deps | `pnpm install` |
-| Start dev servers | `pnpm dev` |
-| Run tests | `pnpm test` |
-| Build for prod | `pnpm build` |
-| Lint code | `pnpm lint` |
-| Format code | `pnpm format` |
-| Deploy Worker | `cd apps/worker && wrangler deploy` |
-| Export logs | `cd apps/worker && wrangler tail` |
+| Task              | Command                             |
+| ----------------- | ----------------------------------- |
+| Install deps      | `pnpm install`                      |
+| Start dev servers | `pnpm dev`                          |
+| Run tests         | `pnpm test`                         |
+| Build for prod    | `pnpm build`                        |
+| Lint code         | `pnpm lint`                         |
+| Format code       | `pnpm format`                       |
+| Deploy Worker     | `cd apps/worker && wrangler deploy` |
+| Export logs       | `cd apps/worker && wrangler tail`   |
 
 ## Resources
 
