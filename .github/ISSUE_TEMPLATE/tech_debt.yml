@@ -1,0 +1,42 @@
+name: Tech Debt / Refactor
+description: Track refactors or code smells to fix
+labels: [tech debt]
+body:
+  - type: input
+    id: summary
+    attributes:
+      label: Summary
+    validations:
+      required: true
+  - type: textarea
+    id: smell
+    attributes:
+      label: Code Smell Observed
+      description: Use refactoring.guru vocabulary (e.g., Long Function, Shotgun Surgery, Feature Envy, Data Clump, Duplicate Code, Middle Man)
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope / Proposed Approach
+      description: What to extract, simplify, or reorganize
+    validations:
+      required: true
+  - type: textarea
+    id: tests
+    attributes:
+      label: Tests Needed
+      description: Unit, integration, golden, e2e
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - parser
+        - worker
+        - web
+        - docs
+        - ci
+        - other
+    validations:
+      required: true

@@ -1,0 +1,44 @@
+name: Feature / Story
+description: Request a new feature or user story
+labels: [enhancement]
+body:
+  - type: input
+    id: summary
+    attributes:
+      label: Summary
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / Motivation
+      description: What user problem does this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria
+      description: Bullet list of done criteria
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
+    validations:
+      required: true
+  - type: textarea
+    id: non_goals
+    attributes:
+      label: Non-Goals / Out of Scope
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - parser
+        - worker
+        - web
+        - docs
+        - ci
+        - other
+    validations:
+      required: true
