@@ -9,6 +9,7 @@ Successfully implemented comprehensive testing infrastructure for the fantastic-
 ### ✅ Completed Tasks
 
 #### 1. Vitest Configuration
+
 - **Root Configuration**: Created `vitest.config.ts` at repository root with shared settings
 - **Package Configurations**: Added `vitest.config.ts` to all 7 workspaces:
   - `apps/web` (jsdom environment for Preact)
@@ -21,6 +22,7 @@ Successfully implemented comprehensive testing infrastructure for the fantastic-
 - **Coverage**: Configured v8 coverage provider with HTML, JSON, and text reporters
 
 #### 2. Playwright E2E Testing
+
 - **Installation**: Added `@playwright/test` and `@types/node` to apps/web
 - **Configuration**: Created `playwright.config.ts` with:
   - 5 browser projects (Chromium, Firefox, WebKit, Mobile Chrome, Mobile Safari)
@@ -31,7 +33,9 @@ Successfully implemented comprehensive testing infrastructure for the fantastic-
 - **Test Structure**: Created `apps/web/e2e/` directory with placeholder test
 
 #### 3. Test Scripts
+
 Standardized scripts across all packages:
+
 ```json
 {
   "test": "vitest",
@@ -46,6 +50,7 @@ Standardized scripts across all packages:
 Root package.json orchestrates via `pnpm -r run <script>`.
 
 #### 4. Documentation
+
 - **testing-strategy.md** (12,218 bytes): Comprehensive guide covering:
   - Testing philosophy (test pyramid)
   - Test types (unit, integration, E2E)
@@ -58,13 +63,17 @@ Root package.json orchestrates via `pnpm -r run <script>`.
   - Troubleshooting
 
 #### 5. CI Pipeline
+
 Updated `.github/workflows/ci.yml`:
+
 - Added Playwright browser installation step
 - Enabled E2E test execution
 - Full pipeline: format → lint → typecheck → deadcode → unit tests → integration tests → E2E tests
 
 #### 6. Git Configuration
+
 Updated `.gitignore` to exclude:
+
 - `test-results/`
 - `playwright-report/`
 - `playwright/.cache/`
@@ -72,7 +81,9 @@ Updated `.gitignore` to exclude:
 ## Test Results
 
 ### Unit Tests
+
 ✅ **7 tests passed** across 6 packages:
+
 - `apps/web`: 1 test (Web App placeholder)
 - `apps/worker`: 2 tests (Worker + integration placeholder)
 - `packages/utils`: 1 test (Utils placeholder)
@@ -81,11 +92,15 @@ Updated `.gitignore` to exclude:
 - `packages/thunderstore-client`: 1 test (Client placeholder)
 
 ### Integration Tests
+
 ✅ **1 test passed**:
+
 - `apps/worker`: Worker Integration Tests placeholder
 
 ### E2E Tests
+
 ✅ **5 tests passed** (1 test × 5 browser configurations):
+
 - Chromium (Desktop)
 - Firefox (Desktop)
 - WebKit (Desktop Safari)
@@ -93,14 +108,17 @@ Updated `.gitignore` to exclude:
 - Mobile Safari (iPhone 12)
 
 ### Security Scan
+
 ✅ **0 alerts** found by CodeQL (JavaScript + GitHub Actions)
 
 ### Code Review
+
 ✅ **0 issues** found by automated code review
 
 ## Architecture
 
 ### Directory Structure
+
 ```
 fantastic-octo-waffle/
 ├── vitest.config.ts                    # Root Vitest config
@@ -142,6 +160,7 @@ fantastic-octo-waffle/
 ### Configuration Files
 
 #### Root `vitest.config.ts`
+
 ```typescript
 export default defineConfig({
   test: {
@@ -150,26 +169,30 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
-      exclude: ['node_modules/', 'dist/', 'coverage/', '**/*.config.{ts,js}', '**/.*']
-    }
-  }
+      exclude: ['node_modules/', 'dist/', 'coverage/', '**/*.config.{ts,js}', '**/.*'],
+    },
+  },
 });
 ```
 
 #### `apps/web/vitest.config.ts`
+
 ```typescript
 export default defineConfig({
   test: {
     globals: true,
-    environment: 'jsdom',  // For Preact components
+    environment: 'jsdom', // For Preact components
     include: ['src/**/*.{test,spec}.{ts,tsx}'],
-    exclude: ['node_modules/', 'dist/', 'coverage/', 'e2e/'],  // Exclude E2E tests
-    coverage: { /* ... */ }
-  }
+    exclude: ['node_modules/', 'dist/', 'coverage/', 'e2e/'], // Exclude E2E tests
+    coverage: {
+      /* ... */
+    },
+  },
 });
 ```
 
 #### `apps/web/playwright.config.ts`
+
 ```typescript
 export default defineConfig({
   testDir: './e2e',
@@ -178,27 +201,31 @@ export default defineConfig({
     { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
     { name: 'webkit', use: { ...devices['Desktop Safari'] } },
     { name: 'Mobile Chrome', use: { ...devices['Pixel 5'] } },
-    { name: 'Mobile Safari', use: { ...devices['iPhone 12'] } }
+    { name: 'Mobile Safari', use: { ...devices['iPhone 12'] } },
   ],
   // webServer commented out until UI is implemented
 });
 ```
 
 #### `apps/worker/vitest.integration.config.ts`
+
 ```typescript
 export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    include: ['src/**/*.integration.test.ts'],  // Only integration tests
-    coverage: { /* ... */ }
-  }
+    include: ['src/**/*.integration.test.ts'], // Only integration tests
+    coverage: {
+      /* ... */
+    },
+  },
 });
 ```
 
 ## Running Tests
 
 ### Local Development
+
 ```bash
 # Run all tests
 pnpm test
@@ -225,7 +252,9 @@ pnpm test:e2e:headed    # Run in headed mode (see browser)
 ```
 
 ### CI/CD
+
 Tests run automatically on every pull request:
+
 1. **Format check** - Prettier
 2. **Lint** - ESLint
 3. **Type check** - TypeScript
@@ -237,16 +266,19 @@ Tests run automatically on every pull request:
 ## Dependencies Added
 
 ### apps/web
+
 - `@playwright/test@^1.57.0` - E2E testing framework
 - `@types/node@^25.0.6` - Node.js type definitions for Playwright
 
 ### All packages (already had)
+
 - `vitest@^2.1.8` - Unit/integration test framework
 - `jsdom@^26.0.0` (web only) - DOM implementation for testing Preact components
 
 ## Current State
 
 ### Ready for Expansion ✅
+
 The testing infrastructure is fully configured and ready for real test implementation:
 
 1. **Unit Tests**: Add tests for new functions/modules as they're implemented
@@ -254,12 +286,15 @@ The testing infrastructure is fully configured and ready for real test implement
 3. **E2E Tests**: Test complete user flows once UI is built
 
 ### Placeholder Tests 📝
+
 All current tests are placeholders that verify the pipeline works:
+
 - They pass consistently
 - They don't test actual functionality yet
 - They serve as templates for real tests
 
 ### Pending Work 🚧
+
 - **E2E webServer**: Commented out in playwright.config.ts until UI exists (index.html)
 - **Coverage Thresholds**: Not enforced yet (will add in Phase 1)
 - **Real Tests**: Will be added incrementally in Phase 1+
@@ -267,24 +302,31 @@ All current tests are placeholders that verify the pipeline works:
 ## Key Design Decisions
 
 ### 1. Test Co-location
+
 Unit tests live next to source files (`*.test.ts`) for easy maintenance.
 
 ### 2. Separate E2E Directory
+
 E2E tests in dedicated `e2e/` directory (`*.spec.ts`) to avoid confusion with unit tests.
 
 ### 3. Integration Test Naming
+
 Integration tests use `*.integration.test.ts` suffix and separate config.
 
 ### 4. Environment Configuration
+
 - `jsdom` for web (Preact components need DOM)
 - `node` for all others (Workers, libraries)
 
 ### 5. Browser Coverage
+
 5 browser configurations for comprehensive E2E testing:
+
 - Desktop: Chromium, Firefox, WebKit
 - Mobile: Chrome (Pixel 5), Safari (iPhone 12)
 
 ### 6. Monorepo Orchestration
+
 Root scripts use `pnpm -r run` to execute tests across all packages in parallel.
 
 ## Verification Checklist
@@ -305,19 +347,25 @@ Root scripts use `pnpm -r run` to execute tests across all packages in parallel.
 ## Next Steps (Phase 1+)
 
 ### 1. Implement Real Unit Tests
+
 As features are built, add unit tests:
+
 - Parser functions (binary readers, decompression, deserialization)
 - Renderer utilities (mesh conversion, material mapping)
 - Utility functions (type guards, error handling)
 
 ### 2. Add Integration Tests
+
 Test component interactions:
+
 - Worker endpoint handlers with mock data
 - Parser pipeline with synthetic bundles
 - Renderer pipeline with mock meshes
 
 ### 3. Implement E2E Tests
+
 Once UI is built:
+
 - Uncomment webServer in playwright.config.ts
 - Test complete user flows:
   - Browse mod list
@@ -327,7 +375,9 @@ Once UI is built:
   - Error handling
 
 ### 4. Add Coverage Thresholds
+
 Set minimum coverage requirements:
+
 ```typescript
 coverage: {
   thresholds: {
@@ -340,6 +390,7 @@ coverage: {
 ```
 
 ### 5. Golden Files (Parser)
+
 Create fixture bundles and golden output files for parser regression testing.
 
 ## Resources
@@ -357,6 +408,6 @@ The testing framework is **fully configured and operational**. All acceptance cr
 ✅ Playwright configured for E2E tests  
 ✅ Test structure established (unit, integration, E2E)  
 ✅ CI can run tests successfully  
-✅ Placeholder tests exist to verify pipeline works  
+✅ Placeholder tests exist to verify pipeline works
 
 The infrastructure is ready for expansion as features are implemented in Phase 1 and beyond.

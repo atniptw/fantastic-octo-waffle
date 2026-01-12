@@ -37,12 +37,14 @@ All code changes should include appropriate tests. Tests serve as documentation 
 **Location**: Co-located with source files (e.g., `src/utils.ts` → `src/utils.test.ts`)
 
 **Scope**:
+
 - Pure functions and business logic
 - Utility functions
 - Type transformations
 - Error handling
 
 **Example**:
+
 ```typescript
 import { describe, it, expect } from 'vitest';
 import { parseUnityFSHeader } from './parser';
@@ -54,7 +56,7 @@ describe('parseUnityFSHeader', () => {
     expect(result.signature).toBe('UnityFS');
     expect(result.version).toBe(6);
   });
-  
+
   it('should throw on invalid signature', () => {
     const buffer = createInvalidHeader();
     expect(() => parseUnityFSHeader(buffer)).toThrow('Invalid signature');
@@ -71,12 +73,14 @@ describe('parseUnityFSHeader', () => {
 **Location**: `src/**/*.integration.test.ts` or `__tests__/integration/`
 
 **Scope**:
+
 - API endpoint handlers (Worker)
 - Parser pipeline (multiple decompression stages)
 - Renderer pipeline (mesh → three.js conversion)
 - External API interactions (with mocking)
 
 **Example**:
+
 ```typescript
 import { describe, it, expect, vi } from 'vitest';
 
@@ -84,15 +88,15 @@ describe('Worker Proxy Endpoint', () => {
   it('should proxy allowed URLs with correct CORS headers', async () => {
     const request = new Request('https://example.com/proxy?url=...');
     const response = await handleProxyRequest(request);
-    
+
     expect(response.status).toBe(200);
     expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*');
   });
-  
+
   it('should reject non-allowlisted URLs', async () => {
     const request = new Request('https://example.com/proxy?url=evil.com');
     const response = await handleProxyRequest(request);
-    
+
     expect(response.status).toBe(403);
   });
 });
@@ -107,27 +111,29 @@ describe('Worker Proxy Endpoint', () => {
 **Location**: `apps/web/e2e/`
 
 **Scope**:
+
 - User flows (browse mods → select → view 3D)
 - UI interactions
 - Cross-browser compatibility
 - Performance and accessibility
 
 **Example**:
+
 ```typescript
 import { test, expect } from '@playwright/test';
 
 test('user can browse and view cosmetic', async ({ page }) => {
   await page.goto('/');
-  
+
   // Wait for mod list to load
   await page.waitForSelector('[data-testid="mod-list"]');
-  
+
   // Select first cosmetic mod
   await page.click('[data-testid="mod-item"]:first-child');
-  
+
   // Verify 3D viewer loads
   await expect(page.locator('[data-testid="three-canvas"]')).toBeVisible();
-  
+
   // Verify cosmetic renders
   await page.waitForSelector('[data-testid="mesh-loaded"]');
 });
@@ -244,14 +250,15 @@ pnpm playwright test --debug
 #### General
 
 1. **Arrange-Act-Assert (AAA)**: Structure tests clearly
+
    ```typescript
    it('should do something', () => {
      // Arrange: Set up test data
      const input = createTestData();
-     
+
      // Act: Execute the code under test
      const result = functionToTest(input);
-     
+
      // Assert: Verify expectations
      expect(result).toEqual(expectedOutput);
    });
@@ -260,10 +267,11 @@ pnpm playwright test --debug
 2. **One assertion per test** (when possible): Makes failures easier to diagnose
 
 3. **Descriptive test names**: Use "should" statements
+
    ```typescript
    // Good
    it('should throw error when buffer is too small', () => { ... });
-   
+
    // Bad
    it('test parser', () => { ... });
    ```
@@ -303,7 +311,7 @@ describe('Parser Pipeline Integration', () => {
   it('should parse complete AssetBundle', async () => {
     const bundle = await loadTestBundle('cosmetic.hhh');
     const result = await parseAssetBundle(bundle);
-    
+
     expect(result.meshes).toHaveLength(1);
     expect(result.textures).toHaveLength(2);
     expect(result.materials).toHaveLength(1);
@@ -354,13 +362,13 @@ vi.restoreAllMocks();
 ```typescript
 test('should handle API failure gracefully', async ({ page }) => {
   // Mock API failure
-  await page.route('**/api/mods', route => {
+  await page.route('**/api/mods', (route) => {
     route.fulfill({
       status: 500,
       body: 'Internal Server Error',
     });
   });
-  
+
   await page.goto('/');
   await expect(page.locator('[data-testid="error-message"]')).toBeVisible();
 });
@@ -401,6 +409,7 @@ pnpm test:cov
 ```
 
 Coverage reports are generated in `coverage/` directories:
+
 - HTML report: `coverage/index.html`
 - JSON report: `coverage/coverage-final.json`
 
@@ -428,6 +437,7 @@ coverage: {
 ### GitHub Actions Workflow
 
 Tests run automatically on:
+
 - Pull requests to `main`
 - Pushes to `main`
 
@@ -508,6 +518,7 @@ pnpm exec playwright install
 ## Maintenance
 
 This document should be updated when:
+
 - New test types are added
 - Testing tools or frameworks change
 - Coverage requirements change
