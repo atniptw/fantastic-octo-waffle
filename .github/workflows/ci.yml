@@ -1,8 +1,6 @@
 name: Test & Lint
 
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
 
@@ -52,19 +50,17 @@ jobs:
         run: pnpm test:unit
 
       - name: Run integration tests
+        if: ${{ hashFiles('**/vitest.integration.config.ts') != '' }}
         run: pnpm test:integration
-        continue-on-error: true # Some packages don't have integration tests yet
 
-      - name: Build
-        run: pnpm build
-        # TEMPORARY: Build continues on error during Phase 0 because project setup is incomplete
-        # TODO: Remove continue-on-error once all entry points (index.html, etc.) are implemented
-        continue-on-error: true
+      # Note: Build step removed from Phase 0 CI workflow
+      # Will be re-added once all entry points (index.html, etc.) are implemented
+      # This ensures CI provides a real quality gate rather than passing with build failures
 
       # Phase 1: E2E tests placeholder (to be implemented in Phase 1)
       # Skipped for now as E2E infrastructure is not yet set up
       - name: Run E2E tests (Phase 1 placeholder)
-        if: false
+        if: github.event_name == 'workflow_dispatch'
         run: |
           echo "E2E tests will be implemented in Phase 1"
           echo "This step will run Playwright tests against the deployed app"

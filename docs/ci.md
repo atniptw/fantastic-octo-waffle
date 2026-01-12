@@ -20,7 +20,6 @@ This project uses GitHub Actions for continuous integration. The CI pipeline ens
 
 **Triggers:**
 
-- Push to `main` branch
 - Pull requests targeting `main` branch
 
 **Node Version:** 24.x
@@ -36,9 +35,10 @@ This project uses GitHub Actions for continuous integration. The CI pipeline ens
 7. **Type check** - Run `pnpm typecheck` (TypeScript compilation check)
 8. **Dead code detection** - Run `pnpm deadcode` (ts-prune with --error flag)
 9. **Unit tests** - Run `pnpm test:unit` (Vitest)
-10. **Integration tests** - Run `pnpm test:integration` (continues on error if not implemented)
-11. **Build** - Run `pnpm build` (continues on error during Phase 0 setup)
-12. **E2E placeholder** - Skipped step with Phase 1 reference comment
+10. **Integration tests** - Run `pnpm test:integration` (only if integration test configs exist)
+11. **E2E placeholder** - Skipped step, can be manually triggered for testing (Phase 1 implementation)
+
+**Note:** Build step is intentionally excluded from Phase 0 CI workflow because project setup is incomplete (missing entry points like index.html). This will be added once the build can reliably succeed, ensuring CI provides a real quality gate rather than passing with build failures.
 
 ## Build Configuration
 
@@ -61,20 +61,41 @@ All `tsconfig.json` files include `noEmitOnError: true`, which fails the build o
 
 ### Vite (Warnings as Errors)
 
-`apps/web/vite.config.ts` is configured to treat Rollup warnings as errors:
+`apps/web/vite.config.ts` is configured to treat Rollup warnings as errors **in CI environments only**:
 
 ```typescript
 export default defineConfig({
   build: {
     rollupOptions: {
-      onwarn(warning, warn) {
-        // Treat warnings as errors in CI
-        throw new Error(warning.message);
+      onwarn(warning, defaultHandler) {
+        const isCi = process.env.CI === 'true' || process.env.CI === '1';
+
+        if (isCi) {
+          // Include warning details for better debugging
+          const details = [
+            `Code: ${warning.code || 'unknown'}`,
+            `Message: ${warning.message}`,
+            warning.loc
+              ? `Location: ${warning.loc.file}:${warning.loc.line}:${warning.loc.column}`
+              : '',
+          ]
+            .filter(Boolean)
+            .join('\n');
+          throw new Error(`Build failed due to warning:\n${details}`);
+        }
+
+        // In non-CI environments, use default handler
+        defaultHandler(warning);
       },
     },
   },
 });
 ```
+
+This approach:
+
+- **In CI:** Fails the build on any Rollup warnings with detailed error information
+- **In development:** Shows warnings without failing, avoiding disruption to local workflows
 
 ## Dead Code Detection Strategy
 
