@@ -1,76 +1,297 @@
-# CI Design
+# CI/CD Pipeline Documentation
 
-This document describes the continuous integration (CI) plan for the project, focused on fast feedback, dead-code detection, and reliable deployments to GitHub Pages and Cloudflare Workers.
+## Overview
+
+This project uses GitHub Actions for continuous integration. The CI pipeline ensures code quality, runs tests, and validates builds on every push and pull request to the `main` branch.
 
 ## Goals
 
-- Fast feedback on PRs (lint, type, unit/integration tests).
-- Catch dead/unused code and unused dependencies early.
-- Keep build reproducible (Node 24 LTS, pnpm).
-- Automatic deploy to GitHub Pages on main; optional gated deploy to Cloudflare Worker.
+- Fast feedback on PRs (lint, type, unit/integration tests)
+- Catch dead/unused code early with ts-prune
+- Keep build reproducible (Node 24 LTS, pnpm)
+- Fail on TypeScript and Vite warnings to maintain code quality
+- Automated quality checks before merge
 
-## Pipelines
+## Current Implementation (Phase 0)
 
-### 1) Test & Lint (per push/PR)
+### Workflow: Test & Lint
 
-- **Node:** 24.x LTS
-- **Steps:**
-  - `pnpm install`
-  - `pnpm format:check` (Prettier) — fail on unformatted code
-  - `pnpm lint` (ESLint + TypeScript rules for unused vars)
-  - `pnpm typecheck` (tsc --noEmit)
-  - `pnpm test:unit`
-  - `pnpm test:integration`
-  - (Optional per PR) `pnpm test:e2e --trace on`
-  - `pnpm ts-prune` (dead exports) or `pnpm knip` (unused files/exports/deps)
-  - `pnpm build` (fail on warnings)
+**File:** `.github/workflows/ci.yml`
 
-### 2) E2E (Playwright) (PRs to main or label `e2e`)
+**Triggers:**
 
-- Install Playwright browsers (cached).
-- Run `pnpm test:e2e --trace on`.
-- Upload Playwright report artifact on failure.
+- Pull requests targeting `main` branch
 
-### 3) Build & Deploy Web (GitHub Pages)
+**Node Version:** 24.x
 
-- Trigger: merge to `main`.
-- Steps: `pnpm install`, `pnpm build` in `apps/web`.
-- Upload `dist/` as Pages artifact; deploy via `actions/deploy-pages`.
+**Steps:**
 
-### 4) Deploy Worker (optional, manual or protected)
+1. **Checkout code** - Clone the repository
+2. **Setup pnpm** - Install pnpm 10.28.0
+3. **Setup Node.js** - Install Node.js 24.x with pnpm caching
+4. **Install dependencies** - Run `pnpm install --frozen-lockfile`
+5. **Format check** - Run `pnpm format:check` (Prettier validation)
+6. **Lint** - Run `pnpm lint` (ESLint)
+7. **Type check** - Run `pnpm typecheck` (TypeScript compilation check)
+8. **Dead code detection** - Run `pnpm deadcode` (ts-prune with --error flag)
+9. **Unit tests** - Run `pnpm test:unit` (Vitest)
+10. **Integration tests** - Run `pnpm test:integration` (only if integration test configs exist)
+11. **E2E placeholder** - Skipped step, can be manually triggered for testing (Phase 1 implementation)
 
-- Trigger: manual dispatch or tag.
-- Steps: `pnpm install`, `pnpm build` in `apps/worker`, `wrangler deploy`.
-- Secrets: `CF_API_TOKEN`, `CF_ACCOUNT_ID`.
+**Note:** Build step is intentionally excluded from Phase 0 CI workflow because project setup is incomplete (missing entry points like index.html). This will be added once the build can reliably succeed, ensuring CI provides a real quality gate rather than passing with build failures.
 
-## Dead Code & Dependency Hygiene
+## Build Configuration
 
-- **TypeScript:** `noUnusedLocals`, `noUnusedParameters`, `noFallthroughCasesInSwitch` in `tsconfig`.
-- **ESLint:** `@typescript-eslint/no-unused-vars` (ignore args prefixed with `_`), `@typescript-eslint/no-unused-expressions`.
-- **ts-prune:** Detect unused exports. CI fails if output is non-empty.
-  - Example: `pnpm ts-prune | tee /tmp/tsprune && test ! -s /tmp/tsprune`
-- **knip (optional):** Broader unused detector (files/exports/deps). Configure ignores for build-generated entrypoints.
-- **depcheck (optional, periodic):** Unused/missing deps; run nightly/weekly to reduce PR noise.
+### TypeScript (Warnings as Errors)
 
-## Caching
+All `tsconfig.json` files include `noEmitOnError: true`, which fails the build on any TypeScript errors or warnings. Combined with strict mode settings:
 
-- Use `actions/setup-node` with `cache: 'pnpm'`.
-- Cache Playwright browsers only on jobs that run E2E (saves ~1GB per run).
+```json
+{
+  "compilerOptions": {
+    "strict": true,
+    "noEmitOnError": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true
+  }
+}
+```
 
-## Artifacts
+### Vite (Warnings as Errors)
 
-- Playwright HTML report on E2E failures.
-- (Optional) Coverage report (lcov) if coverage gate is added later.
+`apps/web/vite.config.ts` is configured to treat Rollup warnings as errors **in CI environments only**:
 
-## Branch Protection & Gates
+```typescript
+export default defineConfig({
+  build: {
+    rollupOptions: {
+      onwarn(warning, defaultHandler) {
+        const isCi = process.env.CI === 'true' || process.env.CI === '1';
 
-- Require Test & Lint workflow to pass before merging to `main`.
-- E2E workflow required on `main` (or label-based opt-in during early stages).
-- Deploy workflows run only after required checks pass.
+        if (isCi) {
+          // Include warning details for better debugging
+          const details = [
+            `Code: ${warning.code || 'unknown'}`,
+            `Message: ${warning.message}`,
+            warning.loc
+              ? `Location: ${warning.loc.file}:${warning.loc.line}:${warning.loc.column}`
+              : '',
+          ]
+            .filter(Boolean)
+            .join('\n');
+          throw new Error(`Build failed due to warning:\n${details}`);
+        }
 
-## Future Enhancements
+        // In non-CI environments, use default handler
+        defaultHandler(warning);
+      },
+    },
+  },
+});
+```
 
-- Coverage threshold gate (e.g., 80% on parser package) once stable.
-- knip `--strict` mode when entrypoints are finalized.
-- Nightly depcheck to keep package.json clean.
-- SAST/secret scanning (e.g., `gitleaks`) if needed.
+This approach:
+
+- **In CI:** Fails the build on any Rollup warnings with detailed error information
+- **In development:** Shows warnings without failing, avoiding disruption to local workflows
+
+## Dead Code Detection Strategy
+
+### Phase 0 (Current): ts-prune
+
+**Tool:** `ts-prune` v0.10.3
+
+**Usage:**
+
+```bash
+pnpm deadcode  # Runs: ts-prune --error
+```
+
+**Features:**
+
+- Detects unused exports across the codebase
+- Fast execution with minimal configuration
+- Fails CI on any unused exports (--error flag)
+- Simple setup, perfect for Phase 0
+
+**Ignoring False Positives:**
+Add `// ts-prune-ignore-next` comment above exports that are intentionally unused (e.g., public API exports).
+
+### Phase 1+ (Future): knip
+
+**Tool:** `knip` (to be added)
+
+**Planned Features:**
+
+- Unused files detection
+- Unused dependencies in package.json
+- Unused imports (not just exports)
+- Duplicate exports
+- More comprehensive analysis
+
+**Why Later:**
+
+- Requires tuning for monorepo entrypoints
+- More complex configuration needed
+- Best added once build structure is stable
+
+## Caching Strategy
+
+The workflow uses GitHub Actions caching:
+
+- **Cache Type:** pnpm store (via `setup-node` action)
+- **Cache Key:** Based on `pnpm-lock.yaml`
+- **Benefits:**
+  - Faster dependency installation (30-60s → 10-20s)
+  - Reduced network usage
+  - More reliable builds
+
+## Branch Protection (Manual Setup Required)
+
+⚠️ **Post-Merge Action Required:**
+
+After this PR is merged, configure branch protection in GitHub repository settings:
+
+1. Navigate to: **Settings → Branches → Add rule**
+2. Branch name pattern: `main`
+3. Enable: **"Require status checks to pass before merging"**
+4. Select required check: **"Test & Lint"**
+5. Recommended settings:
+   - ✅ Require pull request reviews (1 reviewer)
+   - ✅ Require linear history
+   - ✅ Include administrators
+
+**Note:** Branch protection rules cannot be automated via workflow files and must be manually configured.
+
+## Local Development
+
+Run the same checks locally before pushing:
+
+```bash
+# Format code
+pnpm format
+
+# Check formatting
+pnpm format:check
+
+# Lint code
+pnpm lint
+
+# Fix linting issues
+pnpm lint:fix
+
+# Type check
+pnpm typecheck
+
+# Check for dead code
+pnpm deadcode
+
+# Run unit tests
+pnpm test:unit
+
+# Run integration tests
+pnpm test:integration
+
+# Build
+pnpm build
+```
+
+## Troubleshooting
+
+### Format Check Failures
+
+```bash
+pnpm format  # Auto-fix all formatting issues
+```
+
+### Lint Failures
+
+```bash
+pnpm lint:fix  # Auto-fix simple issues
+# Review and manually fix remaining issues
+```
+
+### Type Check Failures
+
+- Fix TypeScript errors in the reported files
+- Ensure all types are properly imported/exported
+- Check for typos in property names
+
+### Dead Code Detection
+
+```bash
+pnpm deadcode  # See unused exports
+# Remove unused exports OR add ts-prune-ignore comment if intentional
+```
+
+### Build Failures
+
+- Ensure all entry points exist (e.g., index.html for web app)
+- Check that all dependencies are installed
+- Review error messages for missing files or type errors
+
+## Status Badge
+
+Add this badge to your README to show CI status:
+
+```markdown
+[![Test & Lint](https://github.com/atniptw/fantastic-octo-waffle/actions/workflows/ci.yml/badge.svg)](https://github.com/atniptw/fantastic-octo-waffle/actions/workflows/ci.yml)
+```
+
+## Out of Scope for Phase 0
+
+The following items are **deferred to Phase 1** or later:
+
+- ❌ GitHub Pages auto-deploy
+- ❌ Cloudflare Worker deployment
+- ❌ E2E testing implementation (Playwright)
+- ❌ knip dead code detection
+- ❌ Code coverage reporting
+- ❌ Performance benchmarking
+- ❌ Visual regression testing
+
+## Future Enhancements (Phase 1+)
+
+### Deploy Workflows
+
+**GitHub Pages (apps/web):**
+
+- Trigger: Push to `main`
+- Build web app and deploy to GitHub Pages
+- Use `actions/deploy-pages` action
+
+**Cloudflare Worker (apps/worker):**
+
+- Trigger: Manual dispatch or tag
+- Deploy worker with wrangler
+- Requires secrets: `CF_API_TOKEN`, `CF_ACCOUNT_ID`
+
+### E2E Testing (Playwright)
+
+- Install Playwright browsers (cached)
+- Run `pnpm test:e2e`
+- Upload trace artifacts on failure
+- Required check for main branch merges
+
+### Advanced Dead Code Detection
+
+- Add `knip` for comprehensive analysis
+- Configure for monorepo structure
+- Detect unused files and dependencies
+
+### Coverage & Quality Gates
+
+- Generate coverage reports with Vitest
+- Enforce minimum coverage thresholds
+- Upload coverage to external services (Codecov, Coveralls)
+
+## Resources
+
+- [GitHub Actions Documentation](https://docs.github.com/en/actions)
+- [pnpm CI Guide](https://pnpm.io/continuous-integration)
+- [TypeScript Compiler Options](https://www.typescriptlang.org/tsconfig)
+- [Vite Build Configuration](https://vitejs.dev/config/build-options.html)
+- [ts-prune Documentation](https://github.com/nadeesha/ts-prune)
+- [Branch Protection Rules](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches)
