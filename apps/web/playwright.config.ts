@@ -62,8 +62,15 @@ export default defineConfig({
     },
   ],
 
-  // NOTE: webServer configuration is commented out until the app has index.html and UI components
-  // Uncomment this in Phase 1 when implementing the actual UI:
+  // NOTE: webServer configuration is commented out until the app has index.html and UI components.
+  // The app currently has no entry point, so Vite dev server cannot start properly.
+  //
+  // Phase 1 TODO: When implementing the UI:
+  // 1. Create index.html entry point in apps/web/
+  // 2. Uncomment the webServer configuration below
+  // 3. Enable the skipped E2E tests in e2e/app.spec.ts (remove test.skip())
+  //
+  // Until then, E2E tests that don't require navigation (like setup verification) can run without a server.
   //
   // webServer: {
   //   command: 'pnpm dev',
