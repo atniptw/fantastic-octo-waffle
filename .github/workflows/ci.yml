@@ -53,15 +53,14 @@ jobs:
         if: ${{ hashFiles('**/vitest.integration.config.ts') != '' }}
         run: pnpm test:integration
 
+      - name: Install Playwright browsers
+        run: pnpm --filter @fantastic-octo-waffle/web exec playwright install --with-deps
+
       # Note: Build step removed from Phase 0 CI workflow
       # Will be re-added once all entry points (index.html, etc.) are implemented
       # This ensures CI provides a real quality gate rather than passing with build failures
 
-      # Phase 1: E2E tests placeholder (to be implemented in Phase 1)
-      # This step is skipped and serves as documentation for future implementation
-      - name: Run E2E tests (Phase 1 placeholder)
-        if: false # Disabled placeholder - will be implemented in Phase 1
-        run: |
-          echo "E2E tests will be implemented in Phase 1"
-          echo "This step will run Playwright tests against the deployed app"
-          pnpm test:e2e
+      # E2E tests (requires dev server to be running)
+      # Note: These tests are currently placeholder tests and will be fully implemented in Phase 1
+      - name: Run E2E tests
+        run: pnpm test:e2e

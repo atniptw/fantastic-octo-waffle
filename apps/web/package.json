@@ -9,6 +9,10 @@
     "preview": "vite preview",
     "test": "vitest",
     "test:unit": "vitest run",
+    "test:integration": "echo 'No integration tests for web app'",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:headed": "playwright test --headed",
     "test:watch": "vitest watch",
     "test:cov": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
@@ -19,7 +23,9 @@
     "three": "^0.171.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.57.0",
     "@preact/preset-vite": "^2.9.3",
+    "@types/node": "^25.0.6",
     "@types/three": "^0.171.0",
     "jsdom": "^26.0.0",
     "vite": "^6.0.7",

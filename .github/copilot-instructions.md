@@ -5,6 +5,7 @@ AI agents helping with this codebase should understand the architecture, develop
 ## Architecture Essentials
 
 This is a **browser-first cosmetic viewer** for REPO game mods. Key architecture:
+
 - **Frontend**: Vite + Preact + three.js; **Worker**: Cloudflare Workers proxy; **Parser**: UnityFS reader offloaded to Web Worker
 - **Data flow**: User downloads mod from Thunderstore → Worker validates & proxies URL → Browser unzips with fflate → Web Worker parses `.hhh` AssetBundle → three.js renders 3D meshes
 - **Monorepo structure** (pnpm workspaces): `apps/web`, `apps/worker`, `packages/{unity-ab-parser, thunderstore-client, renderer-three, utils}`
@@ -13,12 +14,14 @@ This is a **browser-first cosmetic viewer** for REPO game mods. Key architecture
 ## Development Workflow
 
 **Common tasks:**
+
 - `pnpm dev` — runs web app (port 5173) + worker (port 8787) in parallel
 - `pnpm test` — runs vitest across all packages; golden files in `__tests__/fixtures/`
 - `pnpm build` — TypeScript + Vite build; worker deploys via wrangler
 - `cd apps/web && pnpm build && pnpm preview` — test production build locally
 
 **Key files**:
+
 - Worker routes: `apps/worker/src/index.ts` — implement `/api/mods` and `/proxy` endpoints
 - Parser entry: `packages/unity-ab-parser/src/index.ts` — UnityFS reader, block decompression, object deserialization
 - Renderer: `packages/renderer-three/src/index.ts` — maps Unity Standard → MeshStandardMaterial
@@ -85,14 +88,13 @@ self.onmessage = ({ data: { action, buffer } }) => {
 
 Always transfer ArrayBuffers (`[arrayBuffer]` second arg) to avoid copying. Catch and report errors back to main thread; don't throw silently.
 
-
 ## Code Smells in Context
 
 - **Long Function in parser**: If a binary reader (e.g., `parseUnityFSHeader`, `deserializeMesh`) exceeds 100 lines, extract common patterns into helper functions (e.g., `readBEUint32`, `readString`).
 - **Repeated decompression logic**: LZ4 and LZMA block handling similar; extract common `decompressBlock(flags, compData, expectedSize)`.
 - **Divergent change in renderer**: If 3D asset changes affect both mesh creation and material setup, ensure both live in `renderer-three` package, not split between web and renderer.
 - **Primitive obsession for binary offsets**: Don't pass raw `(offset, size)` tuples; create typed `BufferView { buffer, offset, size }`.
-- **Type guards in multiple places**: If code checks `if (obj.type === 'Mesh')` in web, worker, *and* renderer, use a discriminated union instead.
+- **Type guards in multiple places**: If code checks `if (obj.type === 'Mesh')` in web, worker, _and_ renderer, use a discriminated union instead.
 - **Comments explaining binary format**: If comments are parsing UnityFS structs, extract to `doc/specs/parser-pipeline.md` and link instead.
 
 ## Testing Expectations

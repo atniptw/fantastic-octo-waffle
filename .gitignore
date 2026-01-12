@@ -23,6 +23,9 @@ out/
 coverage/
 .nyc_output/
 *.lcov
+test-results/
+playwright-report/
+playwright/.cache/
 
 # IDE and editors
 .vscode/*
