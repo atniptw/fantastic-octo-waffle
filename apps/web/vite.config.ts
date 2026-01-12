@@ -11,7 +11,8 @@ export default defineConfig({
     minify: 'esbuild',
     rollupOptions: {
       onwarn(warning) {
-        // Treat warnings as errors in CI
+        // Requirement: Treat all Rollup warnings as errors in CI to maintain code quality
+        // This ensures build warnings don't accumulate and become technical debt
         throw new Error(warning.message);
       },
     },

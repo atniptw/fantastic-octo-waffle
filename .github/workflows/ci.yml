@@ -49,11 +49,13 @@ jobs:
         run: pnpm test:unit
 
       - name: Run integration tests
-        run: pnpm test:integration || echo "Integration tests not yet implemented"
-        continue-on-error: true
+        run: pnpm test:integration
+        continue-on-error: true # Some packages don't have integration tests yet
 
       - name: Build
         run: pnpm build
+        # TEMPORARY: Build continues on error during Phase 0 because project setup is incomplete
+        # TODO: Remove continue-on-error once all entry points (index.html, etc.) are implemented
         continue-on-error: true
 
       # Phase 1: E2E tests placeholder (to be implemented in Phase 1)
