@@ -1,5 +1,7 @@
 # REPO Cosmetic Viewer
 
+[![Test & Lint](https://github.com/atniptw/fantastic-octo-waffle/actions/workflows/ci.yml/badge.svg)](https://github.com/atniptw/fantastic-octo-waffle/actions/workflows/ci.yml)
+
 A static web app for browsing and rendering cosmetics from [REPO](https://thunderstore.io/c/repo/) game mods. Download a mod, parse its Unity AssetBundles (`.hhh` files) in-browser, and preview 3D cosmetics with three.js.
 
 ## Quick Start

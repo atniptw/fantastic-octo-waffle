@@ -34,6 +34,7 @@
     "removeComments": false,
     "importHelpers": true,
     "downlevelIteration": true,
+    "noEmitOnError": true,
 
     // Interop Constraints
     "esModuleInterop": true,
