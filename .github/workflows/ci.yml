@@ -11,6 +11,9 @@ jobs:
     name: Test & Lint
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: read
+
     strategy:
       matrix:
         node-version: [24.x]
