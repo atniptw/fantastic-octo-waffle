@@ -10,6 +10,7 @@
     "test": "vitest",
     "test:unit": "vitest run",
     "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:e2e": "echo 'No E2E tests for worker'",
     "test:watch": "vitest watch",
     "test:cov": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
