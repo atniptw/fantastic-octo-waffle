@@ -5,6 +5,7 @@
 **Target:** Unity 2022.3.x AssetBundle format (UnityFS).
 
 **In-scope:**
+
 - `.hhh` files (AssetBundle archives containing serialized Unity objects).
 - Object types: `Mesh`, `Texture2D`, `Material`, `Shader`.
 - Compression: **LZ4** (uncompressed blocks) and **LZMA** (compressed blocks).
@@ -13,6 +14,7 @@
 - Memory model: Support bundles up to ~500 MB uncompressed.
 
 **Out-of-scope (v1):**
+
 - Crunch-compressed textures (deferred to Phase 3).
 - Advanced shaders (custom vertex/fragment); fallback to standard.
 - Animation/skinning (cosmetics are static meshes).
@@ -41,6 +43,7 @@ struct UnityFSHeader {
 ```
 
 **Parsing:**
+
 - Read first 32 bytes as big-endian integers.
 - Validate signature.
 - Verify version is 6 (Unity 2022.3).
@@ -58,11 +61,13 @@ struct BlockInfo {
 ```
 
 **Compression flags:**
+
 - `0x00`: No compression (raw block).
 - `0x40`: LZ4 compression.
 - `0xC0`: LZMA compression.
 
 **Example:** For a 5 MB bundle with 1 MB blocks:
+
 - Block 0: 1 MB uncompressed → 500 KB LZ4-compressed.
 - Block 1: 1 MB uncompressed → 400 KB LZMA-compressed.
 - Blocks 2–4: Similar.
@@ -86,6 +91,7 @@ struct DirectoryEntry {
 ```
 
 **Class IDs (selected):**
+
 - `91`: Mesh
 - `28`: Texture2D
 - `21`: Material
@@ -118,6 +124,7 @@ struct DirectoryEntry {
    - Concatenate all decompressed blocks into a single `uncompressed_data` ArrayBuffer.
 
 **Error handling:**
+
 - If any block decompresses to size != expected uncompressed size → abort; log error + block index.
 - If LZMA fails → offer user option to clear cache and retry; suggest reporting if persists.
 
@@ -151,6 +158,7 @@ For each `DirectoryEntry` with `class_id` in `[91, 28, 21]`:
    - Extract property map: `{ "_MainTex": textureRef, "_Metallic": 0.5, ... }`.
 
 **Output:** Intermediate representation (IR):
+
 ```typescript
 type ParsedBundle = {
   meshes: ParsedMesh[];
@@ -166,6 +174,7 @@ type ParsedBundle = {
 ### Mesh Deserialization
 
 **Serialized Mesh structure (simplified):**
+
 ```
 uint32_t  m_Name_length
 char[]    m_Name
@@ -190,6 +199,7 @@ SubMesh[] m_SubMeshes { firstVertex, vertexCount, firstIndex, indexCount }
 ```
 
 **Parsing code pattern:**
+
 ```typescript
 const mesh = {
   name: readString(data, offset),
@@ -198,7 +208,7 @@ const mesh = {
   tangents: readFloat32Array(data, offset, count * 4),
   uv0: readFloat32Array(data, offset, count * 2),
   indices: readUint32Array(data, offset, indexCount),
-  submeshes: readSubmeshes(data, offset, count)
+  submeshes: readSubmeshes(data, offset, count),
 };
 ```
 
@@ -219,6 +229,7 @@ uint8_t[] m_ImageData (compressed or raw)
 ```
 
 **Handling formats:**
+
 - **RGBA32 (4):** 4 bytes per pixel; directly load to GPU.
 - **DXT1/DXT5 (10/12):** Compressed texture format; three.js `CompressedTexture` support.
 - **PNG/JPEG:** Embed as bytes; decode via `createImageBitmap({ type: 'image/png' })` in Web Worker.
@@ -235,12 +246,14 @@ uint32_t  m_UniformBuffer.size (serialized properties)
 ```
 
 **For Standard shader, extract:**
+
 - `_MainTex` → base color texture.
 - `_MetallicGloss` → packed metallic + smoothness (R=metallic, A=smoothness).
 - `_BumpMap` → normal map.
 - `_Smoothness` → direct smoothness value (if not packed).
 
 **Mapping to three.js:**
+
 ```typescript
 const material = new MeshStandardMaterial({
   map: baseColorTexture,
@@ -248,7 +261,7 @@ const material = new MeshStandardMaterial({
   metalness: metallicValue,
   roughness: 1 - smoothnessValue,
   side: DoubleSide,
-  envMapIntensity: 1.0
+  envMapIntensity: 1.0,
 });
 ```
 
@@ -261,18 +274,10 @@ const material = new MeshStandardMaterial({
 ```typescript
 // Create BufferGeometry from parsed mesh
 const geometry = new BufferGeometry();
-geometry.setAttribute('position', new BufferAttribute(
-  new Float32Array(mesh.vertices), 3
-));
-geometry.setAttribute('normal', new BufferAttribute(
-  new Float32Array(mesh.normals), 3
-));
-geometry.setAttribute('uv', new BufferAttribute(
-  new Float32Array(mesh.uv0), 2
-));
-geometry.setIndex(new BufferAttribute(
-  new Uint32Array(mesh.indices), 1
-));
+geometry.setAttribute('position', new BufferAttribute(new Float32Array(mesh.vertices), 3));
+geometry.setAttribute('normal', new BufferAttribute(new Float32Array(mesh.normals), 3));
+geometry.setAttribute('uv', new BufferAttribute(new Float32Array(mesh.uv0), 2));
+geometry.setIndex(new BufferAttribute(new Uint32Array(mesh.indices), 1));
 
 // If no normals provided, compute them
 if (!mesh.normals.length) {
@@ -291,7 +296,7 @@ for (const parsedMat of materials) {
     normalMap: getTexture(parsedMat.normalTexture),
     metalness: parsedMat.metallic,
     roughness: parsedMat.roughness,
-    side: DoubleSide
+    side: DoubleSide,
   });
   materialMap.set(parsedMat.name, mat);
 }
@@ -326,20 +331,24 @@ scene.add(group);
 ## Performance Considerations
 
 ### Memory Management
+
 - **Streaming:** Don't load entire uncompressed data into memory at once; decompress blocks incrementally.
 - **Buffer reuse:** Reuse typed arrays where possible (e.g., temporary decompression buffers).
 - **Garbage collection:** Post-processing should yield periodically to avoid GC pauses.
 
 ### Decompression Optimization
+
 - **LZ4:** Use `lz4js` (JavaScript; ~50KB). Fast; supports streaming.
 - **LZMA:** Use pre-compiled WebAssembly module (`@wasmer/wasm-xz` or similar; ~100KB compressed). ~10x faster than JS.
 - **Pre-init:** Initialize WASM decoder once at app startup, reuse across bundles.
 
 ### Texture Decode
+
 - **createImageBitmap:** Offload PNG/JPEG decoding to Web Worker via `createImageBitmap({ type: 'image/png' })`.
 - **DXT/ETC:** Keep compressed; GPU decompresses (via three.js extension).
 
 ### Profiling
+
 - Log parse time per phase (decompress, deserialize, scene build).
 - Telemetry: bundle size, mesh count, texture count, parse duration.
 - Budget: aim for < 3s total parse for typical 10–50 MB cosmetic bundle.
@@ -349,26 +358,32 @@ scene.add(group);
 ## Known Limitations and Gotchas
 
 ### LZMA Block Boundaries
+
 - **Gotcha:** Each LZMA block is independently compressed; decoders must be reset between blocks.
 - **Fix:** Initialize a fresh LZMA decoder per block or use a streaming interface if available.
 
 ### Texture Format Mismatches
+
 - **Gotcha:** Crunch-compressed textures (common in older mods) require a Crunch decoder; bundling this adds ~200KB.
 - **v1 workaround:** Detect Crunch format; display "Crunch textures not yet supported"; fetch uncompressed fallback if available.
 
 ### Missing Tangents
+
 - **Gotcha:** Some meshes lack tangent data. Normal mapping requires tangent vectors for per-pixel orientation.
 - **Fix:** Use `three.js/examples/geometries/TangentSpaceNormalMapGenerator.js` to compute tangents if missing.
 
 ### Shader Property Extraction
+
 - **Gotcha:** Material properties (like `_Metallic`, `_MainTex`) are serialized in a format that varies by shader and unity version.
 - **Approach for v1:** Hardcode parsing for Standard shader; for other shaders, gracefully skip properties and render with fallback material.
 
 ### Large Model Memory Overhead
+
 - **Gotcha:** A 50 MB compressed bundle can decompress to 200+ MB; combined with three.js scene graph, peak memory can exceed 500 MB.
 - **Mitigation:** Show warning UI if uncompressed size > 300 MB; offer to clear IndexedDB cache; suggest using a modern device.
 
 ### Reference Resolution
+
 - **Gotcha:** Materials reference textures by offset into the object directory; texture names may not align with material property names.
 - **Approach:** Build a reverse index during deserialization; match textures to materials by internal reference offsets.
 
@@ -377,24 +392,26 @@ scene.add(group);
 ## Testing & Validation
 
 ### Fixtures
+
 - Maintain a set of small (<10 MB) test bundles from known mods (e.g., Masaicker/MoreHead v1.0).
 - Store hashes and expected parse outputs (golden files).
 
 ### Unit Tests
+
 - Binary reader functions: alignment, byte order, slicing.
 - Decompression: known vectors for LZ4 and LZMA.
 - Mesh/texture/material parsing: synthetic small structures.
 
 ### Integration Tests
+
 - Full parse of a real small cosmetic bundle; assert mesh count, vertex count, material names.
 - Verify three.js scene graph is valid and renderable.
 
 ### Acceptance Criteria (v1)
+
 - [ ] Parse Masaicker/MoreHead 1.0.0 and render at least 3 meshes.
 - [ ] Handle both LZ4 and LZMA block compression.
 - [ ] Render base color and normal maps; tolerate missing metallic/smoothness.
 - [ ] Parse-to-render time < 3s on mid-range laptop.
 - [ ] Memory peak < 500 MB.
 - [ ] Friendly error messages for unsupported formats.
-
-

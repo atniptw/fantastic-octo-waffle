@@ -3,6 +3,7 @@
 This document describes the continuous integration (CI) plan for the project, focused on fast feedback, dead-code detection, and reliable deployments to GitHub Pages and Cloudflare Workers.
 
 ## Goals
+
 - Fast feedback on PRs (lint, type, unit/integration tests).
 - Catch dead/unused code and unused dependencies early.
 - Keep build reproducible (Node 24 LTS, pnpm).
@@ -11,6 +12,7 @@ This document describes the continuous integration (CI) plan for the project, fo
 ## Pipelines
 
 ### 1) Test & Lint (per push/PR)
+
 - **Node:** 24.x LTS
 - **Steps:**
   - `pnpm install`
@@ -24,16 +26,19 @@ This document describes the continuous integration (CI) plan for the project, fo
   - `pnpm build` (fail on warnings)
 
 ### 2) E2E (Playwright) (PRs to main or label `e2e`)
+
 - Install Playwright browsers (cached).
 - Run `pnpm test:e2e --trace on`.
 - Upload Playwright report artifact on failure.
 
 ### 3) Build & Deploy Web (GitHub Pages)
+
 - Trigger: merge to `main`.
 - Steps: `pnpm install`, `pnpm build` in `apps/web`.
 - Upload `dist/` as Pages artifact; deploy via `actions/deploy-pages`.
 
 ### 4) Deploy Worker (optional, manual or protected)
+
 - Trigger: manual dispatch or tag.
 - Steps: `pnpm install`, `pnpm build` in `apps/worker`, `wrangler deploy`.
 - Secrets: `CF_API_TOKEN`, `CF_ACCOUNT_ID`.
@@ -64,6 +69,7 @@ This document describes the continuous integration (CI) plan for the project, fo
 - Deploy workflows run only after required checks pass.
 
 ## Future Enhancements
+
 - Coverage threshold gate (e.g., 80% on parser package) once stable.
 - knip `--strict` mode when entrypoints are finalized.
 - Nightly depcheck to keep package.json clean.

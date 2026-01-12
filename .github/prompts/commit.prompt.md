@@ -25,41 +25,42 @@ Analyze my staged git changes and commit them with an appropriate message follow
    - `feat`: A new feature (correlates with MINOR in SemVer)
    - `fix`: A bug fix (correlates with PATCH in SemVer)
    - `!` after type/scope: Indicates a BREAKING CHANGE (correlates with MAJOR in SemVer)
-   
+
    **Description Rules:**
    - **MUST** be lowercase
    - **MUST** be a short summary in imperative mood (e.g., "add" not "added" or "adds")
    - **MUST NOT** end with a period
    - **SHOULD** be 50 characters or less
-   
+
    **Body Rules (optional but recommended for complex changes):**
    - **MUST** begin one blank line after description
    - **SHOULD** explain the motivation for the change and contrast with previous behavior
    - **SHOULD** wrap at 72 characters
-   
+
    **Footer Rules (optional):**
    - **MUST** begin one blank line after body (or description if no body)
    - **MUST** use format: `<token>: <value>` or `<token> #<issue-number>`
    - `BREAKING CHANGE:` footer **MUST** be used for breaking changes (alternative to `!`)
    - Use `Closes`, `Fixes`, `Resolves` for issue references (e.g., `Fixes #123`)
-   
+
    **Examples:**
+
    ```
    feat(api): add user authentication endpoint
-   
+
    fix: resolve memory leak in data processing
-   
+
    feat!: redesign configuration API
-   
+
    BREAKING CHANGE: config structure now uses nested objects
-   
+
    docs: update installation instructions
-   
+
    refactor(core): simplify error handling logic
-   
+
    This refactoring improves code readability and reduces
    duplicate error handling code across modules.
-   
+
    Fixes #456
    ```
 

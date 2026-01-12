@@ -43,6 +43,7 @@ This document describes the test fixtures used for integration and E2E testing.
 ### Real Mod Fixtures (Optional, with permission)
 
 **If including real mods:**
+
 1. Contact mod author via Thunderstore or GitHub.
 2. Request permission to include in test suite with attribution.
 3. Document approval (link to conversation, email, etc.).
@@ -72,6 +73,7 @@ To add a new synthetic fixture:
 **Binary storage:** Use Git LFS to avoid bloating the repository.
 
 **Setup (one-time):**
+
 ```bash
 git lfs install
 cd packages/unity-ab-parser
@@ -83,30 +85,29 @@ git commit -m "chore: enable git lfs for fixtures"
 After setup, commit `.hhh` files normally; git automatically stores them in LFS.
 
 **Large bundles:** If a fixture exceeds 100 MB, compress before committing:
+
 ```bash
 bzip2 {file}.hhh
 # Creates {file}.hhh.bz2; then decompress in test setup
 ```
 
 Then reference in tests:
+
 ```typescript
-const fixture = readFileSync(
-  resolve(__dirname, '../fixtures/synthetic-large-v1.hhh.bz2')
-);
+const fixture = readFileSync(resolve(__dirname, '../fixtures/synthetic-large-v1.hhh.bz2'));
 const decompressed = bzip2Decompress(fixture);
 ```
 
 ## Accessing Fixtures in Tests
 
 **Example (Vitest):**
+
 ```typescript
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 
 test('parses synthetic-minimal-v1', () => {
-  const fixture = readFileSync(
-    resolve(__dirname, '../fixtures/synthetic-minimal-v1.hhh')
-  );
+  const fixture = readFileSync(resolve(__dirname, '../fixtures/synthetic-minimal-v1.hhh'));
   const result = parseBundle(new Uint8Array(fixture));
   expect(result.meshes.length).toBe(1);
   expect(result.meshes[0].vertices.length).toBe(9); // 3 vertices * 3 coords
@@ -114,6 +115,7 @@ test('parses synthetic-minimal-v1', () => {
 ```
 
 **Golden file comparison:**
+
 ```typescript
 const golden = readFileSync(
   resolve(__dirname, '../fixtures/goldens/synthetic-minimal-v1.golden.json'),
@@ -133,4 +135,3 @@ pnpm test:update-goldens
 ```
 
 This will re-parse all fixtures and update `.golden.json` files. **Review changes carefully before committing.**
-

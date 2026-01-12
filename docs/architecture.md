@@ -5,6 +5,7 @@
 The REPO cosmetic viewer is a **static web application** with a minimal **Cloudflare Worker proxy backend**. All heavy lifting (mod parsing, 3D rendering) happens in the user's browser.
 
 **Tech Stack:**
+
 - **Frontend:** Vite + Preact + Signals + three.js + TypeScript
 - **Worker:** Cloudflare Workers + TypeScript + Miniflare
 - **Package & Compression:** fflate (zip), lz4js (LZ4), WASM LZMA (LZMA decompression)
@@ -71,6 +72,7 @@ The REPO cosmetic viewer is a **static web application** with a minimal **Cloudf
 ```
 
 **Browser-side Web Workers:**
+
 ```
 Main Thread (UI)
     │
@@ -87,12 +89,14 @@ Main Thread (UI)
 ## Data Flow
 
 ### Mod Browsing
+
 1. **Fetch mod list:** `GET /api/mods?community=repo&query=&page=1&sort=downloads`
 2. **Worker proxies** to `new.thunderstore.io/api/cyberstacks/...`
 3. **Response normalized** by Worker (CORS headers added; caching set to 5 min).
 4. **UI displays cards** with mod name, author, version, description.
 
 ### Download & Unzip
+
 1. **User clicks mod version.**
 2. **Worker fetches** download URL (from Thunderstore API).
 3. **Browser calls** `GET /proxy?url=https://cdn.thunderstore.io/file/{hash}.zip`
@@ -100,6 +104,7 @@ Main Thread (UI)
 5. **Browser unzips** in chunks using fflate; streams to IndexedDB cache.
 
 ### Parsing
+
 1. **Extract `.hhh` files** from zip.
 2. **Post to Web Worker:** `{ action: 'parse', buffer: ArrayBuffer<.hhh> }`
 3. **Worker:**
@@ -111,6 +116,7 @@ Main Thread (UI)
 4. **Main thread:** Creates three.js Geometry + Materials + Mesh.
 
 ### Caching
+
 - **HTTP:** Worker sets `Cache-Control: public, max-age=300` for API; downloads marked `immutable`.
 - **In-browser:** IndexedDB stores parsed mesh/texture data per bundle SHA256 hash.
 - **Local Storage:** Recently viewed mods (simple list of `{namespace}/{name}:{version}`).
@@ -119,14 +125,14 @@ Main Thread (UI)
 
 **Strategy:** Graceful degradation with user-facing toasts.
 
-| Error | Handling |
-|-------|----------|
-| Network timeout | Retry 3× with exponential backoff; fallback to cached version if available. |
-| Invalid .hhh file | Log error; display toast "This mod has an incompatible format." |
-| LZMA decompress fails | Suggest clearing browser cache; offer download of parser debug log. |
-| Texture decode fails | Skip texture; render mesh with fallback color. |
-| Memory limit exceeded | Halt parsing; suggest closing other tabs; display warning. |
-| Worker crashes | Fallback to main-thread parsing (slow); telemetry alert. |
+| Error                 | Handling                                                                    |
+| --------------------- | --------------------------------------------------------------------------- |
+| Network timeout       | Retry 3× with exponential backoff; fallback to cached version if available. |
+| Invalid .hhh file     | Log error; display toast "This mod has an incompatible format."             |
+| LZMA decompress fails | Suggest clearing browser cache; offer download of parser debug log.         |
+| Texture decode fails  | Skip texture; render mesh with fallback color.                              |
+| Memory limit exceeded | Halt parsing; suggest closing other tabs; display warning.                  |
+| Worker crashes        | Fallback to main-thread parsing (slow); telemetry alert.                    |
 
 **Telemetry:** Opt-in event logging for error types, parse duration, bundle size category.
 
@@ -146,5 +152,3 @@ Main Thread (UI)
 - **Parse time:** < 3s for typical cosmetic bundle.
 - **Render:** 60 FPS with orbit controls + lights on mid-range laptop.
 - **Memory:** Peak < 500MB during parse of large bundles.
-
-

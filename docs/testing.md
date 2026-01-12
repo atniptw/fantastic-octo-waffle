@@ -3,11 +3,13 @@
 ## Overview
 
 Testing is organized into three layers:
+
 1. **Unit tests** for individual functions (binary readers, decompressors, deserializers).
 2. **Integration tests** for parsing pipelines (real bundles, golden outputs).
 3. **End-to-end tests** for user flows (browse → download → render).
 
 **Tools:**
+
 - **Vitest:** Unit + integration tests; Web Worker support; fast.
 - **Playwright:** E2E browser tests; canvas rendering validation.
 - **Golden files:** Serialized parse outputs for deterministic regression detection.
@@ -21,12 +23,14 @@ Testing is organized into three layers:
 **File:** `packages/unity-ab-parser/src/__tests__/readers.test.ts`
 
 Test cases for:
+
 - Reading uint32 (big-endian, alignment boundaries).
 - Reading float32 arrays with correct stride.
 - String deserialization (null-terminated vs. length-prefixed).
 - Bounds checking (reject reads past buffer end).
 
 **Example:**
+
 ```typescript
 it('reads big-endian uint32', () => {
   const data = new Uint8Array([0x12, 0x34, 0x56, 0x78]);
@@ -39,12 +43,14 @@ it('reads big-endian uint32', () => {
 **File:** `packages/unity-ab-parser/src/__tests__/decompressors.test.ts`
 
 Test cases:
+
 - LZ4 known vectors (from official LZ4 test suite).
 - LZMA known vectors.
 - Block boundary handling (ensure decoders reset state).
 - Error cases (corrupt compressed data).
 
 **Example:**
+
 ```typescript
 it('decompresses LZ4 with known vector', () => {
   const compressed = new Uint8Array([0x04, 0x22, 0x4D, 0x18, 0x20, ...]);
@@ -82,19 +88,21 @@ Uses synthetic test fixtures; validates end-to-end parse pipeline.
 **Fixtures location:** `packages/unity-ab-parser/fixtures/`
 
 **Example fixtures:**
+
 - `synthetic-minimal-v1.hhh` (5 KB, 1 triangle mesh; LZ4 compressed)
 - `synthetic-textured-v1.hhh` (50 KB, 1 cube with textures; LZMA compressed)
 
 **Test structure:**
+
 ```typescript
 it('parses synthetic-minimal-v1', async () => {
   const bundle = await loadFixture('synthetic-minimal-v1.hhh');
   const result = await parseBundle(bundle);
-  
+
   expect(result.meshes).toHaveLength(1);
   expect(result.meshes[0].name).toBe('Triangle');
   expect(result.meshes[0].vertices.length).toBe(9); // 3 vertices * 3 coords
-  
+
   // Compare against golden output
   const golden = loadGolden('synthetic-minimal-v1.golden.json');
   expect(result).toEqual(golden);
@@ -102,6 +110,7 @@ it('parses synthetic-minimal-v1', async () => {
 ```
 
 **Golden file format** (`synthetic-minimal-v1.golden.json`):
+
 ```json
 {
   "meshes": [
@@ -131,12 +140,12 @@ Test parsing offloaded to Web Worker (via Vitest Web Worker environment):
 ```typescript
 it('parses bundle in Web Worker', async () => {
   const worker = new Worker('./parser-worker.ts', { type: 'module' });
-  
+
   const result = await new Promise((resolve) => {
     worker.onmessage = (e) => resolve(e.data);
     worker.postMessage({ action: 'parse', buffer: bundleArrayBuffer });
   });
-  
+
   expect(result.meshes.length).toBeGreaterThan(0);
   worker.terminate();
 });
@@ -153,23 +162,23 @@ it('parses bundle in Web Worker', async () => {
 ```typescript
 test('browse mod list and render cosmetic', async ({ page }) => {
   await page.goto('http://localhost:5173');
-  
+
   // Wait for mod list to load
   await page.waitForSelector('[data-test=mod-card]', { timeout: 5000 });
   expect(page.locator('[data-test=mod-card]')).toBeDefined();
-  
+
   // Click first mod
   await page.click('[data-test=mod-card]:first-child');
-  
+
   // Wait for version selector
   await page.waitForSelector('[data-test=version-select]', { timeout: 5000 });
-  
+
   // Click a version
   await page.click('[data-test=version-select] option:nth-child(1)');
-  
+
   // Wait for canvas to render
   await page.waitForSelector('canvas', { timeout: 10000 });
-  
+
   // Verify canvas is drawing
   const canvas = await page.locator('canvas').boundingBox();
   expect(canvas.width).toBeGreaterThan(100);
@@ -185,23 +194,19 @@ test('browse mod list and render cosmetic', async ({ page }) => {
 import { env } from 'miniflare';
 
 test('proxies API request to Thunderstore', async () => {
-  const response = await env.fetch(
-    'http://localhost:8787/api/mods?community=repo&page=1'
-  );
-  
+  const response = await env.fetch('http://localhost:8787/api/mods?community=repo&page=1');
+
   expect(response.status).toBe(200);
   expect(response.headers.get('access-control-allow-origin')).toBe('*');
-  
+
   const json = await response.json();
   expect(json.results).toBeDefined();
   expect(json.results.length).toBeGreaterThan(0);
 });
 
 test('blocks disallowed hosts', async () => {
-  const response = await env.fetch(
-    'http://localhost:8787/proxy?url=https://evil.com/file.zip'
-  );
-  
+  const response = await env.fetch('http://localhost:8787/proxy?url=https://evil.com/file.zip');
+
   expect(response.status).toBe(400);
   const json = await response.json();
   expect(json.error).toBe('invalid_url');
@@ -217,12 +222,15 @@ test('blocks disallowed hosts', async () => {
 **Location:** `packages/unity-ab-parser/fixtures/`
 
 **Policy:**
+
 - Use **synthetic fixtures** created with Unity 2022.3.x to avoid licensing issues.
 - Store bundles using **Git LFS** to avoid bloating the repository.
 - Keep bundles < 10 MB each (compress with bzip2 if larger).
 - Document creation method, compression type, and SHA256 in `FIXTURES.md`:
+
   ```markdown
   ## synthetic-minimal-v1.hhh
+
   - Source: Created with Unity 2022.3.x for testing
   - Version: 1.0.0
   - License: CC0 (public domain)
@@ -237,6 +245,7 @@ test('blocks disallowed hosts', async () => {
 **Location:** `packages/unity-ab-parser/fixtures/goldens/`
 
 **Format:** JSON with stable, minimal schema:
+
 ```json
 {
   "bundleName": "synthetic-minimal-v1",
@@ -258,6 +267,7 @@ test('blocks disallowed hosts', async () => {
 ```
 
 **Regeneration:**
+
 - If parser logic changes and tests fail, manually inspect the new parse output.
 - If correct, update golden files:
   ```bash
@@ -288,13 +298,13 @@ jobs:
         with:
           node-version: '24'
           cache: 'pnpm'
-      
+
       - run: pnpm install
       - run: pnpm lint
       - run: pnpm test:unit
       - run: pnpm test:integration
       - run: pnpm test:e2e --trace on
-      
+
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v3
@@ -306,6 +316,7 @@ jobs:
 ### Build & Deploy
 
 **Web app:**
+
 ```bash
 cd apps/web
 pnpm build        # → dist/
@@ -314,6 +325,7 @@ pnpm preview      # test prod build locally
 ```
 
 **Worker:**
+
 ```bash
 cd apps/worker
 wrangler deploy    # → deployed to Cloudflare
@@ -324,6 +336,7 @@ wrangler deploy    # → deployed to Cloudflare
 Target: **80%+ coverage** for parser logic.
 
 **Report generation:**
+
 ```bash
 pnpm test:cov
 # → coverage/index.html
@@ -367,5 +380,3 @@ pnpm test:update-goldens
 # Generate coverage report
 pnpm test:cov
 ```
-
-

@@ -1,0 +1,24 @@
+{
+  "name": "@fantastic-octo-waffle/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "build": "tsc && wrangler deploy --dry-run",
+    "deploy": "wrangler deploy",
+    "test": "vitest",
+    "test:unit": "vitest run",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:watch": "vitest watch",
+    "test:cov": "vitest run --coverage",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist node_modules .wrangler .mf"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241218.0",
+    "vitest": "^2.1.8",
+    "wrangler": "^3.101.0"
+  }
+}
