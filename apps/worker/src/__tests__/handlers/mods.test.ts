@@ -211,9 +211,7 @@ describe('Mods handlers', () => {
         status: 404,
       });
 
-      const url = new URL(
-        'http://localhost:8787/api/mod/Unknown/Mod/versions?community=repo'
-      );
+      const url = new URL('http://localhost:8787/api/mod/Unknown/Mod/versions?community=repo');
       const response = await handleModVersions(url);
 
       expect(response.status).toBe(404);
@@ -232,9 +230,7 @@ describe('Mods handlers', () => {
         json: async () => ({ namespace: 'Test', name: 'Mod', versions: [] }),
       });
 
-      const url = new URL(
-        'http://localhost:8787/api/mod/Test/Mod/versions?community=repo'
-      );
+      const url = new URL('http://localhost:8787/api/mod/Test/Mod/versions?community=repo');
       const response = await handleModVersions(url);
 
       expect(response.headers.get('Cache-Control')).toContain('max-age=300');

@@ -7,7 +7,7 @@ describe('Health handler', () => {
       const response = handleHealth();
 
       expect(response.status).toBe(200);
-      
+
       const text = response.clone().text();
       expect(text).toBeDefined();
     });
@@ -15,7 +15,7 @@ describe('Health handler', () => {
     it('should return JSON response', async () => {
       const response = handleHealth();
       const data = await response.json();
-      
+
       expect(data).toEqual({ status: 'ok' });
     });
 

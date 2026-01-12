@@ -39,9 +39,7 @@ describe('Worker Integration', () => {
         json: async () => ({ namespace: 'Test', name: 'Mod', versions: [] }),
       });
 
-      const request = new Request(
-        'http://localhost:8787/api/mod/Test/Mod/versions?community=repo'
-      );
+      const request = new Request('http://localhost:8787/api/mod/Test/Mod/versions?community=repo');
       const response = await worker.fetch(request, mockEnv);
 
       expect(response.status).toBe(200);

@@ -44,11 +44,7 @@ export async function handleProxy(url: URL, request: Request): Promise<Response>
   );
 
   if (!isAllowed) {
-    return jsonError(
-      'host_not_allowed',
-      `Host ${parsedUrl.hostname} is not on the allowlist`,
-      403
-    );
+    return jsonError('host_not_allowed', `Host ${parsedUrl.hostname} is not on the allowlist`, 403);
   }
 
   try {
@@ -101,11 +97,7 @@ export async function handleProxy(url: URL, request: Request): Promise<Response>
           );
 
           if (!redirectAllowed) {
-            return jsonError(
-              'redirect_not_allowed',
-              'Redirect target is not on allowlist',
-              403
-            );
+            return jsonError('redirect_not_allowed', 'Redirect target is not on allowlist', 403);
           }
 
           currentUrl = redirectUrl.toString();
@@ -118,47 +110,47 @@ export async function handleProxy(url: URL, request: Request): Promise<Response>
 
       clearTimeout(timeoutId);
 
-    if (!response.ok) {
-      if (response.status === 404) {
-        return jsonError('file_not_found', 'File not found', 404);
+      if (!response.ok) {
+        if (response.status === 404) {
+          return jsonError('file_not_found', 'File not found', 404);
+        }
+        throw new Error(`CDN error: ${response.status}`);
       }
-      throw new Error(`CDN error: ${response.status}`);
-    }
 
-    // Check content length
-    const contentLength = response.headers.get('Content-Length');
-    if (contentLength && parseInt(contentLength, 10) > MAX_FILE_SIZE_BYTES) {
-      return jsonError(
-        'file_too_large',
-        `File exceeds maximum size of ${MAX_FILE_SIZE_BYTES / 1024 / 1024}MB`,
-        413
-      );
-    }
-
-    // Build response headers
-    const responseHeaders = new Headers();
-
-    // Copy relevant headers
-    for (const header of FORWARDED_HEADERS) {
-      const value = response.headers.get(header);
-      if (value) {
-        responseHeaders.set(header, value);
+      // Check content length
+      const contentLength = response.headers.get('Content-Length');
+      if (contentLength && parseInt(contentLength, 10) > MAX_FILE_SIZE_BYTES) {
+        return jsonError(
+          'file_too_large',
+          `File exceeds maximum size of ${MAX_FILE_SIZE_BYTES / 1024 / 1024}MB`,
+          413
+        );
       }
-    }
 
-    // Add CORS and security headers
-    const corsHeaders = getCorsHeaders();
-    for (const [key, value] of Object.entries(corsHeaders)) {
-      responseHeaders.set(key, value);
-    }
+      // Build response headers
+      const responseHeaders = new Headers();
 
-    // Cache for 1 year (immutable versioned files)
-    responseHeaders.set('Cache-Control', CACHE_DURATIONS.DOWNLOAD);
+      // Copy relevant headers
+      for (const header of FORWARDED_HEADERS) {
+        const value = response.headers.get(header);
+        if (value) {
+          responseHeaders.set(header, value);
+        }
+      }
 
-    return new Response(response.body, {
-      status: response.status,
-      headers: responseHeaders,
-    });
+      // Add CORS and security headers
+      const corsHeaders = getCorsHeaders();
+      for (const [key, value] of Object.entries(corsHeaders)) {
+        responseHeaders.set(key, value);
+      }
+
+      // Cache for 1 year (immutable versioned files)
+      responseHeaders.set('Cache-Control', CACHE_DURATIONS.DOWNLOAD);
+
+      return new Response(response.body, {
+        status: response.status,
+        headers: responseHeaders,
+      });
     } finally {
       clearTimeout(timeoutId);
     }
@@ -170,10 +162,6 @@ export async function handleProxy(url: URL, request: Request): Promise<Response>
         504
       );
     }
-    return jsonError(
-      'proxy_error',
-      'Failed to proxy download request',
-      502
-    );
+    return jsonError('proxy_error', 'Failed to proxy download request', 502);
   }
 }

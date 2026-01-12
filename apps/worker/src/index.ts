@@ -1,6 +1,6 @@
 /**
  * Cloudflare Worker Proxy for Thunderstore API
- * 
+ *
  * Provides CORS-safe proxy for:
  * - Mod listings from Thunderstore
  * - Mod version metadata
@@ -55,4 +55,3 @@ export default {
     }
   },
 };
-

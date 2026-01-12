@@ -16,9 +16,7 @@ export async function handleModsList(url: URL): Promise<Response> {
   const sort = url.searchParams.get('sort') || '';
 
   // Build Thunderstore API URL
-  const thunderstoreUrl = new URL(
-    `${THUNDERSTORE_API_BASE}/frontend/c/${community}/`
-  );
+  const thunderstoreUrl = new URL(`${THUNDERSTORE_API_BASE}/frontend/c/${community}/`);
 
   if (query) {
     thunderstoreUrl.searchParams.set('q', query);
@@ -46,11 +44,7 @@ export async function handleModsList(url: URL): Promise<Response> {
 
     if (!response.ok) {
       if (response.status === 404) {
-        return jsonError(
-          'invalid_community',
-          `Community '${community}' not found`,
-          404
-        );
+        return jsonError('invalid_community', `Community '${community}' not found`, 404);
       }
       throw new Error(`Thunderstore API error: ${response.status}`);
     }
@@ -61,11 +55,7 @@ export async function handleModsList(url: URL): Promise<Response> {
       'Cache-Control': CACHE_DURATIONS.API,
     });
   } catch (error) {
-    return jsonError(
-      'upstream_error',
-      'Failed to fetch from Thunderstore API',
-      502
-    );
+    return jsonError('upstream_error', 'Failed to fetch from Thunderstore API', 502);
   }
 }
 
@@ -97,11 +87,7 @@ export async function handleModVersions(url: URL): Promise<Response> {
 
     if (!response.ok) {
       if (response.status === 404) {
-        return jsonError(
-          'mod_not_found',
-          `Mod ${namespace}/${name} not found`,
-          404
-        );
+        return jsonError('mod_not_found', `Mod ${namespace}/${name} not found`, 404);
       }
       throw new Error(`Thunderstore API error: ${response.status}`);
     }
@@ -112,10 +98,6 @@ export async function handleModVersions(url: URL): Promise<Response> {
       'Cache-Control': CACHE_DURATIONS.API,
     });
   } catch (error) {
-    return jsonError(
-      'upstream_error',
-      'Failed to fetch mod versions from Thunderstore',
-      502
-    );
+    return jsonError('upstream_error', 'Failed to fetch mod versions from Thunderstore', 502);
   }
 }

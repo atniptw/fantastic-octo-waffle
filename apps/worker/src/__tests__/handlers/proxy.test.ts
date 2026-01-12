@@ -55,9 +55,7 @@ describe('Proxy handler', () => {
 
     it('should reject URLs not on allowlist', async () => {
       const url = new URL('http://localhost:8787/proxy?url=https://evil.com/malware.zip');
-      const request = new Request(
-        'http://localhost:8787/proxy?url=https://evil.com/malware.zip'
-      );
+      const request = new Request('http://localhost:8787/proxy?url=https://evil.com/malware.zip');
       const response = await handleProxy(url, request);
 
       expect(response.status).toBe(403);
@@ -405,9 +403,7 @@ describe('Proxy handler', () => {
           }),
         });
 
-      const url = new URL(
-        'http://localhost:8787/proxy?url=https://thunderstore.io/file/test.zip'
-      );
+      const url = new URL('http://localhost:8787/proxy?url=https://thunderstore.io/file/test.zip');
       const request = new Request(
         'http://localhost:8787/proxy?url=https://thunderstore.io/file/test.zip'
       );
@@ -450,7 +446,7 @@ describe('Proxy handler', () => {
           'Content-Type': 'application/zip',
           'Content-Range': 'bytes 0-999/1000000',
           'Accept-Ranges': 'bytes',
-          'ETag': '"abc123"',
+          ETag: '"abc123"',
           'Last-Modified': 'Wed, 12 Jan 2026 00:00:00 GMT',
         }),
       });
@@ -501,7 +497,7 @@ describe('Proxy handler', () => {
         headers: new Headers({
           'Content-Type': 'application/zip',
           'Content-Length': '1000',
-          'ETag': '"abc123"',
+          ETag: '"abc123"',
           'Last-Modified': 'Wed, 12 Jan 2026 00:00:00 GMT',
         }),
       });
