@@ -58,9 +58,9 @@ jobs:
       # This ensures CI provides a real quality gate rather than passing with build failures
 
       # Phase 1: E2E tests placeholder (to be implemented in Phase 1)
-      # Skipped for now as E2E infrastructure is not yet set up
+      # This step is skipped and serves as documentation for future implementation
       - name: Run E2E tests (Phase 1 placeholder)
-        if: github.event_name == 'workflow_dispatch'
+        if: false # Disabled placeholder - will be implemented in Phase 1
         run: |
           echo "E2E tests will be implemented in Phase 1"
           echo "This step will run Playwright tests against the deployed app"
