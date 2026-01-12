@@ -62,11 +62,13 @@ export default defineConfig({
     },
   ],
 
-  // Run your local dev server before starting the tests
-  webServer: {
-    command: 'pnpm dev',
-    url: 'http://localhost:5173',
-    reuseExistingServer: !process.env.CI,
-    timeout: 120 * 1000,
-  },
+  // NOTE: webServer configuration is commented out until the app has index.html and UI components
+  // Uncomment this in Phase 1 when implementing the actual UI:
+  // 
+  // webServer: {
+  //   command: 'pnpm dev',
+  //   url: 'http://localhost:5173',
+  //   reuseExistingServer: !process.env.CI,
+  //   timeout: 120 * 1000,
+  // },
 });
