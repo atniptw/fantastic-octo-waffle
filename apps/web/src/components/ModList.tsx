@@ -7,7 +7,6 @@ import type { ThunderstorePackageVersion } from '@fantastic-octo-waffle/utils';
 import { ModCard } from './ModCard';
 import './ModList.css';
 
-// ts-prune-ignore-next
 export interface ModListProps {
   /** Array of mods to display */
   mods: ThunderstorePackageVersion[];

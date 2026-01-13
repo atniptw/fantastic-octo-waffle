@@ -7,7 +7,6 @@ import type { ThunderstorePackageVersion } from '@fantastic-octo-waffle/utils';
 import { formatDownloads, formatRating } from '@fantastic-octo-waffle/utils';
 import './ModCard.css';
 
-// ts-prune-ignore-next
 export interface ModCardProps {
   /** Mod data to display */
   mod: ThunderstorePackageVersion;
