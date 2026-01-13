@@ -19,12 +19,16 @@
     "clean": "rm -rf dist node_modules .vite"
   },
   "dependencies": {
+    "@fantastic-octo-waffle/utils": "workspace:*",
+    "@preact/signals": "^2.5.1",
     "preact": "^10.25.4",
     "three": "^0.171.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.57.0",
     "@preact/preset-vite": "^2.9.3",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/preact": "^3.2.4",
     "@types/node": "^25.0.6",
     "@types/three": "^0.171.0",
     "jsdom": "^26.0.0",

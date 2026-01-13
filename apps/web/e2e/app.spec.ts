@@ -13,8 +13,8 @@ test.describe('Web App E2E Tests', () => {
     expect(await page.evaluate(() => navigator.userAgent)).toBeTruthy();
   });
 
-  // Phase 0: Basic UI tests - ENABLED after #83
-  test('navigates to home page and displays stub UI', async ({ page }) => {
+  // Phase 1: Basic UI tests - Updated for mod list implementation
+  test('navigates to home page and displays mod list UI', async ({ page }) => {
     await page.goto('/');
     await expect(page).toHaveTitle(/REPO Cosmetic Viewer/i);
 
@@ -22,9 +22,8 @@ test.describe('Web App E2E Tests', () => {
     const header = page.locator('h1');
     await expect(header).toHaveText('REPO Cosmetic Viewer');
 
-    // Check welcome message
-    await expect(page.locator('text=Welcome!')).toBeVisible();
-    await expect(page.locator('text=Phase 0 - Setup Complete')).toBeVisible();
+    // Check subtitle
+    await expect(page.locator('text=Browse and preview cosmetic mods')).toBeVisible();
   });
 
   // TODO Phase 1: Enable when mod list is implemented

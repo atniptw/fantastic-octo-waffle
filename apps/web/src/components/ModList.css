@@ -1,0 +1,57 @@
+/* Mod List styles */
+
+.mod-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1.5rem;
+  padding: 2rem;
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.mod-list-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+  padding: 3rem;
+}
+
+.mod-list-empty p {
+  font-size: 1.2rem;
+  color: #888;
+  font-weight: 500;
+}
+
+/* Responsive adjustments */
+@media (max-width: 1024px) {
+  .mod-list {
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 1.25rem;
+    padding: 1.5rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .mod-list {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 1rem;
+    padding: 1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .mod-list {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+    padding: 1rem;
+  }
+}
+
+/* Ensure minimum width for mobile */
+@media (max-width: 320px) {
+  .mod-list {
+    padding: 0.75rem;
+  }
+}
