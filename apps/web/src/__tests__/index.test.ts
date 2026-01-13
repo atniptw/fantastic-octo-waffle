@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { App } from './App';
+import { App } from '../App';
 
 describe('Web App', () => {
   it('App component should be defined', () => {

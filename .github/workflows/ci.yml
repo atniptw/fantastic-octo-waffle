@@ -54,13 +54,9 @@ jobs:
         run: pnpm test:integration
 
       - name: Install Playwright browsers
-        run: pnpm --filter @fantastic-octo-waffle/web exec playwright install --with-deps
+        run: pnpm --filter @fantastic-octo-waffle/web exec playwright install --with-deps chromium firefox
 
-      # Note: Build step removed from Phase 0 CI workflow
-      # Will be re-added once all entry points (index.html, etc.) are implemented
-      # This ensures CI provides a real quality gate rather than passing with build failures
-
-      # E2E tests (requires dev server to be running)
-      # Note: These tests are currently placeholder tests and will be fully implemented in Phase 1
+      # E2E tests - tests the full user flow with Chromium and Firefox
+      # WebKit disabled in CI due to additional system dependencies
       - name: Run E2E tests
         run: pnpm test:e2e
