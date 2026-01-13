@@ -128,6 +128,27 @@ describe('Proxy handler', () => {
 
       expect(response.status).toBe(200);
     });
+
+    it('should reject malicious lookalike subdomains', async () => {
+      const testCases = [
+        'https://evilcdn.thunderstore.io.com/file/test.zip',
+        'https://cdn.thunderstore.io.evil.com/file/test.zip',
+        'https://fakethunderstore.io/file/test.zip',
+      ];
+
+      for (const testUrl of testCases) {
+        const url = new URL(`http://localhost:8787/proxy?url=${encodeURIComponent(testUrl)}`);
+        const request = new Request(`http://localhost:8787/proxy?url=${encodeURIComponent(testUrl)}`);
+        const response = await handleProxy(url, request);
+
+        expect(response.status).toBe(403);
+        const data = await response.json();
+        expect(data).toMatchObject({
+          error: 'host_not_allowed',
+          status: 403,
+        });
+      }
+    });
   });
 
   describe('Download proxying', () => {

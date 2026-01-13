@@ -2,7 +2,12 @@
  * Mod list and version endpoints
  */
 
-import { THUNDERSTORE_API_BASE, USER_AGENT, CACHE_DURATIONS } from '../constants';
+import {
+  THUNDERSTORE_API_BASE,
+  USER_AGENT,
+  CACHE_DURATIONS,
+  FETCH_TIMEOUT_MS,
+} from '../constants';
 import { jsonError, jsonResponse } from '../utils/responses';
 
 /**
@@ -36,26 +41,42 @@ export async function handleModsList(url: URL): Promise<Response> {
   }
 
   try {
-    const response = await fetch(thunderstoreUrl.toString(), {
-      headers: {
-        'User-Agent': USER_AGENT,
-      },
-    });
+    // Set up timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
-    if (!response.ok) {
-      if (response.status === 404) {
-        return jsonError('invalid_community', `Community '${community}' not found`, 404);
+    try {
+      const response = await fetch(thunderstoreUrl.toString(), {
+        headers: {
+          'User-Agent': USER_AGENT,
+        },
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          return jsonError('invalid_community', `Community '${community}' not found`, 404);
+        }
+        throw new Error(`Thunderstore API error: ${response.status}`);
       }
-      throw new Error(`Thunderstore API error: ${response.status}`);
+
+      const data = await response.json();
+
+      return jsonResponse(data, 200, {
+        'Cache-Control': CACHE_DURATIONS.API,
+      });
+    } finally {
+      clearTimeout(timeoutId);
     }
-
-    const data = await response.json();
-
-    return jsonResponse(data, 200, {
-      'Cache-Control': CACHE_DURATIONS.API,
-    });
   } catch (error) {
-    return jsonError('upstream_error', 'Failed to fetch from Thunderstore API', 502);
+    if (error instanceof Error && error.name === 'AbortError') {
+      return jsonError(
+        'timeout',
+        `Request timed out after ${FETCH_TIMEOUT_MS / 1000} seconds`,
+        504
+      );
+    }
+    return jsonError('upstream_error', 'Failed to process Thunderstore API response', 502);
   }
 }
 
@@ -79,25 +100,41 @@ export async function handleModVersions(url: URL): Promise<Response> {
   const thunderstoreUrl = `${THUNDERSTORE_API_BASE}/frontend/c/${community}/p/${namespace}/${name}/`;
 
   try {
-    const response = await fetch(thunderstoreUrl, {
-      headers: {
-        'User-Agent': USER_AGENT,
-      },
-    });
+    // Set up timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
-    if (!response.ok) {
-      if (response.status === 404) {
-        return jsonError('mod_not_found', `Mod ${namespace}/${name} not found`, 404);
+    try {
+      const response = await fetch(thunderstoreUrl, {
+        headers: {
+          'User-Agent': USER_AGENT,
+        },
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          return jsonError('mod_not_found', `Mod ${namespace}/${name} not found`, 404);
+        }
+        throw new Error(`Thunderstore API error: ${response.status}`);
       }
-      throw new Error(`Thunderstore API error: ${response.status}`);
+
+      const data = await response.json();
+
+      return jsonResponse(data, 200, {
+        'Cache-Control': CACHE_DURATIONS.API,
+      });
+    } finally {
+      clearTimeout(timeoutId);
     }
-
-    const data = await response.json();
-
-    return jsonResponse(data, 200, {
-      'Cache-Control': CACHE_DURATIONS.API,
-    });
   } catch (error) {
-    return jsonError('upstream_error', 'Failed to fetch mod versions from Thunderstore', 502);
+    if (error instanceof Error && error.name === 'AbortError') {
+      return jsonError(
+        'timeout',
+        `Request timed out after ${FETCH_TIMEOUT_MS / 1000} seconds`,
+        504
+      );
+    }
+    return jsonError('upstream_error', 'Failed to process mod versions response from Thunderstore', 502);
   }
 }

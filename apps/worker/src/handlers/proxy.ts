@@ -92,6 +92,12 @@ export async function handleProxy(url: URL, request: Request): Promise<Response>
           }
 
           const redirectUrl = new URL(location, currentUrl);
+
+          // Validate redirect URL protocol
+          if (redirectUrl.protocol !== 'https:') {
+            return jsonError('invalid_protocol', 'Only HTTPS URLs are allowed', 400);
+          }
+
           const redirectAllowed = ALLOWED_DOWNLOAD_HOSTS.some(
             (host) => redirectUrl.hostname === host || redirectUrl.hostname.endsWith(`.${host}`)
           );
@@ -107,8 +113,6 @@ export async function handleProxy(url: URL, request: Request): Promise<Response>
         // Not a redirect, proceed with response
         break;
       }
-
-      clearTimeout(timeoutId);
 
       if (!response.ok) {
         if (response.status === 404) {
