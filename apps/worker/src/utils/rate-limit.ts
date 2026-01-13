@@ -34,6 +34,9 @@ export type RateLimitType = keyof typeof RATE_LIMITS;
  * Returns true if allowed, false if rate limit exceeded
  */
 export function checkRateLimit(clientId: string, type: RateLimitType): boolean {
+  // Lazy cleanup of old entries
+  maybeCleanup();
+
   const config = RATE_LIMITS[type];
   const now = Date.now() / 1000; // Convert to seconds
 
@@ -94,6 +97,9 @@ export function getClientId(request: Request): string {
 /**
  * Clean up old entries from rate limit store
  * Should be called periodically to prevent memory leaks
+ * 
+ * Note: This is called lazily during rate limit checks rather than on a timer
+ * because Cloudflare Workers don't support setInterval at global scope
  */
 export function cleanupRateLimitStore(): void {
   const now = Date.now() / 1000;
@@ -106,5 +112,17 @@ export function cleanupRateLimitStore(): void {
   }
 }
 
-// Cleanup every 5 minutes
-setInterval(cleanupRateLimitStore, 5 * 60 * 1000);
+// Track last cleanup time
+let lastCleanup = Date.now() / 1000;
+const cleanupInterval = 60; // Clean up every minute
+
+/**
+ * Perform lazy cleanup if enough time has passed
+ */
+function maybeCleanup(): void {
+  const now = Date.now() / 1000;
+  if (now - lastCleanup > cleanupInterval) {
+    cleanupRateLimitStore();
+    lastCleanup = now;
+  }
+}
