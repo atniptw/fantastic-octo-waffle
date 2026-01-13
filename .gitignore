@@ -51,3 +51,7 @@ logs/
 *.tmp
 .cache/
 .temp/
+
+# Cloudflare Workers
+.wrangler/
+.mf/
