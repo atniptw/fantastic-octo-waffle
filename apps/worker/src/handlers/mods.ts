@@ -9,12 +9,21 @@ import {
   FETCH_TIMEOUT_MS,
 } from '../constants';
 import { jsonError, jsonResponse } from '../utils/responses';
+import { checkRateLimit, getClientId } from '../utils/rate-limit';
 
 /**
  * List mods from Thunderstore
  * GET /api/mods?community=repo&query=...&page=1&sort=downloads
  */
-export async function handleModsList(url: URL): Promise<Response> {
+export async function handleModsList(url: URL, request: Request): Promise<Response> {
+  // Check rate limit
+  const clientId = getClientId(request);
+  if (!checkRateLimit(clientId, 'API')) {
+    return jsonError('rate_limit_exceeded', 'Too many requests. Please try again later.', 429, {
+      'Retry-After': '60',
+    });
+  }
+
   const community = url.searchParams.get('community') || 'repo';
   const query = url.searchParams.get('query') || '';
   const page = url.searchParams.get('page') || '1';
@@ -84,7 +93,15 @@ export async function handleModsList(url: URL): Promise<Response> {
  * Get mod version details
  * GET /api/mod/:namespace/:name/versions
  */
-export async function handleModVersions(url: URL): Promise<Response> {
+export async function handleModVersions(url: URL, request: Request): Promise<Response> {
+  // Check rate limit
+  const clientId = getClientId(request);
+  if (!checkRateLimit(clientId, 'API')) {
+    return jsonError('rate_limit_exceeded', 'Too many requests. Please try again later.', 429, {
+      'Retry-After': '60',
+    });
+  }
+
   const pathParts = url.pathname.split('/').filter(Boolean);
 
   // Expected: ['api', 'mod', namespace, name, 'versions']

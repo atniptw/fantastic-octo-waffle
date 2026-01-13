@@ -1,6 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { handleProxy } from '../../handlers/proxy';
 
+// Helper to create mock requests with unique IPs to avoid rate limiting
+let requestCounter = 0;
+function createMockRequest(url: string, options?: RequestInit): Request {
+  requestCounter++;
+  return new Request(url, {
+    ...options,
+    headers: {
+      ...options?.headers,
+      'CF-Connecting-IP': `127.0.0.${Math.floor(requestCounter / 20)}.${requestCounter % 256}`,
+    },
+  });
+}
+
 describe('Proxy handler', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -9,7 +22,7 @@ describe('Proxy handler', () => {
   describe('URL validation', () => {
     it('should return 400 when URL is missing', async () => {
       const url = new URL('http://localhost:8787/proxy');
-      const request = new Request('http://localhost:8787/proxy');
+      const request = createMockRequest('http://localhost:8787/proxy');
       const response = await handleProxy(url, request);
 
       expect(response.status).toBe(400);
@@ -23,7 +36,7 @@ describe('Proxy handler', () => {
 
     it('should return 400 for invalid URL format', async () => {
       const url = new URL('http://localhost:8787/proxy?url=not-a-valid-url');
-      const request = new Request('http://localhost:8787/proxy?url=not-a-valid-url');
+      const request = createMockRequest('http://localhost:8787/proxy?url=not-a-valid-url');
       const response = await handleProxy(url, request);
 
       expect(response.status).toBe(400);
@@ -39,7 +52,7 @@ describe('Proxy handler', () => {
       const url = new URL(
         'http://localhost:8787/proxy?url=http://cdn.thunderstore.io/file/test.zip'
       );
-      const request = new Request(
+      const request = createMockRequest(
         'http://localhost:8787/proxy?url=http://cdn.thunderstore.io/file/test.zip'
       );
       const response = await handleProxy(url, request);
@@ -55,7 +68,7 @@ describe('Proxy handler', () => {
 
     it('should reject URLs not on allowlist', async () => {
       const url = new URL('http://localhost:8787/proxy?url=https://evil.com/malware.zip');
-      const request = new Request('http://localhost:8787/proxy?url=https://evil.com/malware.zip');
+      const request = createMockRequest('http://localhost:8787/proxy?url=https://evil.com/malware.zip');
       const response = await handleProxy(url, request);
 
       expect(response.status).toBe(403);
@@ -85,7 +98,7 @@ describe('Proxy handler', () => {
       const url = new URL(
         'http://localhost:8787/proxy?url=https://cdn.thunderstore.io/file/test.zip'
       );
-      const request = new Request(
+      const request = createMockRequest(
         'http://localhost:8787/proxy?url=https://cdn.thunderstore.io/file/test.zip'
       );
       const response = await handleProxy(url, request);
@@ -97,7 +110,7 @@ describe('Proxy handler', () => {
       const url = new URL(
         'http://localhost:8787/proxy?url=https://thunderstore.io/package/download/test.zip'
       );
-      const request = new Request(
+      const request = createMockRequest(
         'http://localhost:8787/proxy?url=https://thunderstore.io/package/download/test.zip'
       );
       const response = await handleProxy(url, request);
@@ -109,7 +122,7 @@ describe('Proxy handler', () => {
       const url = new URL(
         'http://localhost:8787/proxy?url=https://gcdn.thunderstore.io/live/repository/packages/test.zip'
       );
-      const request = new Request(
+      const request = createMockRequest(
         'http://localhost:8787/proxy?url=https://gcdn.thunderstore.io/live/repository/packages/test.zip'
       );
       const response = await handleProxy(url, request);
@@ -121,7 +134,7 @@ describe('Proxy handler', () => {
       const url = new URL(
         'http://localhost:8787/proxy?url=https://sub.cdn.thunderstore.io/file/test.zip'
       );
-      const request = new Request(
+      const request = createMockRequest(
         'http://localhost:8787/proxy?url=https://sub.cdn.thunderstore.io/file/test.zip'
       );
       const response = await handleProxy(url, request);
@@ -138,7 +151,7 @@ describe('Proxy handler', () => {
 
       for (const testUrl of testCases) {
         const url = new URL(`http://localhost:8787/proxy?url=${encodeURIComponent(testUrl)}`);
-        const request = new Request(`http://localhost:8787/proxy?url=${encodeURIComponent(testUrl)}`);
+        const request = createMockRequest(`http://localhost:8787/proxy?url=${encodeURIComponent(testUrl)}`);
         const response = await handleProxy(url, request);
 
         expect(response.status).toBe(403);
@@ -167,7 +180,7 @@ describe('Proxy handler', () => {
       const url = new URL(
         'http://localhost:8787/proxy?url=https://cdn.thunderstore.io/file/test.zip'
       );
-      const request = new Request(
+      const request = createMockRequest(
         'http://localhost:8787/proxy?url=https://cdn.thunderstore.io/file/test.zip'
       );
       const response = await handleProxy(url, request);
@@ -192,7 +205,7 @@ describe('Proxy handler', () => {
       const url = new URL(
         'http://localhost:8787/proxy?url=https://cdn.thunderstore.io/file/test.zip'
       );
-      const request = new Request(
+      const request = createMockRequest(
         'http://localhost:8787/proxy?url=https://cdn.thunderstore.io/file/test.zip',
         {
           headers: { Range: 'bytes=0-999' },
@@ -221,7 +234,7 @@ describe('Proxy handler', () => {
       const url = new URL(
         'http://localhost:8787/proxy?url=https://cdn.thunderstore.io/file/missing.zip'
       );
-      const request = new Request(
+      const request = createMockRequest(
         'http://localhost:8787/proxy?url=https://cdn.thunderstore.io/file/missing.zip'
       );
       const response = await handleProxy(url, request);
@@ -251,7 +264,7 @@ describe('Proxy handler', () => {
       const url = new URL(
         'http://localhost:8787/proxy?url=https://cdn.thunderstore.io/file/huge.zip'
       );
-      const request = new Request(
+      const request = createMockRequest(
         'http://localhost:8787/proxy?url=https://cdn.thunderstore.io/file/huge.zip'
       );
       const response = await handleProxy(url, request);
@@ -279,7 +292,7 @@ describe('Proxy handler', () => {
       const url = new URL(
         'http://localhost:8787/proxy?url=https://cdn.thunderstore.io/file/normal.zip'
       );
-      const request = new Request(
+      const request = createMockRequest(
         'http://localhost:8787/proxy?url=https://cdn.thunderstore.io/file/normal.zip'
       );
       const response = await handleProxy(url, request);
@@ -301,7 +314,7 @@ describe('Proxy handler', () => {
       const url = new URL(
         'http://localhost:8787/proxy?url=https://cdn.thunderstore.io/file/test.zip'
       );
-      const request = new Request(
+      const request = createMockRequest(
         'http://localhost:8787/proxy?url=https://cdn.thunderstore.io/file/test.zip'
       );
       const response = await handleProxy(url, request);
@@ -338,7 +351,7 @@ describe('Proxy handler', () => {
       const url = new URL(
         'http://localhost:8787/proxy?url=https://cdn.thunderstore.io/file/test.zip'
       );
-      const request = new Request(
+      const request = createMockRequest(
         'http://localhost:8787/proxy?url=https://cdn.thunderstore.io/file/test.zip'
       );
       const response = await handleProxy(url, request);
@@ -360,7 +373,7 @@ describe('Proxy handler', () => {
       const url = new URL(
         'http://localhost:8787/proxy?url=https://cdn.thunderstore.io/file/test.zip'
       );
-      const request = new Request(
+      const request = createMockRequest(
         'http://localhost:8787/proxy?url=https://cdn.thunderstore.io/file/test.zip'
       );
       const response = await handleProxy(url, request);
@@ -384,7 +397,7 @@ describe('Proxy handler', () => {
       const url = new URL(
         'http://localhost:8787/proxy?url=https://cdn.thunderstore.io/file/test.zip'
       );
-      const request = new Request(
+      const request = createMockRequest(
         'http://localhost:8787/proxy?url=https://cdn.thunderstore.io/file/test.zip'
       );
       const response = await handleProxy(url, request);
@@ -425,7 +438,7 @@ describe('Proxy handler', () => {
         });
 
       const url = new URL('http://localhost:8787/proxy?url=https://thunderstore.io/file/test.zip');
-      const request = new Request(
+      const request = createMockRequest(
         'http://localhost:8787/proxy?url=https://thunderstore.io/file/test.zip'
       );
       const response = await handleProxy(url, request);
@@ -449,7 +462,7 @@ describe('Proxy handler', () => {
       const url = new URL(
         'http://localhost:8787/proxy?url=https://cdn.thunderstore.io/file/test.zip'
       );
-      const request = new Request(
+      const request = createMockRequest(
         'http://localhost:8787/proxy?url=https://cdn.thunderstore.io/file/test.zip'
       );
       const response = await handleProxy(url, request);
@@ -475,7 +488,7 @@ describe('Proxy handler', () => {
       const url = new URL(
         'http://localhost:8787/proxy?url=https://cdn.thunderstore.io/file/test.zip'
       );
-      const request = new Request(
+      const request = createMockRequest(
         'http://localhost:8787/proxy?url=https://cdn.thunderstore.io/file/test.zip'
       );
       const response = await handleProxy(url, request);
@@ -501,7 +514,7 @@ describe('Proxy handler', () => {
       const url = new URL(
         'http://localhost:8787/proxy?url=https://cdn.thunderstore.io/file/test.zip'
       );
-      const request = new Request(
+      const request = createMockRequest(
         'http://localhost:8787/proxy?url=https://cdn.thunderstore.io/file/test.zip'
       );
       const response = await handleProxy(url, request);
@@ -526,7 +539,7 @@ describe('Proxy handler', () => {
       const url = new URL(
         'http://localhost:8787/proxy?url=https://cdn.thunderstore.io/file/test.zip'
       );
-      const request = new Request(
+      const request = createMockRequest(
         'http://localhost:8787/proxy?url=https://cdn.thunderstore.io/file/test.zip'
       );
       const response = await handleProxy(url, request);
@@ -554,7 +567,7 @@ describe('Proxy handler', () => {
       const url = new URL(
         'http://localhost:8787/proxy?url=https://cdn.thunderstore.io/file/test.zip'
       );
-      const request = new Request(
+      const request = createMockRequest(
         'http://localhost:8787/proxy?url=https://cdn.thunderstore.io/file/test.zip',
         { method: 'HEAD' }
       );
@@ -581,7 +594,7 @@ describe('Proxy handler', () => {
       const url = new URL(
         'http://localhost:8787/proxy?url=https://cdn.thunderstore.io/file/test.zip'
       );
-      const request = new Request(
+      const request = createMockRequest(
         'http://localhost:8787/proxy?url=https://cdn.thunderstore.io/file/test.zip'
       );
       const response = await handleProxy(url, request);
@@ -607,7 +620,7 @@ describe('Proxy handler', () => {
       const url = new URL(
         'http://localhost:8787/proxy?url=https://cdn.thunderstore.io/file/test.zip'
       );
-      const request = new Request(
+      const request = createMockRequest(
         'http://localhost:8787/proxy?url=https://cdn.thunderstore.io/file/test.zip'
       );
       const response = await handleProxy(url, request);
@@ -629,7 +642,7 @@ describe('Proxy handler', () => {
       const url = new URL(
         'http://localhost:8787/proxy?url=https://cdn.thunderstore.io/file/test.zip'
       );
-      const request = new Request(
+      const request = createMockRequest(
         'http://localhost:8787/proxy?url=https://cdn.thunderstore.io/file/test.zip'
       );
       const response = await handleProxy(url, request);
