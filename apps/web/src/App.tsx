@@ -1,38 +1,107 @@
 import type { FunctionalComponent } from 'preact';
+import { useEffect } from 'preact/hooks';
+import type { ThunderstorePackageVersion } from '@fantastic-octo-waffle/utils';
+import { fetchMods } from './lib/api';
+import {
+  mods,
+  currentPage,
+  totalCount,
+  isLoading,
+  error,
+  selectedMod,
+  totalPages,
+  hasPreviousPage,
+  hasNextPage,
+  sortOrder,
+} from './lib/state';
+import { ModList } from './components/ModList';
+import { Pagination } from './components/Pagination';
+import { LoadingSpinner } from './components/LoadingSpinner';
+import { ErrorToast } from './components/ErrorToast';
 import './app.css';
 
 /**
  * Root application component.
  *
- * Renders the top-level application layout, consisting of:
- * - A header with the application title and subtitle.
- * - A main section with placeholder content describing the REPO cosmetic viewer
- *   and current development phase.
- * - A footer with a link to the Thunderstore REPO category.
- *
- * This is a Phase 0 stub UI used to validate the Vite + Preact setup.
- * Future phases will replace the placeholder content with a mod browser,
- * search, pagination, and 3D previews.
- *
- * @returns {JSX.Element} Root application container with header, main content, and footer.
+ * Implements Phase 1: Mod List UI
+ * - Fetches mods from /api/mods on mount
+ * - Displays mod cards in a responsive grid
+ * - Provides pagination controls
+ * - Shows loading and error states
  */
 export const App: FunctionalComponent = () => {
+  // Load mods when component mounts or page changes
+  useEffect(() => {
+    const loadMods = async () => {
+      isLoading.value = true;
+      error.value = null;
+
+      try {
+        const response = await fetchMods(currentPage.value, '', sortOrder.value);
+        mods.value = response.results;
+        totalCount.value = response.count;
+      } catch (err) {
+        error.value = err instanceof Error ? err.message : 'Failed to load mods';
+        mods.value = [];
+        totalCount.value = 0;
+      } finally {
+        isLoading.value = false;
+      }
+    };
+
+    loadMods();
+  }, [currentPage.value, sortOrder.value]);
+
+  const handleModClick = (mod: ThunderstorePackageVersion) => {
+    selectedMod.value = mod;
+    // TODO: Navigate to mod detail or open modal
+  };
+
+  const handlePreviousPage = () => {
+    if (hasPreviousPage.value) {
+      currentPage.value -= 1;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  const handleNextPage = () => {
+    if (hasNextPage.value) {
+      currentPage.value += 1;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  const handleDismissError = () => {
+    error.value = null;
+  };
+
   return (
     <div class="app">
+      {error.value && <ErrorToast message={error.value} onDismiss={handleDismissError} />}
+
       <header class="app-header">
         <h1>REPO Cosmetic Viewer</h1>
         <p class="app-subtitle">Browse and preview cosmetic mods</p>
       </header>
 
       <main class="app-main">
-        <div class="placeholder-content">
-          <h2>Welcome!</h2>
-          <p>This is a browser-based viewer for REPO game cosmetic mods.</p>
-          <p class="status">
-            <strong>Status:</strong> Phase 0 - Setup Complete ✓
-          </p>
-          <p class="coming-soon">Coming soon: Mod browser, 3D previews, and more!</p>
-        </div>
+        {isLoading.value ? (
+          <LoadingSpinner />
+        ) : (
+          <>
+            <ModList mods={mods.value} onModClick={handleModClick} />
+            {mods.value.length > 0 && (
+              <Pagination
+                currentPage={currentPage.value}
+                totalPages={totalPages.value}
+                hasPrevious={hasPreviousPage.value}
+                hasNext={hasNextPage.value}
+                onPrevious={handlePreviousPage}
+                onNext={handleNextPage}
+              />
+            )}
+          </>
+        )}
       </main>
 
       <footer class="app-footer">
