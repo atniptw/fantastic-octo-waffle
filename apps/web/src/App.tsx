@@ -2,9 +2,19 @@ import type { FunctionalComponent } from 'preact';
 import './app.css';
 
 /**
- * Root application component
- * Phase 0: Stub UI to validate Vite + Preact setup
- * Phase 1: Will add mod list, search, and pagination
+ * Root application component.
+ *
+ * Renders the top-level application layout, consisting of:
+ * - A header with the application title and subtitle.
+ * - A main section with placeholder content describing the REPO cosmetic viewer
+ *   and current development phase.
+ * - A footer with a link to the Thunderstore REPO category.
+ *
+ * This is a Phase 0 stub UI used to validate the Vite + Preact setup.
+ * Future phases will replace the placeholder content with a mod browser,
+ * search, pagination, and 3D previews.
+ *
+ * @returns {JSX.Element} Root application container with header, main content, and footer.
  */
 export const App: FunctionalComponent = () => {
   return (
