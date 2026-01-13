@@ -15,7 +15,7 @@ test.describe('Web App E2E Tests', () => {
 
   // Phase 0: Basic UI tests - ENABLED after #83
   test('navigates to home page and displays stub UI', async ({ page }) => {
-    await page.goto('http://localhost:5173');
+    await page.goto('/');
     await expect(page).toHaveTitle(/REPO Cosmetic Viewer/i);
 
     // Check header is visible
