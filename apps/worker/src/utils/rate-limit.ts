@@ -95,7 +95,7 @@ export function getClientId(request: Request): string {
 /**
  * Clean up old entries from rate limit store
  * Should be called periodically to prevent memory leaks
- * 
+ *
  * Note: This is called lazily during rate limit checks rather than on a timer
  * because Cloudflare Workers don't support setInterval at global scope
  */

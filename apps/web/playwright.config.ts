@@ -58,7 +58,7 @@ export default defineConfig({
       name: 'Mobile Chrome',
       use: { ...devices['Pixel 5'] },
     },
-    
+
     // Mobile Safari disabled (uses WebKit)
     // {
     //   name: 'Mobile Safari',

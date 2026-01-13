@@ -17,11 +17,11 @@ test.describe('Web App E2E Tests', () => {
   test('navigates to home page and displays stub UI', async ({ page }) => {
     await page.goto('http://localhost:5173');
     await expect(page).toHaveTitle(/REPO Cosmetic Viewer/i);
-    
+
     // Check header is visible
     const header = page.locator('h1');
     await expect(header).toHaveText('REPO Cosmetic Viewer');
-    
+
     // Check welcome message
     await expect(page.locator('text=Welcome!')).toBeVisible();
     await expect(page.locator('text=Phase 0 - Setup Complete')).toBeVisible();
