@@ -6,7 +6,7 @@ describe('Pagination', () => {
   it('should render page information', () => {
     const onPrevious = vi.fn();
     const onNext = vi.fn();
-    
+
     render(
       <Pagination
         currentPage={2}
@@ -24,7 +24,7 @@ describe('Pagination', () => {
   it('should disable previous button on first page', () => {
     const onPrevious = vi.fn();
     const onNext = vi.fn();
-    
+
     render(
       <Pagination
         currentPage={1}
@@ -43,7 +43,7 @@ describe('Pagination', () => {
   it('should disable next button on last page', () => {
     const onPrevious = vi.fn();
     const onNext = vi.fn();
-    
+
     render(
       <Pagination
         currentPage={5}
@@ -62,7 +62,7 @@ describe('Pagination', () => {
   it('should call onPrevious when previous button clicked', () => {
     const onPrevious = vi.fn();
     const onNext = vi.fn();
-    
+
     render(
       <Pagination
         currentPage={2}
@@ -76,14 +76,14 @@ describe('Pagination', () => {
 
     const prevButton = screen.getByLabelText('Previous page');
     prevButton.click();
-    
+
     expect(onPrevious).toHaveBeenCalledTimes(1);
   });
 
   it('should call onNext when next button clicked', () => {
     const onPrevious = vi.fn();
     const onNext = vi.fn();
-    
+
     render(
       <Pagination
         currentPage={2}
@@ -97,14 +97,14 @@ describe('Pagination', () => {
 
     const nextButton = screen.getByLabelText('Next page');
     nextButton.click();
-    
+
     expect(onNext).toHaveBeenCalledTimes(1);
   });
 
   it('should show page 1 of 1 when totalPages is 0', () => {
     const onPrevious = vi.fn();
     const onNext = vi.fn();
-    
+
     render(
       <Pagination
         currentPage={1}

@@ -5,6 +5,7 @@
 import type { FunctionalComponent } from 'preact';
 import './ErrorToast.css';
 
+// ts-prune-ignore-next
 export interface ErrorToastProps {
   /** Error message to display */
   message: string;

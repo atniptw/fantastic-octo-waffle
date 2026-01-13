@@ -7,6 +7,7 @@ import type { ThunderstorePackageVersion } from '@fantastic-octo-waffle/utils';
 import { formatDownloads, formatRating } from '@fantastic-octo-waffle/utils';
 import './ModCard.css';
 
+// ts-prune-ignore-next
 export interface ModCardProps {
   /** Mod data to display */
   mod: ThunderstorePackageVersion;
@@ -43,14 +44,12 @@ export const ModCard: FunctionalComponent<ModCardProps> = ({ mod, onClick }) => 
           <img src={mod.icon_url} alt={`${mod.name} icon`} />
         </div>
       )}
-      
+
       <div class="mod-card-content">
         <h3 class="mod-card-title">{mod.name}</h3>
         <p class="mod-card-author">by {mod.namespace}</p>
-        
-        <p class="mod-card-description">
-          {mod.description || 'No description available'}
-        </p>
+
+        <p class="mod-card-description">{mod.description || 'No description available'}</p>
 
         <div class="mod-card-stats">
           <span class="mod-stat" title="Downloads">

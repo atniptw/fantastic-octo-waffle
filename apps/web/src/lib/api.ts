@@ -17,16 +17,16 @@ export async function fetchMods(
   const url = new URL(`${API_BASE}/api/mods`);
   url.searchParams.set('community', 'repo');
   url.searchParams.set('page', page.toString());
-  
+
   if (query) {
     url.searchParams.set('query', query);
   }
-  
+
   url.searchParams.set('sort', sort);
 
   const response = await fetch(url.toString(), {
     headers: {
-      'Accept': 'application/json',
+      Accept: 'application/json',
     },
   });
 

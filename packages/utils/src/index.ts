@@ -6,7 +6,9 @@
 
 /**
  * A package version from Thunderstore API
+ * @public - Used across web app components
  */
+// ts-prune-ignore-next
 export interface ThunderstorePackageVersion {
   /** Unique namespace of the mod author/team */
   namespace: string;
@@ -42,7 +44,9 @@ export interface ThunderstorePackageVersion {
 
 /**
  * Thunderstore API paginated response
+ * @public - Used by API client
  */
+// ts-prune-ignore-next
 export interface ThunderstoreApiResponse {
   /** Total number of results */
   count: number;
@@ -56,7 +60,9 @@ export interface ThunderstoreApiResponse {
 
 /**
  * Error response from API
+ * @public - Used by API client error handling
  */
+// ts-prune-ignore-next
 export interface ApiError {
   error: string;
   message: string;

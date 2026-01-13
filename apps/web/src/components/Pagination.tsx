@@ -5,6 +5,7 @@
 import type { FunctionalComponent } from 'preact';
 import './Pagination.css';
 
+// ts-prune-ignore-next
 export interface PaginationProps {
   /** Current page number (1-indexed) */
   currentPage: number;
@@ -46,12 +47,7 @@ export const Pagination: FunctionalComponent<PaginationProps> = ({
         Page {currentPage} of {totalPages || 1}
       </span>
 
-      <button
-        class="pagination-button"
-        onClick={onNext}
-        disabled={!hasNext}
-        aria-label="Next page"
-      >
+      <button class="pagination-button" onClick={onNext} disabled={!hasNext} aria-label="Next page">
         Next →
       </button>
     </div>

@@ -11,11 +11,6 @@ import type { ThunderstorePackageVersion } from '@fantastic-octo-waffle/utils';
 export const currentPage = signal<number>(1);
 
 /**
- * Search query
- */
-export const searchQuery = signal<string>('');
-
-/**
  * Sort order
  */
 export const sortOrder = signal<'downloads' | 'newest' | 'rating'>('downloads');
