@@ -18,7 +18,7 @@ export const searchQuery = signal<string>('');
 /**
  * Sort order
  */
-export const sortOrder = signal<'downloads' | 'newest' | 'rating' | ''>('downloads');
+export const sortOrder = signal<'downloads' | 'newest' | 'rating'>('downloads');
 
 /**
  * List of mods on current page

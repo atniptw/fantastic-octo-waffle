@@ -1,5 +1,5 @@
 import type { FunctionalComponent } from 'preact';
-import { useEffect } from 'preact/hooks';
+import { useEffect, useCallback } from 'preact/hooks';
 import type { ThunderstorePackageVersion } from '@fantastic-octo-waffle/utils';
 import { fetchMods } from './lib/api';
 import {
@@ -30,15 +30,11 @@ import './app.css';
  * - Shows loading and error states
  */
 export const App: FunctionalComponent = () => {
-  // Load mods when component mounts
-  useEffect(() => {
-    loadModsForPage(currentPage.value);
-  }, []);
-
   /**
    * Load mods for a specific page
+   * Memoized with useCallback to maintain stable reference
    */
-  const loadModsForPage = async (page: number) => {
+  const loadModsForPage = useCallback(async (page: number) => {
     isLoading.value = true;
     error.value = null;
 
@@ -53,7 +49,13 @@ export const App: FunctionalComponent = () => {
     } finally {
       isLoading.value = false;
     }
-  };
+  }, []);
+
+  // Load mods when component mounts (intentionally runs only once on mount)
+  // Subsequent page loads are triggered by pagination handlers
+  useEffect(() => {
+    loadModsForPage(currentPage.value);
+  }, [loadModsForPage]);
 
   const handleModClick = (mod: ThunderstorePackageVersion) => {
     selectedMod.value = mod;

@@ -12,7 +12,7 @@ const API_BASE = import.meta.env.DEV ? 'http://localhost:8787' : '';
 export async function fetchMods(
   page: number = 1,
   query: string = '',
-  sort: 'downloads' | 'newest' | 'rating' | '' = 'downloads'
+  sort: 'downloads' | 'newest' | 'rating' = 'downloads'
 ): Promise<ThunderstoreApiResponse> {
   const url = new URL(`${API_BASE}/api/mods`);
   url.searchParams.set('community', 'repo');
@@ -22,9 +22,7 @@ export async function fetchMods(
     url.searchParams.set('query', query);
   }
   
-  if (sort) {
-    url.searchParams.set('sort', sort);
-  }
+  url.searchParams.set('sort', sort);
 
   const response = await fetch(url.toString(), {
     headers: {
