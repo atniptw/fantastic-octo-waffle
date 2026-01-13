@@ -13,12 +13,26 @@ import {
 } from '../constants';
 import { jsonError } from '../utils/responses';
 import { getCorsHeaders } from '../utils/cors';
+import { checkRateLimit, getClientId } from '../utils/rate-limit';
 
 /**
  * Proxy download requests with allowlist validation
  * GET /proxy?url=https://cdn.thunderstore.io/file/...
  */
 export async function handleProxy(url: URL, request: Request): Promise<Response> {
+  // Check rate limit (stricter for downloads)
+  const clientId = getClientId(request);
+  if (!checkRateLimit(clientId, 'PROXY')) {
+    return jsonError(
+      'rate_limit_exceeded',
+      'Too many download requests. Please try again later.',
+      429,
+      {
+        'Retry-After': '60',
+      }
+    );
+  }
+
   const targetUrl = url.searchParams.get('url');
 
   if (!targetUrl) {

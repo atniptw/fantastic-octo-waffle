@@ -22,12 +22,17 @@ export function jsonResponse(
   });
 }
 
-export function jsonError(error: string, message: string, status: number): Response {
+export function jsonError(
+  error: string,
+  message: string,
+  status: number,
+  additionalHeaders: Record<string, string> = {}
+): Response {
   const errorResponse: ErrorResponse = {
     error,
     message,
     status,
   };
 
-  return jsonResponse(errorResponse, status);
+  return jsonResponse(errorResponse, status, additionalHeaders);
 }

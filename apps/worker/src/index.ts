@@ -32,11 +32,11 @@ export default {
       }
 
       if (url.pathname === '/api/mods') {
-        return handleModsList(url);
+        return handleModsList(url, request);
       }
 
       if (url.pathname.startsWith('/api/mod/')) {
-        return handleModVersions(url);
+        return handleModVersions(url, request);
       }
 
       if (url.pathname === '/proxy') {

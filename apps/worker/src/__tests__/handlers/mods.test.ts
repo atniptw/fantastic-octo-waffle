@@ -1,6 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { handleModsList, handleModVersions } from '../../handlers/mods';
 
+// Helper to create mock requests
+function createMockRequest(url: string): Request {
+  return new Request(url, {
+    headers: {
+      'CF-Connecting-IP': '127.0.0.1',
+    },
+  });
+}
+
 describe('Mods handlers', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -26,7 +35,8 @@ describe('Mods handlers', () => {
       });
 
       const url = new URL('http://localhost:8787/api/mods?community=repo');
-      const response = await handleModsList(url);
+      const request = createMockRequest(url.toString());
+      const response = await handleModsList(url, request);
 
       expect(response.status).toBe(200);
       expect(globalThis.fetch).toHaveBeenCalledWith(
@@ -46,7 +56,8 @@ describe('Mods handlers', () => {
       });
 
       const url = new URL('http://localhost:8787/api/mods?community=repo&query=head');
-      await handleModsList(url);
+      const request = createMockRequest(url.toString());
+      await handleModsList(url, request);
 
       expect(globalThis.fetch).toHaveBeenCalledWith(
         expect.stringContaining('q=head'),
@@ -62,7 +73,8 @@ describe('Mods handlers', () => {
       });
 
       const url = new URL('http://localhost:8787/api/mods?community=repo&sort=downloads');
-      await handleModsList(url);
+      const request = createMockRequest(url.toString());
+      await handleModsList(url, request);
 
       expect(globalThis.fetch).toHaveBeenCalledWith(
         expect.stringContaining('ordering=-downloads'),
@@ -78,7 +90,8 @@ describe('Mods handlers', () => {
       });
 
       const url = new URL('http://localhost:8787/api/mods?community=repo&sort=newest');
-      await handleModsList(url);
+      const request = createMockRequest(url.toString());
+      await handleModsList(url, request);
 
       expect(globalThis.fetch).toHaveBeenCalledWith(
         expect.stringContaining('ordering=-date_created'),
@@ -94,7 +107,8 @@ describe('Mods handlers', () => {
       });
 
       const url = new URL('http://localhost:8787/api/mods?community=repo&sort=rating');
-      await handleModsList(url);
+      const request = createMockRequest(url.toString());
+      await handleModsList(url, request);
 
       expect(globalThis.fetch).toHaveBeenCalledWith(
         expect.stringContaining('ordering=-rating'),
@@ -109,7 +123,8 @@ describe('Mods handlers', () => {
       });
 
       const url = new URL('http://localhost:8787/api/mods?community=invalid');
-      const response = await handleModsList(url);
+      const request = createMockRequest(url.toString());
+      const response = await handleModsList(url, request);
 
       expect(response.status).toBe(404);
 
@@ -124,7 +139,8 @@ describe('Mods handlers', () => {
       globalThis.fetch = vi.fn().mockRejectedValue(new Error('Network error'));
 
       const url = new URL('http://localhost:8787/api/mods?community=repo');
-      const response = await handleModsList(url);
+      const request = createMockRequest(url.toString());
+      const response = await handleModsList(url, request);
 
       expect(response.status).toBe(502);
 
@@ -143,7 +159,8 @@ describe('Mods handlers', () => {
       });
 
       const url = new URL('http://localhost:8787/api/mods?community=repo');
-      const response = await handleModsList(url);
+      const request = createMockRequest(url.toString());
+      const response = await handleModsList(url, request);
 
       expect(response.headers.get('Cache-Control')).toContain('max-age=300');
       expect(response.headers.get('Cache-Control')).toContain('stale-while-revalidate');
@@ -167,7 +184,8 @@ describe('Mods handlers', () => {
       const url = new URL(
         'http://localhost:8787/api/mod/TestAuthor/TestMod/versions?community=repo'
       );
-      const response = await handleModVersions(url);
+      const request = createMockRequest(url.toString());
+      const response = await handleModVersions(url, request);
 
       expect(response.status).toBe(200);
       expect(globalThis.fetch).toHaveBeenCalledWith(
@@ -181,7 +199,8 @@ describe('Mods handlers', () => {
 
     it('should return 400 for invalid path - missing name', async () => {
       const url = new URL('http://localhost:8787/api/mod/TestAuthor/versions');
-      const response = await handleModVersions(url);
+      const request = createMockRequest(url.toString());
+      const response = await handleModVersions(url, request);
 
       expect(response.status).toBe(400);
 
@@ -194,7 +213,8 @@ describe('Mods handlers', () => {
 
     it('should return 400 for invalid path - missing versions suffix', async () => {
       const url = new URL('http://localhost:8787/api/mod/TestAuthor/TestMod');
-      const response = await handleModVersions(url);
+      const request = createMockRequest(url.toString());
+      const response = await handleModVersions(url, request);
 
       expect(response.status).toBe(400);
 
@@ -212,7 +232,8 @@ describe('Mods handlers', () => {
       });
 
       const url = new URL('http://localhost:8787/api/mod/Unknown/Mod/versions?community=repo');
-      const response = await handleModVersions(url);
+      const request = createMockRequest(url.toString());
+      const response = await handleModVersions(url, request);
 
       expect(response.status).toBe(404);
 
@@ -231,7 +252,8 @@ describe('Mods handlers', () => {
       });
 
       const url = new URL('http://localhost:8787/api/mod/Test/Mod/versions?community=repo');
-      const response = await handleModVersions(url);
+      const request = createMockRequest(url.toString());
+      const response = await handleModVersions(url, request);
 
       expect(response.headers.get('Cache-Control')).toContain('max-age=300');
     });
