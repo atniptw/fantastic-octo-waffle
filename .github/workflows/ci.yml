@@ -43,6 +43,9 @@ jobs:
       - name: Type check
         run: pnpm typecheck
 
+      - name: Build
+        run: pnpm build
+
       - name: Dead code detection
         run: pnpm deadcode
 
