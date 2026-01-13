@@ -2,12 +2,7 @@
  * Mod list and version endpoints
  */
 
-import {
-  THUNDERSTORE_API_BASE,
-  USER_AGENT,
-  CACHE_DURATIONS,
-  FETCH_TIMEOUT_MS,
-} from '../constants';
+import { THUNDERSTORE_API_BASE, USER_AGENT, CACHE_DURATIONS, FETCH_TIMEOUT_MS } from '../constants';
 import { jsonError, jsonResponse } from '../utils/responses';
 import { checkRateLimit, getClientId } from '../utils/rate-limit';
 
@@ -152,6 +147,10 @@ export async function handleModVersions(url: URL, request: Request): Promise<Res
         504
       );
     }
-    return jsonError('upstream_error', 'Failed to process mod versions response from Thunderstore', 502);
+    return jsonError(
+      'upstream_error',
+      'Failed to process mod versions response from Thunderstore',
+      502
+    );
   }
 }
