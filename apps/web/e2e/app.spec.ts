@@ -3,9 +3,6 @@ import { test, expect } from '@playwright/test';
 /**
  * E2E tests for the cosmetic viewer web app.
  * These tests verify the entire user flow from browsing mods to viewing 3D models.
- *
- * NOTE: These tests require the web app to be fully implemented with index.html and UI components.
- * They are currently skipped and will be enabled in Phase 1 when the UI is implemented.
  */
 
 test.describe('Web App E2E Tests', () => {
@@ -16,13 +13,21 @@ test.describe('Web App E2E Tests', () => {
     expect(await page.evaluate(() => navigator.userAgent)).toBeTruthy();
   });
 
-  // TODO Phase 1: Enable this test when index.html and UI components are implemented
-  // Also uncomment webServer in playwright.config.ts
-  test.skip('navigates to home page', async ({ page }) => {
+  // Phase 0: Basic UI tests - ENABLED after #83
+  test('navigates to home page and displays stub UI', async ({ page }) => {
     await page.goto('/');
-    await expect(page).toHaveTitle(/fantastic-octo-waffle|Cosmetic Viewer/i);
+    await expect(page).toHaveTitle(/REPO Cosmetic Viewer/i);
+
+    // Check header is visible
+    const header = page.locator('h1');
+    await expect(header).toHaveText('REPO Cosmetic Viewer');
+
+    // Check welcome message
+    await expect(page.locator('text=Welcome!')).toBeVisible();
+    await expect(page.locator('text=Phase 0 - Setup Complete')).toBeVisible();
   });
 
+  // TODO Phase 1: Enable when mod list is implemented
   test.skip('displays mod list', async ({ page }) => {
     await page.goto('/');
     // Wait for mod list to load

@@ -16,10 +16,9 @@
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist node_modules .wrangler .mf"
   },
-  "dependencies": {},
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20241218.0",
     "vitest": "^2.1.8",
-    "wrangler": "^3.101.0"
+    "wrangler": "^4.59.0"
   }
 }

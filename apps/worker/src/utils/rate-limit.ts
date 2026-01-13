@@ -14,6 +14,7 @@ interface TokenBucket {
 const rateLimitStore = new Map<string, TokenBucket>();
 
 // Rate limit configurations
+// ts-prune-ignore-next (used internally and in tests)
 export const RATE_LIMITS = {
   API: {
     maxTokens: 100, // 100 requests
@@ -25,6 +26,7 @@ export const RATE_LIMITS = {
   },
 } as const;
 
+// ts-prune-ignore-next (used as type parameter)
 export type RateLimitType = keyof typeof RATE_LIMITS;
 
 /**
@@ -95,10 +97,11 @@ export function getClientId(request: Request): string {
 /**
  * Clean up old entries from rate limit store
  * Should be called periodically to prevent memory leaks
- * 
+ *
  * Note: This is called lazily during rate limit checks rather than on a timer
  * because Cloudflare Workers don't support setInterval at global scope
  */
+// ts-prune-ignore-next (used internally and exported for testing)
 export function cleanupRateLimitStore(): void {
   const now = Date.now() / 1000;
   const maxAge = 300; // 5 minutes

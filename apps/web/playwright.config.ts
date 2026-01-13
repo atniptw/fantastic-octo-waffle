@@ -46,36 +46,31 @@ export default defineConfig({
       use: { ...devices['Desktop Firefox'] },
     },
 
-    {
-      name: 'webkit',
-      use: { ...devices['Desktop Safari'] },
-    },
+    // WebKit disabled in dev containers due to missing system dependencies
+    // Re-enable in CI if running on a system with full webkit deps
+    // {
+    //   name: 'webkit',
+    //   use: { ...devices['Desktop Safari'] },
+    // },
 
     // Mobile viewports
     {
       name: 'Mobile Chrome',
       use: { ...devices['Pixel 5'] },
     },
-    {
-      name: 'Mobile Safari',
-      use: { ...devices['iPhone 12'] },
-    },
+
+    // Mobile Safari disabled (uses WebKit)
+    // {
+    //   name: 'Mobile Safari',
+    //   use: { ...devices['iPhone 12'] },
+    // },
   ],
 
-  // NOTE: webServer configuration is commented out until the app has index.html and UI components.
-  // The app currently has no entry point, so Vite dev server cannot start properly.
-  //
-  // Phase 1 TODO: When implementing the UI:
-  // 1. Create index.html entry point in apps/web/
-  // 2. Uncomment the webServer configuration below
-  // 3. Enable the skipped E2E tests in e2e/app.spec.ts (remove test.skip())
-  //
-  // Until then, E2E tests that don't require navigation (like setup verification) can run without a server.
-  //
-  // webServer: {
-  //   command: 'pnpm dev',
-  //   url: 'http://localhost:5173',
-  //   reuseExistingServer: !process.env.CI,
-  //   timeout: 120 * 1000,
-  // },
+  // Start dev server before running tests
+  webServer: {
+    command: 'pnpm dev',
+    url: 'http://localhost:5173',
+    reuseExistingServer: !process.env.CI,
+    timeout: 120 * 1000,
+  },
 });
