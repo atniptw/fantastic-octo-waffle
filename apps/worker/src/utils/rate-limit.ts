@@ -18,12 +18,10 @@ export const RATE_LIMITS = {
   API: {
     maxTokens: 100, // 100 requests
     refillRate: 100 / 60, // per second (100 per minute)
-    windowSeconds: 60,
   },
   PROXY: {
     maxTokens: 20, // 20 requests
     refillRate: 20 / 60, // per second (20 per minute)
-    windowSeconds: 60,
   },
 } as const;
 

@@ -1,6 +1,36 @@
 import tseslint from '@typescript-eslint/eslint-plugin';
 import tsparser from '@typescript-eslint/parser';
 
+// Common rules shared between JS and TS configurations
+const commonRules = {
+  // Error Prevention
+  'no-constant-condition': 'error',
+  'no-dupe-keys': 'error',
+  'no-duplicate-case': 'error',
+  'no-empty': 'error',
+  'no-ex-assign': 'error',
+  'no-extra-boolean-cast': 'error',
+  'no-func-assign': 'error',
+  'no-unreachable': 'error',
+  'valid-typeof': 'error',
+
+  // Best Practices
+  'no-console': ['warn', { allow: ['warn', 'error', 'info'] }],
+  'no-debugger': 'error',
+  'no-alert': 'warn',
+  'prefer-const': 'error',
+  'no-var': 'error',
+  eqeqeq: ['error', 'always'],
+  curly: ['error', 'all'],
+  'no-throw-literal': 'error',
+  'no-unused-expressions': 'error',
+  'no-return-await': 'warn',
+
+  // Style (minimal, Prettier handles most)
+  semi: ['error', 'always'],
+  quotes: ['error', 'single', { avoidEscape: true, allowTemplateLiterals: true }],
+};
+
 export default [
   {
     ignores: [
@@ -70,7 +100,6 @@ export default [
       },
     },
     rules: {
-      // Error Prevention
       'no-unused-vars': [
         'error',
         {
@@ -80,31 +109,7 @@ export default [
         },
       ],
       'no-undef': 'error',
-      'no-constant-condition': 'error',
-      'no-dupe-keys': 'error',
-      'no-duplicate-case': 'error',
-      'no-empty': 'error',
-      'no-ex-assign': 'error',
-      'no-extra-boolean-cast': 'error',
-      'no-func-assign': 'error',
-      'no-unreachable': 'error',
-      'valid-typeof': 'error',
-
-      // Best Practices
-      'no-console': ['warn', { allow: ['warn', 'error', 'info'] }],
-      'no-debugger': 'error',
-      'no-alert': 'warn',
-      'prefer-const': 'error',
-      'no-var': 'error',
-      eqeqeq: ['error', 'always'],
-      curly: ['error', 'all'],
-      'no-throw-literal': 'error',
-      'no-unused-expressions': 'error',
-      'no-return-await': 'warn',
-
-      // Style (minimal, Prettier handles most)
-      semi: ['error', 'always'],
-      quotes: ['error', 'single', { avoidEscape: true, allowTemplateLiterals: true }],
+      ...commonRules,
     },
   },
   {
@@ -189,32 +194,8 @@ export default [
       '@typescript-eslint/explicit-module-boundary-types': 'off',
       '@typescript-eslint/no-non-null-assertion': 'warn',
 
-      // Error Prevention
-      'no-constant-condition': 'error',
-      'no-dupe-keys': 'error',
-      'no-duplicate-case': 'error',
-      'no-empty': 'error',
-      'no-ex-assign': 'error',
-      'no-extra-boolean-cast': 'error',
-      'no-func-assign': 'error',
-      'no-unreachable': 'error',
-      'valid-typeof': 'error',
-
-      // Best Practices
-      'no-console': ['warn', { allow: ['warn', 'error', 'info'] }],
-      'no-debugger': 'error',
-      'no-alert': 'warn',
-      'prefer-const': 'error',
-      'no-var': 'error',
-      eqeqeq: ['error', 'always'],
-      curly: ['error', 'all'],
-      'no-throw-literal': 'error',
-      'no-unused-expressions': 'error',
-      'no-return-await': 'warn',
-
-      // Style (minimal, Prettier handles most)
-      semi: ['error', 'always'],
-      quotes: ['error', 'single', { avoidEscape: true, allowTemplateLiterals: true }],
+      // Apply common rules
+      ...commonRules,
     },
   },
 ];
