@@ -30,7 +30,7 @@ import './app.css';
  * - Shows loading and error states
  */
 export const App: FunctionalComponent = () => {
-  // Load mods when component mounts or page changes
+  // Load mods when component mounts
   useEffect(() => {
     const loadMods = async () => {
       isLoading.value = true;
@@ -50,24 +50,50 @@ export const App: FunctionalComponent = () => {
     };
 
     loadMods();
-  }, [currentPage.value, sortOrder.value]);
+  }, []);
 
   const handleModClick = (mod: ThunderstorePackageVersion) => {
     selectedMod.value = mod;
     // TODO: Navigate to mod detail or open modal
   };
 
-  const handlePreviousPage = () => {
+  const handlePreviousPage = async () => {
     if (hasPreviousPage.value) {
       currentPage.value -= 1;
       window.scrollTo({ top: 0, behavior: 'smooth' });
+      
+      // Reload mods for new page
+      isLoading.value = true;
+      error.value = null;
+      try {
+        const response = await fetchMods(currentPage.value, '', sortOrder.value);
+        mods.value = response.results;
+        totalCount.value = response.count;
+      } catch (err) {
+        error.value = err instanceof Error ? err.message : 'Failed to load mods';
+      } finally {
+        isLoading.value = false;
+      }
     }
   };
 
-  const handleNextPage = () => {
+  const handleNextPage = async () => {
     if (hasNextPage.value) {
       currentPage.value += 1;
       window.scrollTo({ top: 0, behavior: 'smooth' });
+      
+      // Reload mods for new page
+      isLoading.value = true;
+      error.value = null;
+      try {
+        const response = await fetchMods(currentPage.value, '', sortOrder.value);
+        mods.value = response.results;
+        totalCount.value = response.count;
+      } catch (err) {
+        error.value = err instanceof Error ? err.message : 'Failed to load mods';
+      } finally {
+        isLoading.value = false;
+      }
     }
   };
 

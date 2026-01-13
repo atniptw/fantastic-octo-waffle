@@ -11,4 +11,4 @@ if (!root) {
   throw new Error('Root element #app not found in DOM');
 }
 
-render(App({}), root);
+render(<App />, root);
