@@ -62,3 +62,28 @@ export interface ApiError {
   message: string;
   status: number;
 }
+
+/**
+ * Format download count (e.g., 1234 -> "1.2K")
+ */
+export function formatDownloads(count: number): string {
+  if (count >= 1000000) {
+    return `${(count / 1000000).toFixed(1)}M`;
+  }
+  if (count >= 1000) {
+    return `${(count / 1000).toFixed(1)}K`;
+  }
+  return count.toString();
+}
+
+/**
+ * Format rating score from 0-100 scale to 0-5 stars
+ */
+export function formatRating(score: number | undefined): string {
+  if (score === null || score === undefined) {
+    return 'N/A';
+  }
+  // Convert 0-100 to 0-5
+  const stars = (score / 100) * 5;
+  return `${stars.toFixed(1)} ★`;
+}

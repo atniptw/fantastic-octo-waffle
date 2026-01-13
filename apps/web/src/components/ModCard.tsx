@@ -4,6 +4,7 @@
 
 import type { FunctionalComponent } from 'preact';
 import type { ThunderstorePackageVersion } from '@fantastic-octo-waffle/utils';
+import { formatDownloads, formatRating } from '@fantastic-octo-waffle/utils';
 import './ModCard.css';
 
 export interface ModCardProps {
@@ -26,27 +27,6 @@ export const ModCard: FunctionalComponent<ModCardProps> = ({ mod, onClick }) => 
       e.preventDefault();
       onClick(mod);
     }
-  };
-
-  // Format download count (e.g., 1234 -> "1.2K")
-  const formatDownloads = (count: number): string => {
-    if (count >= 1000000) {
-      return `${(count / 1000000).toFixed(1)}M`;
-    }
-    if (count >= 1000) {
-      return `${(count / 1000).toFixed(1)}K`;
-    }
-    return count.toString();
-  };
-
-  // Format rating (0-100 scale to 0-5 stars)
-  const formatRating = (score: number | undefined): string => {
-    if (score === undefined || score === null) {
-      return 'N/A';
-    }
-    // Convert 0-100 to 0-5
-    const stars = (score / 100) * 5;
-    return `${stars.toFixed(1)} ★`;
   };
 
   return (
