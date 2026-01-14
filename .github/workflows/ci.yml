@@ -11,6 +11,7 @@ jobs:
     permissions:
       contents: read
     steps:
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-pnpm
 
       - name: Format check
@@ -22,6 +23,7 @@ jobs:
     permissions:
       contents: read
     steps:
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-pnpm
 
       - name: Lint
@@ -33,6 +35,7 @@ jobs:
     permissions:
       contents: read
     steps:
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-pnpm
 
       - name: Type check
@@ -44,6 +47,7 @@ jobs:
     permissions:
       contents: read
     steps:
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-pnpm
 
       - name: Build
@@ -64,6 +68,7 @@ jobs:
     permissions:
       contents: read
     steps:
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-pnpm
 
       - name: Dead code detection
@@ -75,6 +80,7 @@ jobs:
     permissions:
       contents: read
     steps:
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-pnpm
 
       - name: Run unit tests
@@ -86,6 +92,7 @@ jobs:
     permissions:
       contents: read
     steps:
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-pnpm
 
       - name: Run integration tests
@@ -98,6 +105,7 @@ jobs:
     permissions:
       contents: read
     steps:
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-pnpm
 
       - name: Download build artifacts
