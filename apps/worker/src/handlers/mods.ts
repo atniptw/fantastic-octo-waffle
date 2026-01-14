@@ -5,6 +5,7 @@
 import {
   getPackageListing,
   getPackageDetail,
+  ThunderstoreApiError,
   type ListingParams,
 } from '@fantastic-octo-waffle/thunderstore-client';
 import { THUNDERSTORE_API_BASE, USER_AGENT, CACHE_DURATIONS } from '../constants';
@@ -58,9 +59,9 @@ export async function handleModsList(url: URL, request: Request): Promise<Respon
       'Cache-Control': CACHE_DURATIONS.API,
     });
   } catch (error) {
-    if (error instanceof Error) {
-      // Check if it's a 404 error
-      if (error.message.includes('404')) {
+    // Handle typed Thunderstore API errors
+    if (error instanceof ThunderstoreApiError) {
+      if (error.status === 404) {
         return jsonError('invalid_community', `Community '${community}' not found`, 404);
       }
     }
@@ -88,10 +89,10 @@ export async function handleModVersions(url: URL, request: Request): Promise<Res
     return jsonError('invalid_path', 'Expected /api/mod/:namespace/:name/versions', 400);
   }
 
-  // Extract path components (validated by length check above)
-  const namespace = pathParts[2] as string;
-  const name = pathParts[3] as string;
-  const community: string = url.searchParams.get('community') || 'repo';
+  // Extract path components (guaranteed to exist due to length check above)
+  const namespace = pathParts[2]!;
+  const name = pathParts[3]!;
+  const community = url.searchParams.get('community') || 'repo';
 
   try {
     const data = await getPackageDetail(namespace, name, community, {
@@ -103,9 +104,9 @@ export async function handleModVersions(url: URL, request: Request): Promise<Res
       'Cache-Control': CACHE_DURATIONS.API,
     });
   } catch (error) {
-    if (error instanceof Error) {
-      // Check if it's a 404 error
-      if (error.message.includes('404')) {
+    // Handle typed Thunderstore API errors
+    if (error instanceof ThunderstoreApiError) {
+      if (error.status === 404) {
         return jsonError('mod_not_found', `Mod ${namespace}/${name} not found`, 404);
       }
     }

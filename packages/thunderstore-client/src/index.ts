@@ -103,8 +103,22 @@ export interface PackageDetail {
 }
 
 // ============================================================================
-// Client Configuration
+// Client Configuration & Errors
 // ============================================================================
+
+/**
+ * Custom error class for Thunderstore API errors
+ */
+export class ThunderstoreApiError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+    public readonly endpoint: string
+  ) {
+    super(message);
+    this.name = 'ThunderstoreApiError';
+  }
+}
 
 export interface ThunderstoreClientConfig {
   baseUrl?: string;
@@ -137,7 +151,10 @@ function createFetch(config: Required<ThunderstoreClientConfig>) {
           'User-Agent': config.userAgent,
           ...options?.headers,
         },
-        signal: controller.signal,
+        signal: options?.signal
+          ? // If caller provided a signal, respect both timeout and caller signal
+            createCombinedSignal(controller.signal, options.signal)
+          : controller.signal,
       });
 
       return response;
@@ -145,6 +162,20 @@ function createFetch(config: Required<ThunderstoreClientConfig>) {
       clearTimeout(timeoutId);
     }
   };
+}
+
+/**
+ * Combine two abort signals so either can cancel the request
+ */
+function createCombinedSignal(signal1: AbortSignal, signal2: AbortSignal): AbortSignal {
+  const controller = new AbortController();
+
+  const onAbort = () => controller.abort();
+
+  signal1.addEventListener('abort', onAbort, { once: true });
+  signal2.addEventListener('abort', onAbort, { once: true });
+
+  return controller.signal;
 }
 
 /**
@@ -161,7 +192,11 @@ export async function getCommunityMetadata(
   const response = await fetchWithConfig(url);
 
   if (!response.ok) {
-    throw new Error(`Failed to fetch community metadata: ${response.status}`);
+    throw new ThunderstoreApiError(
+      `Failed to fetch community metadata: ${response.status}`,
+      response.status,
+      url
+    );
   }
 
   return response.json() as Promise<CommunityMetadata>;
@@ -181,7 +216,11 @@ export async function getCommunityFilters(
   const response = await fetchWithConfig(url);
 
   if (!response.ok) {
-    throw new Error(`Failed to fetch community filters: ${response.status}`);
+    throw new ThunderstoreApiError(
+      `Failed to fetch community filters: ${response.status}`,
+      response.status,
+      url
+    );
   }
 
   return response.json() as Promise<CommunityFilters>;
@@ -248,7 +287,11 @@ export async function getPackageListing(
   const response = await fetchWithConfig(url.toString());
 
   if (!response.ok) {
-    throw new Error(`Failed to fetch package listing: ${response.status}`);
+    throw new ThunderstoreApiError(
+      `Failed to fetch package listing: ${response.status}`,
+      response.status,
+      url.toString()
+    );
   }
 
   return response.json() as Promise<ListingResponse>;
@@ -270,7 +313,11 @@ export async function getPackageDetail(
   const response = await fetchWithConfig(url);
 
   if (!response.ok) {
-    throw new Error(`Failed to fetch package detail: ${response.status}`);
+    throw new ThunderstoreApiError(
+      `Failed to fetch package detail: ${response.status}`,
+      response.status,
+      url
+    );
   }
 
   return response.json() as Promise<PackageDetail>;

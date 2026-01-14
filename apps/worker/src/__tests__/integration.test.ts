@@ -2,10 +2,24 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import worker from '../index';
 
 // Mock the thunderstore-client module
-vi.mock('@fantastic-octo-waffle/thunderstore-client', () => ({
-  getPackageListing: vi.fn(),
-  getPackageDetail: vi.fn(),
-}));
+vi.mock('@fantastic-octo-waffle/thunderstore-client', () => {
+  class ThunderstoreApiError extends Error {
+    constructor(
+      message: string,
+      public readonly status: number,
+      public readonly endpoint: string
+    ) {
+      super(message);
+      this.name = 'ThunderstoreApiError';
+    }
+  }
+
+  return {
+    getPackageListing: vi.fn(),
+    getPackageDetail: vi.fn(),
+    ThunderstoreApiError,
+  };
+});
 
 import { getPackageListing, getPackageDetail } from '@fantastic-octo-waffle/thunderstore-client';
 

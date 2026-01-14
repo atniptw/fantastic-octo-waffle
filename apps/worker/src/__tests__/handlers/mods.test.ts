@@ -2,12 +2,30 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { handleModsList, handleModVersions } from '../../handlers/mods';
 
 // Mock the thunderstore-client module
-vi.mock('@fantastic-octo-waffle/thunderstore-client', () => ({
-  getPackageListing: vi.fn(),
-  getPackageDetail: vi.fn(),
-}));
+vi.mock('@fantastic-octo-waffle/thunderstore-client', () => {
+  class ThunderstoreApiError extends Error {
+    constructor(
+      message: string,
+      public readonly status: number,
+      public readonly endpoint: string
+    ) {
+      super(message);
+      this.name = 'ThunderstoreApiError';
+    }
+  }
 
-import { getPackageListing, getPackageDetail } from '@fantastic-octo-waffle/thunderstore-client';
+  return {
+    getPackageListing: vi.fn(),
+    getPackageDetail: vi.fn(),
+    ThunderstoreApiError,
+  };
+});
+
+import {
+  getPackageListing,
+  getPackageDetail,
+  ThunderstoreApiError,
+} from '@fantastic-octo-waffle/thunderstore-client';
 
 // Helper to create mock requests
 function createMockRequest(url: string): Request {
@@ -153,7 +171,7 @@ describe('Mods handlers', () => {
 
     it('should return 404 for invalid community', async () => {
       (getPackageListing as any).mockRejectedValueOnce(
-        new Error('Failed to fetch package listing: 404')
+        new ThunderstoreApiError('Failed to fetch package listing: 404', 404, 'http://example.com')
       );
 
       const url = new URL('http://localhost:8787/api/mods?community=invalid');
@@ -288,7 +306,7 @@ describe('Mods handlers', () => {
 
     it('should return 404 for non-existent mod', async () => {
       (getPackageDetail as any).mockRejectedValueOnce(
-        new Error('Failed to fetch package detail: 404')
+        new ThunderstoreApiError('Failed to fetch package detail: 404', 404, 'http://example.com')
       );
 
       const url = new URL('http://localhost:8787/api/mod/Unknown/Mod/versions?community=repo');
