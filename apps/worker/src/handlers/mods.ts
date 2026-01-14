@@ -88,9 +88,9 @@ export async function handleModVersions(url: URL, request: Request): Promise<Res
     return jsonError('invalid_path', 'Expected /api/mod/:namespace/:name/versions', 400);
   }
 
-  const namespace = pathParts[2];
-  const name = pathParts[3];
-  const community = url.searchParams.get('community') || 'repo';
+  const namespace = pathParts[2]!; // Safe: length is 5
+  const name = pathParts[3]!; // Safe: length is 5
+  const community: string = url.searchParams.get('community') || 'repo';
 
   try {
     const data = await getPackageDetail(namespace, name, community, {

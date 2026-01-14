@@ -80,6 +80,10 @@ importers:
         version: 2.1.9(@types/node@25.0.6)(jsdom@26.1.0)
 
   apps/worker:
+    dependencies:
+      '@fantastic-octo-waffle/thunderstore-client':
+        specifier: workspace:*
+        version: link:../../packages/thunderstore-client
     devDependencies:
       '@cloudflare/workers-types':
         specifier: ^4.20241218.0

@@ -164,7 +164,7 @@ export async function getCommunityMetadata(
     throw new Error(`Failed to fetch community metadata: ${response.status}`);
   }
 
-  return response.json();
+  return response.json() as Promise<CommunityMetadata>;
 }
 
 /**
@@ -184,7 +184,7 @@ export async function getCommunityFilters(
     throw new Error(`Failed to fetch community filters: ${response.status}`);
   }
 
-  return response.json();
+  return response.json() as Promise<CommunityFilters>;
 }
 
 /**
@@ -251,7 +251,7 @@ export async function getPackageListing(
     throw new Error(`Failed to fetch package listing: ${response.status}`);
   }
 
-  return response.json();
+  return response.json() as Promise<ListingResponse>;
 }
 
 /**
@@ -273,5 +273,5 @@ export async function getPackageDetail(
     throw new Error(`Failed to fetch package detail: ${response.status}`);
   }
 
-  return response.json();
+  return response.json() as Promise<PackageDetail>;
 }

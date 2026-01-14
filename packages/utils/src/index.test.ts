@@ -5,7 +5,6 @@ import {
   getLatestVersion,
   getTotalDownloads,
   type ThunderstorePackageListing,
-  type ThunderstorePackageVersion,
 } from './index';
 
 describe('Utils', () => {

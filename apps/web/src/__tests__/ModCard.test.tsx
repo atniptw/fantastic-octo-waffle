@@ -88,9 +88,14 @@ describe('ModCard', () => {
   });
 
   it('should handle mod without description', () => {
-    const modWithoutDesc = {
+    const modWithoutDesc: ThunderstorePackageListing = {
       ...mockMod,
-      versions: [{ ...mockMod.versions[0], description: '' }],
+      versions: [
+        {
+          ...mockMod.versions[0]!,
+          description: '',
+        },
+      ],
     };
     const onClick = vi.fn();
     render(<ModCard mod={modWithoutDesc} onClick={onClick} />);
@@ -99,7 +104,7 @@ describe('ModCard', () => {
   });
 
   it('should handle mod without versions', () => {
-    const modWithoutVersions = { ...mockMod, versions: [] };
+    const modWithoutVersions: ThunderstorePackageListing = { ...mockMod, versions: [] };
     const onClick = vi.fn();
     render(<ModCard mod={modWithoutVersions} onClick={onClick} />);
 

@@ -2,10 +2,10 @@
 
 ## Purpose
 
-The Cloudflare Worker acts as a **CORS-safe proxy** for the Thunderstore API and mod download endpoints. It handles:
+The Cloudflare Worker acts as a **CORS-safe proxy** for the Thunderstore community listing API and mod download endpoints. It handles:
 
-- Listing mods by community (with search, pagination, sorting).
-- Fetching mod version metadata and download URLs.
+- Listing mods by community (with search, pagination, sorting) using the new community listing API.
+- Fetching mod version metadata and download URLs from the new package detail API.
 - Proxying zip file downloads with range-request and size-limit support.
 - Enforcing allowlists and rate limits to prevent abuse.
 
@@ -30,34 +30,47 @@ GET /api/mods
   &sort=downloads              (optional; 'downloads', 'newest', 'rating')
 ```
 
-**Purpose:** Fetch paginated list of mods for a given Thunderstore community.
+**Purpose:** Fetch paginated list of mods for a given Thunderstore community using the new community listing API.
 
-**Proxy to:** `https://new.thunderstore.io/api/cyberstacks/repo/packages/?query=...&page=...&ordering=...`
+**Proxy to:** `https://thunderstore.io/listing/{community}/?q=...&page=...&ordering=...`
 
 **Response (200 OK):**
 
 ```json
 {
   "count": 42,
-  "next": "https://new.thunderstore.io/api/cyberstacks/repo/packages/?page=2&...",
+  "next": "https://thunderstore.io/listing/repo/?page=2&...",
   "previous": null,
   "results": [
     {
       "namespace": "Author",
       "name": "CoolHeadMod",
-      "full_name": "Author/CoolHeadMod",
+      "full_name": "Author-CoolHeadMod",
       "owner": "Author",
-      "package_id": 12345,
+      "package_url": "https://thunderstore.io/c/repo/p/Author/CoolHeadMod/",
+      "date_created": "2024-01-10T12:00:00Z",
+      "date_updated": "2024-01-15T12:00:00Z",
+      "uuid4": "abc123...",
+      "rating_score": 85,
+      "is_pinned": false,
       "is_deprecated": false,
-      "total_downloads": 5000,
-      "icon": "https://cdn.thunderstore.io/...",
+      "has_nsfw_content": false,
+      "categories": ["cosmetics", "heads"],
       "versions": [
         {
-          "number": "1.2.3",
+          "name": "Author-CoolHeadMod",
+          "full_name": "Author-CoolHeadMod-1.2.3",
+          "description": "Adds cool heads...",
+          "icon": "https://cdn.thunderstore.io/...",
+          "version_number": "1.2.3",
+          "dependencies": [],
+          "download_url": "https://cdn.thunderstore.io/file/Author-CoolHeadMod-1.2.3.zip",
           "downloads": 500,
-          "timestamp": "2024-01-10T12:00:00Z",
-          "file_name": "Author-CoolHeadMod-1.2.3.zip",
-          "download_url": "https://cdn.thunderstore.io/file/Author-CoolHeadMod-1.2.3.zip"
+          "date_created": "2024-01-10T12:00:00Z",
+          "website_url": "https://github.com/...",
+          "is_active": true,
+          "uuid4": "version-uuid...",
+          "file_size": 5000000
         }
       ]
     }
@@ -77,11 +90,12 @@ GET /api/mods
 
 ```
 GET /api/mod/:namespace/:name/versions
+  ?community=repo              (optional; default 'repo')
 ```
 
-**Purpose:** Fetch all versions and metadata for a specific mod.
+**Purpose:** Fetch all versions and metadata for a specific mod using the new package detail API.
 
-**Proxy to:** `https://new.thunderstore.io/api/cyberstacks/repo/packages/:namespace/:name/`
+**Proxy to:** `https://thunderstore.io/api/cyberstorm/community/{community}/package/{namespace}/{name}/`
 
 **Response (200 OK):**
 
@@ -89,16 +103,29 @@ GET /api/mod/:namespace/:name/versions
 {
   "namespace": "Author",
   "name": "CoolHeadMod",
-  "full_name": "Author/CoolHeadMod",
-  "description": "Adds cool heads...",
-  "wiki_url": "https://github.com/...",
+  "full_name": "Author-CoolHeadMod",
+  "owner": "Author",
+  "package_url": "https://thunderstore.io/c/repo/p/Author/CoolHeadMod/",
+  "date_created": "2024-01-10T12:00:00Z",
+  "date_updated": "2024-01-15T12:00:00Z",
+  "rating_score": 85,
+  "is_pinned": false,
+  "is_deprecated": false,
+  "categories": ["cosmetics", "heads"],
   "versions": [
     {
-      "number": "1.2.3",
-      "downloads": 500,
-      "timestamp": "2024-01-10T12:00:00Z",
-      "file_name": "Author-CoolHeadMod-1.2.3.zip",
+      "name": "Author-CoolHeadMod",
+      "full_name": "Author-CoolHeadMod-1.2.3",
+      "description": "Adds cool heads...",
+      "icon": "https://cdn.thunderstore.io/...",
+      "version_number": "1.2.3",
+      "dependencies": [],
       "download_url": "https://cdn.thunderstore.io/file/Author-CoolHeadMod-1.2.3.zip",
+      "downloads": 500,
+      "date_created": "2024-01-10T12:00:00Z",
+      "website_url": "https://github.com/...",
+      "is_active": true,
+      "uuid4": "version-uuid...",
       "file_size": 5000000
     }
   ]
@@ -234,18 +261,37 @@ GET /api/mods?community=repo&query=head&page=1&sort=downloads
 ```json
 {
   "count": 15,
-  "next": "https://worker.dev/api/mods?community=repo&query=head&page=2",
+  "next": "https://thunderstore.io/listing/repo/?q=head&page=2&ordering=-downloads",
+  "previous": null,
   "results": [
     {
       "namespace": "Masaicker",
       "name": "MoreHead",
-      "full_name": "Masaicker/MoreHead",
-      "total_downloads": 10000,
+      "full_name": "Masaicker-MoreHead",
+      "owner": "Masaicker",
+      "package_url": "https://thunderstore.io/c/repo/p/Masaicker/MoreHead/",
+      "date_created": "2024-01-01T00:00:00Z",
+      "date_updated": "2024-01-15T00:00:00Z",
+      "uuid4": "uuid-here",
+      "rating_score": 90,
+      "is_pinned": false,
+      "is_deprecated": false,
+      "has_nsfw_content": false,
+      "categories": ["cosmetics", "heads"],
       "versions": [
         {
-          "number": "1.5.0",
+          "name": "Masaicker-MoreHead",
+          "full_name": "Masaicker-MoreHead-1.5.0",
+          "description": "Adds more head cosmetics",
+          "icon": "https://cdn.thunderstore.io/icon.png",
+          "version_number": "1.5.0",
+          "dependencies": [],
+          "download_url": "https://cdn.thunderstore.io/file/Masaicker-MoreHead-1.5.0.zip",
           "downloads": 5000,
-          "download_url": "https://cdn.thunderstore.io/file/Masaicker-MoreHead-1.5.0.zip"
+          "date_created": "2024-01-15T00:00:00Z",
+          "is_active": true,
+          "uuid4": "version-uuid",
+          "file_size": 8000000
         }
       ]
     }
