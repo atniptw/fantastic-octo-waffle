@@ -156,7 +156,7 @@ export async function getCommunityMetadata(
 ): Promise<CommunityMetadata> {
   const mergedConfig = { ...DEFAULT_CONFIG, ...config };
   const fetchWithConfig = createFetch(mergedConfig);
-  
+
   const url = `${mergedConfig.baseUrl}/api/cyberstorm/community/${community}/`;
   const response = await fetchWithConfig(url);
 
@@ -176,7 +176,7 @@ export async function getCommunityFilters(
 ): Promise<CommunityFilters> {
   const mergedConfig = { ...DEFAULT_CONFIG, ...config };
   const fetchWithConfig = createFetch(mergedConfig);
-  
+
   const url = `${mergedConfig.baseUrl}/community/${community}/filters/`;
   const response = await fetchWithConfig(url);
 
@@ -216,7 +216,7 @@ export async function getPackageListing(
 ): Promise<ListingResponse> {
   const mergedConfig = { ...DEFAULT_CONFIG, ...config };
   const fetchWithConfig = createFetch(mergedConfig);
-  
+
   const community = params.community || 'repo';
   const url = new URL(`${mergedConfig.baseUrl}/listing/${community}/`);
 
@@ -224,23 +224,23 @@ export async function getPackageListing(
   if (params.page) {
     url.searchParams.set('page', params.page.toString());
   }
-  
+
   if (params.q) {
     url.searchParams.set('q', params.q);
   }
-  
+
   if (params.included_categories && params.included_categories.length > 0) {
     url.searchParams.set('included_categories', params.included_categories.join(','));
   }
-  
+
   if (params.section) {
     url.searchParams.set('section', params.section);
   }
-  
+
   if (params.ordering) {
     url.searchParams.set('ordering', params.ordering);
   }
-  
+
   if (params.page_size) {
     url.searchParams.set('page_size', params.page_size.toString());
   }
@@ -265,7 +265,7 @@ export async function getPackageDetail(
 ): Promise<PackageDetail> {
   const mergedConfig = { ...DEFAULT_CONFIG, ...config };
   const fetchWithConfig = createFetch(mergedConfig);
-  
+
   const url = `${mergedConfig.baseUrl}/api/cyberstorm/community/${community}/package/${namespace}/${name}/`;
   const response = await fetchWithConfig(url);
 

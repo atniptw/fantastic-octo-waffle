@@ -51,7 +51,11 @@ describe('Thunderstore Client', () => {
       (global.fetch as any).mockResolvedValueOnce({
         ok: true,
         status: 200,
-        json: async () => ({ name: 'REPO', identifier: 'repo', require_package_listing_approval: false }),
+        json: async () => ({
+          name: 'REPO',
+          identifier: 'repo',
+          require_package_listing_approval: false,
+        }),
       });
 
       await getCommunityMetadata();
@@ -175,9 +179,7 @@ describe('Thunderstore Client', () => {
         status: 500,
       });
 
-      await expect(getPackageListing()).rejects.toThrow(
-        'Failed to fetch package listing: 500'
-      );
+      await expect(getPackageListing()).rejects.toThrow('Failed to fetch package listing: 500');
     });
   });
 
@@ -252,5 +254,4 @@ describe('Thunderstore Client', () => {
       );
     });
   });
-
 });
