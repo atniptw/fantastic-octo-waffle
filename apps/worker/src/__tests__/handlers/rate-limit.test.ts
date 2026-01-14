@@ -2,6 +2,14 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { handleModsList } from '../../handlers/mods';
 import { handleProxy } from '../../handlers/proxy';
 
+// Mock the thunderstore-client module
+vi.mock('@fantastic-octo-waffle/thunderstore-client', () => ({
+  getPackageListing: vi.fn(),
+  getPackageDetail: vi.fn(),
+}));
+
+import { getPackageListing } from '@fantastic-octo-waffle/thunderstore-client';
+
 // Helper to create mock requests with specific IP
 function createMockRequest(url: string, ip: string, options?: RequestInit): Request {
   return new Request(url, {
@@ -16,7 +24,14 @@ function createMockRequest(url: string, ip: string, options?: RequestInit): Requ
 describe('Rate Limiting', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Mock fetch for successful responses
+    // Mock thunderstore-client for successful responses
+    (getPackageListing as any).mockResolvedValue({
+      count: 0,
+      next: null,
+      previous: null,
+      results: [],
+    });
+    // Mock fetch for proxy requests
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,

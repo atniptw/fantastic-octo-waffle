@@ -1,6 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import worker from '../index';
 
+// Mock the thunderstore-client module
+vi.mock('@fantastic-octo-waffle/thunderstore-client', () => ({
+  getPackageListing: vi.fn(),
+  getPackageDetail: vi.fn(),
+}));
+
+import { getPackageListing, getPackageDetail } from '@fantastic-octo-waffle/thunderstore-client';
+
 describe('Worker Integration', () => {
   const mockEnv = {};
 
@@ -19,31 +27,41 @@ describe('Worker Integration', () => {
     });
 
     it('should route api/mods requests to mods handler', async () => {
-      globalThis.fetch = vi.fn().mockResolvedValue({
-        ok: true,
-        status: 200,
-        json: async () => ({ count: 0, results: [] }),
+      (getPackageListing as any).mockResolvedValueOnce({
+        count: 0,
+        next: null,
+        previous: null,
+        results: [],
       });
 
       const request = new Request('http://localhost:8787/api/mods?community=repo');
       const response = await worker.fetch(request, mockEnv);
 
       expect(response.status).toBe(200);
-      expect(globalThis.fetch).toHaveBeenCalled();
+      expect(getPackageListing).toHaveBeenCalled();
     });
 
     it('should route api/mod/:namespace/:name/versions to mods handler', async () => {
-      globalThis.fetch = vi.fn().mockResolvedValue({
-        ok: true,
-        status: 200,
-        json: async () => ({ namespace: 'Test', name: 'Mod', versions: [] }),
+      (getPackageDetail as any).mockResolvedValueOnce({
+        namespace: 'Test',
+        name: 'Mod',
+        full_name: 'Test-Mod',
+        owner: 'Test',
+        package_url: '',
+        date_created: '',
+        date_updated: '',
+        rating_score: 0,
+        is_pinned: false,
+        is_deprecated: false,
+        categories: [],
+        versions: [],
       });
 
       const request = new Request('http://localhost:8787/api/mod/Test/Mod/versions?community=repo');
       const response = await worker.fetch(request, mockEnv);
 
       expect(response.status).toBe(200);
-      expect(globalThis.fetch).toHaveBeenCalled();
+      expect(getPackageDetail).toHaveBeenCalled();
     });
 
     it('should route proxy requests to proxy handler', async () => {
@@ -92,7 +110,7 @@ describe('Worker Integration', () => {
 
   describe('Error handling', () => {
     it('should catch and report handler errors', async () => {
-      globalThis.fetch = vi.fn().mockRejectedValue(new Error('Unexpected error'));
+      (getPackageListing as any).mockRejectedValueOnce(new Error('Unexpected error'));
 
       const request = new Request('http://localhost:8787/api/mods?community=repo');
       const response = await worker.fetch(request, mockEnv);

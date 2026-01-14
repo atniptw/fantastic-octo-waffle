@@ -2,8 +2,8 @@
  * Cloudflare Worker constants
  */
 
-// Thunderstore API base URL
-export const THUNDERSTORE_API_BASE = 'https://thunderstore.io/api/experimental';
+// Thunderstore API base URL (new community API)
+export const THUNDERSTORE_API_BASE = 'https://thunderstore.io';
 
 // User agent for upstream requests
 export const USER_AGENT = 'fantastic-octo-waffle-worker/0.1.0';
