@@ -1,35 +1,71 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/preact';
 import { ModList } from '../components/ModList';
-import type { ThunderstorePackageVersion } from '@fantastic-octo-waffle/utils';
+import type { ThunderstorePackageListing } from '@fantastic-octo-waffle/utils';
 
 describe('ModList', () => {
-  const mockMods: ThunderstorePackageVersion[] = [
+  const mockMods: ThunderstorePackageListing[] = [
     {
       namespace: 'Author1',
       name: 'Mod1',
-      full_name: 'Author1/Mod1',
-      description: 'First test mod',
-      version_number: '1.0.0',
-      dependencies: [],
-      download_url: 'https://example.com/mod1.zip',
-      downloads: 100,
+      full_name: 'Author1-Mod1',
+      owner: 'Author1',
+      package_url: 'https://thunderstore.io/c/repo/p/Author1/Mod1/',
       date_created: '2024-01-01T00:00:00Z',
-      is_deprecated: false,
+      date_updated: '2024-01-01T00:00:00Z',
+      uuid4: 'uuid1',
+      rating_score: 80,
       is_pinned: false,
+      is_deprecated: false,
+      has_nsfw_content: false,
+      categories: ['cosmetics'],
+      versions: [
+        {
+          name: 'Author1-Mod1',
+          full_name: 'Author1-Mod1-1.0.0',
+          description: 'First test mod',
+          icon: 'https://example.com/icon1.png',
+          version_number: '1.0.0',
+          dependencies: [],
+          download_url: 'https://example.com/mod1.zip',
+          downloads: 100,
+          date_created: '2024-01-01T00:00:00Z',
+          is_active: true,
+          uuid4: 'version-uuid1',
+          file_size: 1000000,
+        },
+      ],
     },
     {
       namespace: 'Author2',
       name: 'Mod2',
-      full_name: 'Author2/Mod2',
-      description: 'Second test mod',
-      version_number: '2.0.0',
-      dependencies: [],
-      download_url: 'https://example.com/mod2.zip',
-      downloads: 200,
+      full_name: 'Author2-Mod2',
+      owner: 'Author2',
+      package_url: 'https://thunderstore.io/c/repo/p/Author2/Mod2/',
       date_created: '2024-01-02T00:00:00Z',
-      is_deprecated: false,
+      date_updated: '2024-01-02T00:00:00Z',
+      uuid4: 'uuid2',
+      rating_score: 90,
       is_pinned: false,
+      is_deprecated: false,
+      has_nsfw_content: false,
+      categories: ['cosmetics'],
+      versions: [
+        {
+          name: 'Author2-Mod2',
+          full_name: 'Author2-Mod2-2.0.0',
+          description: 'Second test mod',
+          icon: 'https://example.com/icon2.png',
+          version_number: '2.0.0',
+          dependencies: [],
+          download_url: 'https://example.com/mod2.zip',
+          downloads: 200,
+          date_created: '2024-01-02T00:00:00Z',
+          is_active: true,
+          uuid4: 'version-uuid2',
+          file_size: 2000000,
+        },
+      ],
     },
   ];
 

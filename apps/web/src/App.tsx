@@ -1,6 +1,6 @@
 import type { FunctionalComponent } from 'preact';
 import { useEffect, useCallback } from 'preact/hooks';
-import type { ThunderstorePackageVersion } from '@fantastic-octo-waffle/utils';
+import type { ThunderstorePackageListing } from '@fantastic-octo-waffle/utils';
 import { fetchMods } from './lib/api';
 import {
   mods,
@@ -57,7 +57,7 @@ export const App: FunctionalComponent = () => {
     loadModsForPage(currentPage.value);
   }, [loadModsForPage]);
 
-  const handleModClick = (mod: ThunderstorePackageVersion) => {
+  const handleModClick = (mod: ThunderstorePackageListing) => {
     selectedMod.value = mod;
     // TODO: Navigate to mod detail or open modal
   };

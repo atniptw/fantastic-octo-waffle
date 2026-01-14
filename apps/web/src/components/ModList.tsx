@@ -3,15 +3,15 @@
  */
 
 import type { FunctionalComponent } from 'preact';
-import type { ThunderstorePackageVersion } from '@fantastic-octo-waffle/utils';
+import type { ThunderstorePackageListing } from '@fantastic-octo-waffle/utils';
 import { ModCard } from './ModCard';
 import './ModList.css';
 
 export interface ModListProps {
   /** Array of mods to display */
-  mods: ThunderstorePackageVersion[];
+  mods: ThunderstorePackageListing[];
   /** Callback when a mod card is clicked */
-  onModClick: (mod: ThunderstorePackageVersion) => void;
+  onModClick: (mod: ThunderstorePackageListing) => void;
 }
 
 /**
