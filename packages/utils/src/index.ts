@@ -126,11 +126,13 @@ export function formatRating(score: number | undefined): string {
 
 /**
  * Get the latest version from a package listing
+ * 
+ * Note: The Thunderstore API returns versions in descending chronological order
+ * (newest first), so the first element is always the latest version.
  */
 export function getLatestVersion(
   pkg: ThunderstorePackageListing
 ): ThunderstorePackageVersion | undefined {
-  // Versions are typically ordered with newest first
   return pkg.versions[0];
 }
 
