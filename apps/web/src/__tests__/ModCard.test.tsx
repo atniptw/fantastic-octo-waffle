@@ -1,24 +1,40 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/preact';
 import { ModCard } from '../components/ModCard';
-import type { ThunderstorePackageVersion } from '@fantastic-octo-waffle/utils';
+import type { ThunderstorePackageListing } from '@fantastic-octo-waffle/utils';
 
 describe('ModCard', () => {
-  const mockMod: ThunderstorePackageVersion = {
+  const mockMod: ThunderstorePackageListing = {
     namespace: 'TestAuthor',
     name: 'TestMod',
-    full_name: 'TestAuthor/TestMod',
-    description: 'A test mod for testing',
-    version_number: '1.0.0',
-    dependencies: [],
-    download_url: 'https://example.com/mod.zip',
-    downloads: 1234,
+    full_name: 'TestAuthor-TestMod',
+    owner: 'TestAuthor',
+    package_url: 'https://thunderstore.io/c/repo/p/TestAuthor/TestMod/',
     date_created: '2024-01-01T00:00:00Z',
-    icon_url: 'https://example.com/icon.png',
-    website_url: 'https://example.com',
-    is_deprecated: false,
-    is_pinned: false,
+    date_updated: '2024-01-01T00:00:00Z',
+    uuid4: 'test-uuid',
     rating_score: 85,
+    is_pinned: false,
+    is_deprecated: false,
+    has_nsfw_content: false,
+    categories: ['cosmetics'],
+    versions: [
+      {
+        name: 'TestAuthor-TestMod',
+        full_name: 'TestAuthor-TestMod-1.0.0',
+        description: 'A test mod for testing',
+        icon: 'https://example.com/icon.png',
+        version_number: '1.0.0',
+        dependencies: [],
+        download_url: 'https://example.com/mod.zip',
+        downloads: 1234,
+        date_created: '2024-01-01T00:00:00Z',
+        website_url: 'https://example.com',
+        is_active: true,
+        uuid4: 'version-uuid',
+        file_size: 1000000,
+      },
+    ],
   };
 
   it('should render mod information', () => {
@@ -44,7 +60,7 @@ describe('ModCard', () => {
     const onClick = vi.fn();
     render(<ModCard mod={mockMod} onClick={onClick} />);
 
-    // Downloads: 1234 should be formatted as 1.2K
+    // Total downloads: 1234 should be formatted as 1.2K
     expect(screen.getByText(/1\.2K/)).toBeDefined();
   });
 
@@ -63,7 +79,7 @@ describe('ModCard', () => {
     expect(screen.getByText(/v1\.0\.0/)).toBeDefined();
   });
 
-  it('should render icon when icon_url is provided', () => {
+  it('should render icon when icon is provided', () => {
     const onClick = vi.fn();
     render(<ModCard mod={mockMod} onClick={onClick} />);
 
@@ -72,10 +88,27 @@ describe('ModCard', () => {
   });
 
   it('should handle mod without description', () => {
-    const modWithoutDesc = { ...mockMod, description: '' };
+    const modWithoutDesc: ThunderstorePackageListing = {
+      ...mockMod,
+      versions: [
+        {
+          ...mockMod.versions[0]!,
+          description: '',
+        },
+      ],
+    };
     const onClick = vi.fn();
     render(<ModCard mod={modWithoutDesc} onClick={onClick} />);
 
+    expect(screen.getByText('No description available')).toBeDefined();
+  });
+
+  it('should handle mod without versions', () => {
+    const modWithoutVersions: ThunderstorePackageListing = { ...mockMod, versions: [] };
+    const onClick = vi.fn();
+    render(<ModCard mod={modWithoutVersions} onClick={onClick} />);
+
+    expect(screen.getByText('TestMod')).toBeDefined();
     expect(screen.getByText('No description available')).toBeDefined();
   });
 });

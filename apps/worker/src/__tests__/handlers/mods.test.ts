@@ -1,6 +1,32 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { handleModsList, handleModVersions } from '../../handlers/mods';
 
+// Mock the thunderstore-client module
+vi.mock('@fantastic-octo-waffle/thunderstore-client', () => {
+  class ThunderstoreApiError extends Error {
+    constructor(
+      message: string,
+      public readonly status: number,
+      public readonly endpoint: string
+    ) {
+      super(message);
+      this.name = 'ThunderstoreApiError';
+    }
+  }
+
+  return {
+    getPackageListing: vi.fn(),
+    getPackageDetail: vi.fn(),
+    ThunderstoreApiError,
+  };
+});
+
+import {
+  getPackageListing,
+  getPackageDetail,
+  ThunderstoreApiError,
+} from '@fantastic-octo-waffle/thunderstore-client';
+
 // Helper to create mock requests
 function createMockRequest(url: string): Request {
   return new Request(url, {
@@ -16,32 +42,47 @@ describe('Mods handlers', () => {
   });
 
   describe('handleModsList', () => {
-    it('should proxy mod list request to Thunderstore', async () => {
+    it('should proxy mod list request to new Thunderstore listing API', async () => {
       const mockResponse = {
         count: 2,
+        next: null,
+        previous: null,
         results: [
           {
             namespace: 'TestAuthor',
             name: 'TestMod',
-            full_name: 'TestAuthor/TestMod',
+            full_name: 'TestAuthor-TestMod',
+            owner: 'TestAuthor',
+            package_url: 'https://thunderstore.io/c/repo/p/TestAuthor/TestMod/',
+            date_created: '2024-01-01T00:00:00Z',
+            date_updated: '2024-01-01T00:00:00Z',
+            uuid4: 'test-uuid',
+            rating_score: 85,
+            is_pinned: false,
+            is_deprecated: false,
+            has_nsfw_content: false,
+            categories: ['cosmetics'],
+            versions: [],
           },
         ],
       };
 
-      globalThis.fetch = vi.fn().mockResolvedValue({
-        ok: true,
-        status: 200,
-        json: async () => mockResponse,
-      });
+      (getPackageListing as any).mockResolvedValueOnce(mockResponse);
 
       const url = new URL('http://localhost:8787/api/mods?community=repo');
       const request = createMockRequest(url.toString());
       const response = await handleModsList(url, request);
 
       expect(response.status).toBe(200);
-      expect(globalThis.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('thunderstore.io/api/experimental/frontend/c/repo'),
-        expect.any(Object)
+      expect(getPackageListing).toHaveBeenCalledWith(
+        expect.objectContaining({
+          community: 'repo',
+          page: 1,
+        }),
+        expect.objectContaining({
+          baseUrl: 'https://thunderstore.io',
+          userAgent: expect.any(String),
+        })
       );
 
       const data = await response.json();
@@ -49,78 +90,89 @@ describe('Mods handlers', () => {
     });
 
     it('should handle query parameter', async () => {
-      globalThis.fetch = vi.fn().mockResolvedValue({
-        ok: true,
-        status: 200,
-        json: async () => ({ count: 0, results: [] }),
+      (getPackageListing as any).mockResolvedValueOnce({
+        count: 0,
+        next: null,
+        previous: null,
+        results: [],
       });
 
       const url = new URL('http://localhost:8787/api/mods?community=repo&query=head');
       const request = createMockRequest(url.toString());
       await handleModsList(url, request);
 
-      expect(globalThis.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('q=head'),
+      expect(getPackageListing).toHaveBeenCalledWith(
+        expect.objectContaining({
+          q: 'head',
+        }),
         expect.any(Object)
       );
     });
 
     it('should handle sort parameter - downloads', async () => {
-      globalThis.fetch = vi.fn().mockResolvedValue({
-        ok: true,
-        status: 200,
-        json: async () => ({ count: 0, results: [] }),
+      (getPackageListing as any).mockResolvedValueOnce({
+        count: 0,
+        next: null,
+        previous: null,
+        results: [],
       });
 
       const url = new URL('http://localhost:8787/api/mods?community=repo&sort=downloads');
       const request = createMockRequest(url.toString());
       await handleModsList(url, request);
 
-      expect(globalThis.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('ordering=-downloads'),
+      expect(getPackageListing).toHaveBeenCalledWith(
+        expect.objectContaining({
+          ordering: '-downloads',
+        }),
         expect.any(Object)
       );
     });
 
     it('should handle sort parameter - newest', async () => {
-      globalThis.fetch = vi.fn().mockResolvedValue({
-        ok: true,
-        status: 200,
-        json: async () => ({ count: 0, results: [] }),
+      (getPackageListing as any).mockResolvedValueOnce({
+        count: 0,
+        next: null,
+        previous: null,
+        results: [],
       });
 
       const url = new URL('http://localhost:8787/api/mods?community=repo&sort=newest');
       const request = createMockRequest(url.toString());
       await handleModsList(url, request);
 
-      expect(globalThis.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('ordering=-date_created'),
+      expect(getPackageListing).toHaveBeenCalledWith(
+        expect.objectContaining({
+          ordering: '-date_created',
+        }),
         expect.any(Object)
       );
     });
 
     it('should handle sort parameter - rating', async () => {
-      globalThis.fetch = vi.fn().mockResolvedValue({
-        ok: true,
-        status: 200,
-        json: async () => ({ count: 0, results: [] }),
+      (getPackageListing as any).mockResolvedValueOnce({
+        count: 0,
+        next: null,
+        previous: null,
+        results: [],
       });
 
       const url = new URL('http://localhost:8787/api/mods?community=repo&sort=rating');
       const request = createMockRequest(url.toString());
       await handleModsList(url, request);
 
-      expect(globalThis.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('ordering=-rating'),
+      expect(getPackageListing).toHaveBeenCalledWith(
+        expect.objectContaining({
+          ordering: '-rating_score',
+        }),
         expect.any(Object)
       );
     });
 
     it('should return 404 for invalid community', async () => {
-      globalThis.fetch = vi.fn().mockResolvedValue({
-        ok: false,
-        status: 404,
-      });
+      (getPackageListing as any).mockRejectedValueOnce(
+        new ThunderstoreApiError('Failed to fetch package listing: 404', 404, 'http://example.com')
+      );
 
       const url = new URL('http://localhost:8787/api/mods?community=invalid');
       const request = createMockRequest(url.toString());
@@ -136,7 +188,7 @@ describe('Mods handlers', () => {
     });
 
     it('should return 502 on upstream error', async () => {
-      globalThis.fetch = vi.fn().mockRejectedValue(new Error('Network error'));
+      (getPackageListing as any).mockRejectedValueOnce(new Error('Network error'));
 
       const url = new URL('http://localhost:8787/api/mods?community=repo');
       const request = createMockRequest(url.toString());
@@ -152,10 +204,11 @@ describe('Mods handlers', () => {
     });
 
     it('should include cache headers', async () => {
-      globalThis.fetch = vi.fn().mockResolvedValue({
-        ok: true,
-        status: 200,
-        json: async () => ({ count: 0, results: [] }),
+      (getPackageListing as any).mockResolvedValueOnce({
+        count: 0,
+        next: null,
+        previous: null,
+        results: [],
       });
 
       const url = new URL('http://localhost:8787/api/mods?community=repo');
@@ -168,18 +221,39 @@ describe('Mods handlers', () => {
   });
 
   describe('handleModVersions', () => {
-    it('should proxy mod version request to Thunderstore', async () => {
+    it('should proxy mod version request to new Thunderstore package detail API', async () => {
       const mockResponse = {
         namespace: 'TestAuthor',
         name: 'TestMod',
-        versions: [{ number: '1.0.0', downloads: 100 }],
+        full_name: 'TestAuthor-TestMod',
+        owner: 'TestAuthor',
+        package_url: 'https://thunderstore.io/c/repo/p/TestAuthor/TestMod/',
+        date_created: '2024-01-01T00:00:00Z',
+        date_updated: '2024-01-01T00:00:00Z',
+        rating_score: 85,
+        is_pinned: false,
+        is_deprecated: false,
+        categories: ['cosmetics'],
+        versions: [
+          {
+            name: 'TestAuthor-TestMod',
+            full_name: 'TestAuthor-TestMod-1.0.0',
+            description: 'Test mod',
+            icon: 'https://cdn.thunderstore.io/icon.png',
+            version_number: '1.0.0',
+            dependencies: [],
+            download_url: 'https://cdn.thunderstore.io/file.zip',
+            downloads: 100,
+            date_created: '2024-01-01T00:00:00Z',
+            website_url: '',
+            is_active: true,
+            uuid4: 'version-uuid',
+            file_size: 1000000,
+          },
+        ],
       };
 
-      globalThis.fetch = vi.fn().mockResolvedValue({
-        ok: true,
-        status: 200,
-        json: async () => mockResponse,
-      });
+      (getPackageDetail as any).mockResolvedValueOnce(mockResponse);
 
       const url = new URL(
         'http://localhost:8787/api/mod/TestAuthor/TestMod/versions?community=repo'
@@ -188,9 +262,14 @@ describe('Mods handlers', () => {
       const response = await handleModVersions(url, request);
 
       expect(response.status).toBe(200);
-      expect(globalThis.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('TestAuthor/TestMod'),
-        expect.any(Object)
+      expect(getPackageDetail).toHaveBeenCalledWith(
+        'TestAuthor',
+        'TestMod',
+        'repo',
+        expect.objectContaining({
+          baseUrl: 'https://thunderstore.io',
+          userAgent: expect.any(String),
+        })
       );
 
       const data = await response.json();
@@ -226,10 +305,9 @@ describe('Mods handlers', () => {
     });
 
     it('should return 404 for non-existent mod', async () => {
-      globalThis.fetch = vi.fn().mockResolvedValue({
-        ok: false,
-        status: 404,
-      });
+      (getPackageDetail as any).mockRejectedValueOnce(
+        new ThunderstoreApiError('Failed to fetch package detail: 404', 404, 'http://example.com')
+      );
 
       const url = new URL('http://localhost:8787/api/mod/Unknown/Mod/versions?community=repo');
       const request = createMockRequest(url.toString());
@@ -245,10 +323,19 @@ describe('Mods handlers', () => {
     });
 
     it('should include cache headers', async () => {
-      globalThis.fetch = vi.fn().mockResolvedValue({
-        ok: true,
-        status: 200,
-        json: async () => ({ namespace: 'Test', name: 'Mod', versions: [] }),
+      (getPackageDetail as any).mockResolvedValueOnce({
+        namespace: 'Test',
+        name: 'Mod',
+        full_name: 'Test-Mod',
+        owner: 'Test',
+        package_url: '',
+        date_created: '',
+        date_updated: '',
+        rating_score: 0,
+        is_pinned: false,
+        is_deprecated: false,
+        categories: [],
+        versions: [],
       });
 
       const url = new URL('http://localhost:8787/api/mod/Test/Mod/versions?community=repo');

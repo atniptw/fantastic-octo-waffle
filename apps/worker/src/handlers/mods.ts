@@ -1,13 +1,19 @@
 /**
- * Mod list and version endpoints
+ * Mod list and version endpoints using new Thunderstore community API
  */
 
-import { THUNDERSTORE_API_BASE, USER_AGENT, CACHE_DURATIONS, FETCH_TIMEOUT_MS } from '../constants';
+import {
+  getPackageListing,
+  getPackageDetail,
+  ThunderstoreApiError,
+  type ListingParams,
+} from '@fantastic-octo-waffle/thunderstore-client';
+import { THUNDERSTORE_API_BASE, USER_AGENT, CACHE_DURATIONS } from '../constants';
 import { jsonError, jsonResponse } from '../utils/responses';
 import { checkRateLimit, getClientId } from '../utils/rate-limit';
 
 /**
- * List mods from Thunderstore
+ * List mods from Thunderstore using new community listing API
  * GET /api/mods?community=repo&query=...&page=1&sort=downloads
  */
 export async function handleModsList(url: URL, request: Request): Promise<Response> {
@@ -24,68 +30,47 @@ export async function handleModsList(url: URL, request: Request): Promise<Respon
   const page = url.searchParams.get('page') || '1';
   const sort = url.searchParams.get('sort') || '';
 
-  // Build Thunderstore API URL
-  const thunderstoreUrl = new URL(`${THUNDERSTORE_API_BASE}/frontend/c/${community}/`);
+  // Build params for new API
+  const params: ListingParams = {
+    community,
+    page: parseInt(page, 10),
+  };
 
   if (query) {
-    thunderstoreUrl.searchParams.set('q', query);
-  }
-
-  if (page) {
-    thunderstoreUrl.searchParams.set('page', page);
+    params.q = query;
   }
 
   // Map our sort params to Thunderstore ordering
   if (sort === 'downloads') {
-    thunderstoreUrl.searchParams.set('ordering', '-downloads');
+    params.ordering = '-downloads';
   } else if (sort === 'newest') {
-    thunderstoreUrl.searchParams.set('ordering', '-date_created');
+    params.ordering = '-date_created';
   } else if (sort === 'rating') {
-    thunderstoreUrl.searchParams.set('ordering', '-rating');
+    params.ordering = '-rating_score';
   }
 
   try {
-    // Set up timeout
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+    const data = await getPackageListing(params, {
+      baseUrl: THUNDERSTORE_API_BASE,
+      userAgent: USER_AGENT,
+    });
 
-    try {
-      const response = await fetch(thunderstoreUrl.toString(), {
-        headers: {
-          'User-Agent': USER_AGENT,
-        },
-        signal: controller.signal,
-      });
-
-      if (!response.ok) {
-        if (response.status === 404) {
-          return jsonError('invalid_community', `Community '${community}' not found`, 404);
-        }
-        throw new Error(`Thunderstore API error: ${response.status}`);
-      }
-
-      const data = await response.json();
-
-      return jsonResponse(data, 200, {
-        'Cache-Control': CACHE_DURATIONS.API,
-      });
-    } finally {
-      clearTimeout(timeoutId);
-    }
+    return jsonResponse(data, 200, {
+      'Cache-Control': CACHE_DURATIONS.API,
+    });
   } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      return jsonError(
-        'timeout',
-        `Request timed out after ${FETCH_TIMEOUT_MS / 1000} seconds`,
-        504
-      );
+    // Handle typed Thunderstore API errors
+    if (error instanceof ThunderstoreApiError) {
+      if (error.status === 404) {
+        return jsonError('invalid_community', `Community '${community}' not found`, 404);
+      }
     }
     return jsonError('upstream_error', 'Failed to process Thunderstore API response', 502);
   }
 }
 
 /**
- * Get mod version details
+ * Get mod version details using new package detail API
  * GET /api/mod/:namespace/:name/versions
  */
 export async function handleModVersions(url: URL, request: Request): Promise<Response> {
@@ -104,48 +89,26 @@ export async function handleModVersions(url: URL, request: Request): Promise<Res
     return jsonError('invalid_path', 'Expected /api/mod/:namespace/:name/versions', 400);
   }
 
-  const namespace = pathParts[2];
-  const name = pathParts[3];
+  // Extract path components (guaranteed to exist due to length check above)
+  const namespace = pathParts[2]!;
+  const name = pathParts[3]!;
   const community = url.searchParams.get('community') || 'repo';
 
-  // Build Thunderstore API URL
-  const thunderstoreUrl = `${THUNDERSTORE_API_BASE}/frontend/c/${community}/p/${namespace}/${name}/`;
-
   try {
-    // Set up timeout
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+    const data = await getPackageDetail(namespace, name, community, {
+      baseUrl: THUNDERSTORE_API_BASE,
+      userAgent: USER_AGENT,
+    });
 
-    try {
-      const response = await fetch(thunderstoreUrl, {
-        headers: {
-          'User-Agent': USER_AGENT,
-        },
-        signal: controller.signal,
-      });
-
-      if (!response.ok) {
-        if (response.status === 404) {
-          return jsonError('mod_not_found', `Mod ${namespace}/${name} not found`, 404);
-        }
-        throw new Error(`Thunderstore API error: ${response.status}`);
-      }
-
-      const data = await response.json();
-
-      return jsonResponse(data, 200, {
-        'Cache-Control': CACHE_DURATIONS.API,
-      });
-    } finally {
-      clearTimeout(timeoutId);
-    }
+    return jsonResponse(data, 200, {
+      'Cache-Control': CACHE_DURATIONS.API,
+    });
   } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      return jsonError(
-        'timeout',
-        `Request timed out after ${FETCH_TIMEOUT_MS / 1000} seconds`,
-        504
-      );
+    // Handle typed Thunderstore API errors
+    if (error instanceof ThunderstoreApiError) {
+      if (error.status === 404) {
+        return jsonError('mod_not_found', `Mod ${namespace}/${name} not found`, 404);
+      }
     }
     return jsonError(
       'upstream_error',

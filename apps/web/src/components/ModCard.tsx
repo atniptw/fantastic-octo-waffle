@@ -3,15 +3,20 @@
  */
 
 import type { FunctionalComponent } from 'preact';
-import type { ThunderstorePackageVersion } from '@fantastic-octo-waffle/utils';
-import { formatDownloads, formatRating } from '@fantastic-octo-waffle/utils';
+import type { ThunderstorePackageListing } from '@fantastic-octo-waffle/utils';
+import {
+  formatDownloads,
+  formatRating,
+  getLatestVersion,
+  getTotalDownloads,
+} from '@fantastic-octo-waffle/utils';
 import './ModCard.css';
 
 export interface ModCardProps {
   /** Mod data to display */
-  mod: ThunderstorePackageVersion;
+  mod: ThunderstorePackageListing;
   /** Callback when card is clicked */
-  onClick: (mod: ThunderstorePackageVersion) => void;
+  onClick: (mod: ThunderstorePackageListing) => void;
 }
 
 /**
@@ -29,6 +34,10 @@ export const ModCard: FunctionalComponent<ModCardProps> = ({ mod, onClick }) => 
     }
   };
 
+  // Get latest version for display
+  const latestVersion = getLatestVersion(mod);
+  const totalDownloads = getTotalDownloads(mod);
+
   return (
     <div
       class="mod-card"
@@ -38,9 +47,9 @@ export const ModCard: FunctionalComponent<ModCardProps> = ({ mod, onClick }) => 
       tabIndex={0}
       aria-label={`View details for ${mod.full_name}`}
     >
-      {mod.icon_url && (
+      {latestVersion?.icon && (
         <div class="mod-card-icon">
-          <img src={mod.icon_url} alt={`${mod.name} icon`} />
+          <img src={latestVersion.icon} alt={`${mod.name} icon`} />
         </div>
       )}
 
@@ -48,18 +57,22 @@ export const ModCard: FunctionalComponent<ModCardProps> = ({ mod, onClick }) => 
         <h3 class="mod-card-title">{mod.name}</h3>
         <p class="mod-card-author">by {mod.namespace}</p>
 
-        <p class="mod-card-description">{mod.description || 'No description available'}</p>
+        <p class="mod-card-description">
+          {latestVersion?.description || 'No description available'}
+        </p>
 
         <div class="mod-card-stats">
-          <span class="mod-stat" title="Downloads">
-            📥 {formatDownloads(mod.downloads)}
+          <span class="mod-stat" title="Total Downloads">
+            📥 {formatDownloads(totalDownloads)}
           </span>
           <span class="mod-stat" title="Rating">
             ⭐ {formatRating(mod.rating_score)}
           </span>
-          <span class="mod-stat" title="Version">
-            v{mod.version_number}
-          </span>
+          {latestVersion && (
+            <span class="mod-stat" title="Latest Version">
+              v{latestVersion.version_number}
+            </span>
+          )}
         </div>
       </div>
     </div>

@@ -3,7 +3,7 @@
  */
 
 import { signal, computed } from '@preact/signals';
-import type { ThunderstorePackageVersion } from '@fantastic-octo-waffle/utils';
+import type { ThunderstorePackageListing } from '@fantastic-octo-waffle/utils';
 
 /**
  * Current page number (1-indexed)
@@ -18,7 +18,7 @@ export const sortOrder = signal<'downloads' | 'newest' | 'rating'>('downloads');
 /**
  * List of mods on current page
  */
-export const mods = signal<ThunderstorePackageVersion[]>([]);
+export const mods = signal<ThunderstorePackageListing[]>([]);
 
 /**
  * Total count of mods (for pagination)
@@ -38,7 +38,7 @@ export const error = signal<string | null>(null);
 /**
  * Selected mod for detail view (null if none selected)
  */
-export const selectedMod = signal<ThunderstorePackageVersion | null>(null);
+export const selectedMod = signal<ThunderstorePackageListing | null>(null);
 
 /**
  * Computed: Total number of pages

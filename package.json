@@ -23,7 +23,7 @@
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,yml,yaml}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,yml,yaml}\"",
     "typecheck": "pnpm -r run typecheck",
-    "deadcode": "ts-prune --error --skip 'packages/utils/src/index\\.ts|apps/web/src/components/.*\\.tsx'",
+    "deadcode": "ts-prune --error --skip 'packages/utils/src/index\\.ts|packages/thunderstore-client/src/index\\.ts|apps/web/src/components/.*\\.tsx'",
     "clean": "pnpm -r run clean && rm -rf node_modules"
   },
   "devDependencies": {

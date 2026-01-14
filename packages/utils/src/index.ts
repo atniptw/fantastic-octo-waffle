@@ -1,44 +1,77 @@
 // Shared utilities and types
 
 /**
- * Thunderstore API response types
+ * Thunderstore API response types (new community listing API)
  */
 
 /**
- * A package version from Thunderstore API
+ * Package version within a listing (from new API)
  * @public - Used across web app components
  */
 export interface ThunderstorePackageVersion {
-  /** Unique namespace of the mod author/team */
-  namespace: string;
-  /** Package name */
+  /** Version name (e.g., "Author-ModName") */
   name: string;
-  /** Full package identifier (namespace/name) */
+  /** Full version name with version number (e.g., "Author-ModName-1.0.0") */
   full_name: string;
   /** Mod description */
   description: string;
+  /** Icon URL */
+  icon: string;
   /** Version string (e.g., "1.0.0") */
   version_number: string;
   /** Array of dependency strings (e.g., ["Author-Mod-1.0.0"]) */
   dependencies: string[];
   /** Download URL for the package zip */
   download_url: string;
-  /** Number of downloads */
+  /** Number of downloads for this specific version */
   downloads: number;
   /** Release date in ISO format */
   date_created: string;
-  /** Icon URL */
-  icon_url?: string;
   /** Website URL */
   website_url?: string;
-  /** Whether this package is deprecated */
-  is_deprecated: boolean;
+  /** Whether this version is active */
+  is_active: boolean;
+  /** UUID of the version */
+  uuid4: string;
+  /** File size in bytes */
+  file_size: number;
+}
+
+/**
+ * Package listing item (from new API)
+ * @public - Used by web app for mod list display
+ */
+export interface ThunderstorePackageListing {
+  /** Unique namespace of the mod author/team */
+  namespace: string;
+  /** Package name */
+  name: string;
+  /** Full package identifier (namespace-name) */
+  full_name: string;
+  /** Package owner */
+  owner: string;
+  /** Package URL on Thunderstore */
+  package_url: string;
+  /** Donation link */
+  donation_link?: string;
+  /** Creation date in ISO format */
+  date_created: string;
+  /** Last update date in ISO format */
+  date_updated: string;
+  /** UUID of the package */
+  uuid4: string;
+  /** Average rating score (0-100) */
+  rating_score: number;
   /** Whether this package is pinned */
   is_pinned: boolean;
+  /** Whether this package is deprecated */
+  is_deprecated: boolean;
+  /** Whether package has NSFW content */
+  has_nsfw_content: boolean;
   /** Package categories */
-  categories?: string[];
-  /** Average rating (if available) */
-  rating_score?: number;
+  categories: string[];
+  /** Array of package versions */
+  versions: ThunderstorePackageVersion[];
 }
 
 /**
@@ -53,7 +86,7 @@ export interface ThunderstoreApiResponse {
   /** URL for previous page (null if first page) */
   previous: string | null;
   /** Array of package results */
-  results: ThunderstorePackageVersion[];
+  results: ThunderstorePackageListing[];
 }
 
 /**
@@ -89,4 +122,23 @@ export function formatRating(score: number | undefined): string {
   // Convert 0-100 to 0-5
   const stars = (score / 100) * 5;
   return `${stars.toFixed(1)} ★`;
+}
+
+/**
+ * Get the latest version from a package listing
+ *
+ * Note: The Thunderstore API returns versions in descending chronological order
+ * (newest first), so the first element is always the latest version.
+ */
+export function getLatestVersion(
+  pkg: ThunderstorePackageListing
+): ThunderstorePackageVersion | undefined {
+  return pkg.versions[0];
+}
+
+/**
+ * Get total downloads for a package (sum of all version downloads)
+ */
+export function getTotalDownloads(pkg: ThunderstorePackageListing): number {
+  return pkg.versions.reduce((sum, version) => sum + version.downloads, 0);
 }
