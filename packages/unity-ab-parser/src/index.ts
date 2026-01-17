@@ -1,2 +1,0 @@
-// Unity AssetBundle Parser
-export {};

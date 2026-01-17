@@ -1,2 +1,0 @@
-// Three.js Renderer
-export {};
