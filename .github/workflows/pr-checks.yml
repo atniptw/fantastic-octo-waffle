@@ -17,7 +17,7 @@ permissions:
 
 env:
   DOTNET_VERSION: '10.0.x'
-  NODE_VERSION: '20.x'
+  NODE_VERSION: '24.x'
   BUNDLE_SIZE_THRESHOLD_PERCENT: 10
 
 jobs:
