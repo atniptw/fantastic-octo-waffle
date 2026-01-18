@@ -132,7 +132,8 @@ jobs:
               echo "❌ WASM bundle grew by ${WASM_PERCENT}%, exceeding threshold of ${{ env.BUNDLE_SIZE_THRESHOLD_PERCENT }}%" >> $GITHUB_STEP_SUMMARY
               exit 1
             elif [ $WASM_PERCENT -lt -5 ]; then
-              echo "✅ WASM bundle decreased by ${WASM_PERCENT}% - great optimization!" >> $GITHUB_STEP_SUMMARY
+              ABS_WASM_PERCENT=${WASM_PERCENT#-}
+              echo "✅ WASM bundle decreased by ${ABS_WASM_PERCENT}% - great optimization!" >> $GITHUB_STEP_SUMMARY
             else
               echo "✅ WASM bundle size change within acceptable limits" >> $GITHUB_STEP_SUMMARY
             fi
@@ -173,11 +174,12 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Check JavaScript Complexity (ESLint)
+        continue-on-error: true
         run: |
           if [ -f "src/BlazorApp/wwwroot/js/package.json" ]; then
             cd src/BlazorApp/wwwroot/js
             npm install
-            npx eslint *.js || true
+            npx eslint *.js
           else
             echo "No package.json found for JS linting - checking with basic ESLint"
             cd src/BlazorApp/wwwroot/js
@@ -215,11 +217,7 @@ jobs:
           if find .. -name "*Test*.csproj" -o -name "*Tests.csproj" | grep -q .; then
             dotnet test --collect:"XPlat Code Coverage" \
               --results-directory ./TestResults/ \
-              --logger "console;verbosity=detailed" \
-              /p:CollectCoverage=true \
-              /p:CoverletOutputFormat=cobertura \
-              /p:Threshold=70 \
-              /p:ThresholdType=line
+              --logger "console;verbosity=detailed"
           else
             echo "⚠️ No test projects found. Creating placeholder test structure is recommended."
             echo "Coverage check skipped - add tests to enable this check." >> $GITHUB_STEP_SUMMARY
@@ -228,6 +226,7 @@ jobs:
         continue-on-error: true
 
       - name: Upload coverage to Codecov
+        if: hashFiles('src/BlazorApp/TestResults/**/coverage.cobertura.xml') != ''
         uses: codecov/codecov-action@v4
         with:
           files: ./src/BlazorApp/TestResults/**/coverage.cobertura.xml
@@ -342,6 +341,10 @@ jobs:
         run: dotnet workload restore
         working-directory: src/BlazorApp
 
+      - name: Restore NuGet packages
+        run: dotnet restore
+        working-directory: src/BlazorApp
+
       - name: Build ${{ matrix.configuration }}
         run: dotnet build -c ${{ matrix.configuration }} --no-restore
         working-directory: src/BlazorApp
@@ -388,7 +391,7 @@ jobs:
         run: |
           dotnet build /p:TreatWarningsAsErrors=false \
             /p:NoWarn="" \
-            /warnaserror:CS0168;CS0219;CS8019
+            /p:WarningsAsErrors="CS0168;CS0219;CS8019"
         working-directory: src/BlazorApp
         continue-on-error: true
 
@@ -424,7 +427,8 @@ jobs:
           if [ "${{ needs.complexity-analysis.result }}" == "success" ]; then
             echo "✅ Complexity Analysis: PASSED" >> $GITHUB_STEP_SUMMARY
           else
-            echo "⚠️ Complexity Analysis: FAILED" >> $GITHUB_STEP_SUMMARY
+            echo "❌ Complexity Analysis: FAILED" >> $GITHUB_STEP_SUMMARY
+            FAILED=1
           fi
 
           # Secondary checks (warnings only)

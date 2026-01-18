@@ -214,5 +214,8 @@ dotnet_diagnostic.CA1848.severity = suggestion
 # CA2007: Do not directly await a Task (not applicable in Blazor WASM)
 dotnet_diagnostic.CA2007.severity = none
 
+# CA1502: Avoid excessive complexity (max complexity 10 for AI-generated code)
+dotnet_diagnostic.CA1502.severity = warning
+
 # IDE0058: Expression value is never used
 dotnet_diagnostic.IDE0058.severity = none
