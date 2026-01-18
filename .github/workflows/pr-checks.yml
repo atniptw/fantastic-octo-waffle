@@ -90,26 +90,26 @@ jobs:
             WASM_SIZE_BASE=$(find dist-base/_framework -name "*.wasm" -exec du -cb {} + 2>/dev/null | tail -1 | cut -f1 || echo "0")
             JS_SIZE_BASE=$(find dist-base/_framework -name "*.js" -exec du -cb {} + 2>/dev/null | tail -1 | cut -f1 || echo "0")
             TOTAL_SIZE_BASE=$(du -sb dist-base 2>/dev/null | cut -f1 || echo "0")
-            
+
             WASM_SIZE_PR=${{ steps.pr-size.outputs.wasm }}
             JS_SIZE_PR=${{ steps.pr-size.outputs.js }}
             TOTAL_SIZE_PR=${{ steps.pr-size.outputs.total }}
-            
+
             WASM_DIFF=$((WASM_SIZE_PR - WASM_SIZE_BASE))
             TOTAL_DIFF=$((TOTAL_SIZE_PR - TOTAL_SIZE_BASE))
-            
+
             if [ $WASM_SIZE_BASE -gt 0 ]; then
               WASM_PERCENT=$((WASM_DIFF * 100 / WASM_SIZE_BASE))
             else
               WASM_PERCENT=0
             fi
-            
+
             if [ $TOTAL_SIZE_BASE -gt 0 ]; then
               TOTAL_PERCENT=$((TOTAL_DIFF * 100 / TOTAL_SIZE_BASE))
             else
               TOTAL_PERCENT=0
             fi
-            
+
             echo "### Base Branch Bundle Sizes" >> $GITHUB_STEP_SUMMARY
             echo "- WASM: $(numfmt --to=iec-i --suffix=B $WASM_SIZE_BASE)" >> $GITHUB_STEP_SUMMARY
             echo "- JS: $(numfmt --to=iec-i --suffix=B $JS_SIZE_BASE)" >> $GITHUB_STEP_SUMMARY
@@ -118,7 +118,7 @@ jobs:
             echo "### Size Changes" >> $GITHUB_STEP_SUMMARY
             echo "- WASM: ${WASM_PERCENT}% change" >> $GITHUB_STEP_SUMMARY
             echo "- Total: ${TOTAL_PERCENT}% change" >> $GITHUB_STEP_SUMMARY
-            
+
             # Fail if WASM grows more than threshold
             if [ $WASM_PERCENT -gt ${{ env.BUNDLE_SIZE_THRESHOLD_PERCENT }} ]; then
               echo "❌ WASM bundle grew by ${WASM_PERCENT}%, exceeding threshold of ${{ env.BUNDLE_SIZE_THRESHOLD_PERCENT }}%" >> $GITHUB_STEP_SUMMARY
@@ -337,7 +337,7 @@ jobs:
           echo "### Build Verification (${{ matrix.configuration }})" >> $GITHUB_STEP_SUMMARY
           echo "Build artifacts:" >> $GITHUB_STEP_SUMMARY
           ls -lh dist-${{ matrix.configuration }}/_framework/*.wasm 2>/dev/null | awk '{print "- " $9 ": " $5}' >> $GITHUB_STEP_SUMMARY || echo "- No WASM files found" >> $GITHUB_STEP_SUMMARY
-          
+
           # Verify critical files exist
           if [ -f "dist-${{ matrix.configuration }}/index.html" ] && \
              [ -d "dist-${{ matrix.configuration }}/_framework" ]; then
@@ -383,7 +383,7 @@ jobs:
         run: |
           echo "## Pull Request Quality Checks Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
+
           # Priority checks (must pass)
           if [ "${{ needs.secret-scanning.result }}" == "success" ]; then
             echo "✅ Secret Scanning: PASSED" >> $GITHUB_STEP_SUMMARY
@@ -391,52 +391,52 @@ jobs:
             echo "❌ Secret Scanning: FAILED" >> $GITHUB_STEP_SUMMARY
             FAILED=1
           fi
-          
+
           if [ "${{ needs.bundle-size-analysis.result }}" == "success" ]; then
             echo "✅ Bundle Size Analysis: PASSED" >> $GITHUB_STEP_SUMMARY
           else
             echo "❌ Bundle Size Analysis: FAILED" >> $GITHUB_STEP_SUMMARY
             FAILED=1
           fi
-          
+
           if [ "${{ needs.complexity-analysis.result }}" == "success" ]; then
             echo "✅ Complexity Analysis: PASSED" >> $GITHUB_STEP_SUMMARY
           else
             echo "⚠️ Complexity Analysis: FAILED" >> $GITHUB_STEP_SUMMARY
           fi
-          
+
           # Secondary checks (warnings only)
           if [ "${{ needs.code-coverage.result }}" == "success" ]; then
             echo "✅ Code Coverage: PASSED" >> $GITHUB_STEP_SUMMARY
           else
             echo "⚠️ Code Coverage: CHECK NEEDED" >> $GITHUB_STEP_SUMMARY
           fi
-          
+
           if [ "${{ needs.integration-tests.result }}" == "success" ]; then
             echo "✅ Integration Tests: PASSED" >> $GITHUB_STEP_SUMMARY
           else
             echo "⚠️ Integration Tests: NOT IMPLEMENTED" >> $GITHUB_STEP_SUMMARY
           fi
-          
+
           if [ "${{ needs.linting-formatting.result }}" == "success" ]; then
             echo "✅ Linting & Formatting: PASSED" >> $GITHUB_STEP_SUMMARY
           else
             echo "⚠️ Linting & Formatting: WARNINGS" >> $GITHUB_STEP_SUMMARY
           fi
-          
+
           if [ "${{ needs.build-verification.result }}" == "success" ]; then
             echo "✅ Build Verification: PASSED" >> $GITHUB_STEP_SUMMARY
           else
             echo "❌ Build Verification: FAILED" >> $GITHUB_STEP_SUMMARY
             FAILED=1
           fi
-          
+
           if [ "${{ needs.dead-code-detection.result }}" == "success" ]; then
             echo "✅ Dead Code Detection: PASSED" >> $GITHUB_STEP_SUMMARY
           else
             echo "⚠️ Dead Code Detection: WARNINGS" >> $GITHUB_STEP_SUMMARY
           fi
-          
+
           echo "" >> $GITHUB_STEP_SUMMARY
           if [ -n "$FAILED" ]; then
             echo "❌ **PR checks FAILED** - Please fix issues before merging" >> $GITHUB_STEP_SUMMARY
