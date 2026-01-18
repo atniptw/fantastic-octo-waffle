@@ -176,14 +176,12 @@ jobs:
       - name: Check JavaScript Complexity (ESLint)
         continue-on-error: true
         run: |
-          if [ -f "src/BlazorApp/wwwroot/js/package.json" ]; then
-            cd src/BlazorApp/wwwroot/js
+          cd src/BlazorApp/wwwroot/js
+          if [ -f "package.json" ]; then
             npm install
             npx eslint *.js
           else
-            echo "No package.json found for JS linting - checking with basic ESLint"
-            cd src/BlazorApp/wwwroot/js
-            npx eslint *.js || echo "No critical complexity issues found"
+            echo "No package.json found - skipping ESLint check"
           fi
 
   # Priority 4: Code Coverage Thresholds (Clear Targets)
