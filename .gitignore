@@ -53,6 +53,8 @@ Thumbs.db
 
 # Build outputs
 dist/
+dist-Debug/
+dist-Release/
 build/
 out/
 coverage/
