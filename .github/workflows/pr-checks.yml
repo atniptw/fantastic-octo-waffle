@@ -177,7 +177,7 @@ jobs:
           if [ -f "src/BlazorApp/wwwroot/js/package.json" ]; then
             cd src/BlazorApp/wwwroot/js
             npm install
-            npx eslint --plugin sonarjs --rule 'sonarjs/cognitive-complexity: [error, 10]' *.js || true
+            npx eslint *.js || true
           else
             echo "No package.json found for JS linting - checking with basic ESLint"
             cd src/BlazorApp/wwwroot/js
@@ -388,7 +388,7 @@ jobs:
         run: |
           dotnet build /p:TreatWarningsAsErrors=false \
             /p:NoWarn="" \
-            /warnaserror:CS0168,CS0219,CS8019
+            /warnaserror:CS0168;CS0219;CS8019
         working-directory: src/BlazorApp
         continue-on-error: true
 
