@@ -11,6 +11,10 @@ on:
       - 'LICENSE'
   workflow_dispatch:
 
+# Default permissions for all jobs (principle of least privilege)
+permissions:
+  contents: read
+
 env:
   DOTNET_VERSION: '10.0.x'
   NODE_VERSION: '20.x'
@@ -21,6 +25,8 @@ jobs:
   secret-scanning:
     name: 🔒 Secret & Credential Scanning
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -39,6 +45,8 @@ jobs:
   bundle-size-analysis:
     name: 📦 Bundle Size Analysis
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout PR code
         uses: actions/checkout@v4
@@ -136,6 +144,8 @@ jobs:
   complexity-analysis:
     name: 🧮 Cyclomatic Complexity Check
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -178,6 +188,8 @@ jobs:
   code-coverage:
     name: 📊 Code Coverage Analysis
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -237,6 +249,8 @@ jobs:
   integration-tests:
     name: 🔗 Integration & E2E Tests
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -270,6 +284,8 @@ jobs:
   linting-formatting:
     name: 🎨 Linting & Formatting
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -308,6 +324,8 @@ jobs:
   build-verification:
     name: 🔨 Build Verification
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     strategy:
       matrix:
         configuration: [Debug, Release]
@@ -351,6 +369,8 @@ jobs:
   dead-code-detection:
     name: 🧹 Dead Code Detection
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -376,6 +396,8 @@ jobs:
   pr-checks-summary:
     name: ✅ PR Checks Summary
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     needs: [secret-scanning, bundle-size-analysis, complexity-analysis, code-coverage, integration-tests, linting-formatting, build-verification, dead-code-detection]
     if: always()
     steps:
