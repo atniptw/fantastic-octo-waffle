@@ -90,7 +90,66 @@ BlazorModViewer/
 
 ## Development Workflow
 
-### Build & Test
+### Prerequisites
+- .NET 10.0 SDK or later
+- Blazor WebAssembly workload: `dotnet workload install wasm-tools`
+- Visual Studio Code, Visual Studio, or JetBrains Rider (recommended)
+- Python 3.8+ (for validation against UnityPy reference implementation)
+
+### How to Build and Run
+
+#### First-time setup
+```bash
+# Install required .NET workload for Blazor WebAssembly
+dotnet workload install wasm-tools
+```
+
+#### Build the Blazor WASM app
+```bash
+cd src/BlazorApp
+dotnet restore
+dotnet build
+```
+
+#### Run locally (development server)
+```bash
+cd src/BlazorApp
+dotnet watch run
+# Opens browser at https://localhost:5001
+```
+
+#### Build for production
+```bash
+cd src/BlazorApp
+dotnet publish -c Release
+# Output: ../../dist/ (configured for GitHub Pages)
+```
+
+### How to Test
+```bash
+# Run all tests
+dotnet test
+
+# Run specific test project
+dotnet test Tests/UnityAssetParser.Tests/
+
+# Run tests with coverage
+dotnet test --collect:"XPlat Code Coverage"
+```
+
+### How to Lint/Validate
+```bash
+# Format code (if using dotnet-format)
+dotnet format
+
+# Build with warnings as errors
+dotnet build /warnaserror
+
+# Restore and build to verify project integrity
+dotnet restore && dotnet build
+```
+
+### Build & Test (CI)
 - CI: Build Blazor, run tests, validate parsing vs. Python reference (see [docs/Workflow.md](docs/Workflow.md))
 - Tests: Unit (binary reader, PackedBitVector, Mesh fields), Integration (ZIP → mesh → Three.js)
 
@@ -101,7 +160,7 @@ BlazorModViewer/
 4. Test fixtures: [Cigar (220 verts), FrogHatSmile (500), BambooCopter (533), Glasses (~600)]
 
 ### Deployment
-- Frontend: GitHub Pages (`docs/` folder), GitHub Actions on push to main
+- Frontend: GitHub Pages (`dist/` folder), GitHub Actions on push to main
 - Worker: Wrangler CLI, routes TBD (`*.workers.dev` for dev)
 
 ## Common Pitfalls
