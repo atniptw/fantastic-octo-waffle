@@ -355,7 +355,13 @@ jobs:
         run: |
           echo "### Build Verification (${{ matrix.configuration }})" >> $GITHUB_STEP_SUMMARY
           echo "Build artifacts:" >> $GITHUB_STEP_SUMMARY
-          ls -lh dist-${{ matrix.configuration }}/_framework/*.wasm 2>/dev/null | awk '{print "- " $9 ": " $5}' >> $GITHUB_STEP_SUMMARY || echo "- No WASM files found" >> $GITHUB_STEP_SUMMARY
+          
+          # List framework files
+          if [ -d "dist-${{ matrix.configuration }}/_framework" ]; then
+            echo "- Framework directory: $(du -sh dist-${{ matrix.configuration }}/_framework | cut -f1)" >> $GITHUB_STEP_SUMMARY
+            WASM_COUNT=$(find dist-${{ matrix.configuration }}/_framework -name "*.wasm" 2>/dev/null | wc -l)
+            echo "- WASM files found: $WASM_COUNT" >> $GITHUB_STEP_SUMMARY
+          fi
 
           # Verify critical files exist
           if [ -f "dist-${{ matrix.configuration }}/index.html" ] && \
@@ -363,6 +369,9 @@ jobs:
             echo "✅ Critical files present" >> $GITHUB_STEP_SUMMARY
           else
             echo "❌ Missing critical build artifacts" >> $GITHUB_STEP_SUMMARY
+            echo "Debug: Current directory: $(pwd)" >> $GITHUB_STEP_SUMMARY
+            echo "Debug: dist-${{ matrix.configuration }} contents:" >> $GITHUB_STEP_SUMMARY
+            ls -la dist-${{ matrix.configuration }} 2>&1 | head -20 >> $GITHUB_STEP_SUMMARY || echo "Directory not found" >> $GITHUB_STEP_SUMMARY
             exit 1
           fi
 
