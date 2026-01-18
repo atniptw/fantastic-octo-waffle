@@ -92,10 +92,17 @@ BlazorModViewer/
 
 ### Prerequisites
 - .NET 10.0 SDK or later
+- Blazor WebAssembly workload: `dotnet workload install wasm-tools`
 - Visual Studio Code, Visual Studio, or JetBrains Rider (recommended)
 - Python 3.8+ (for validation against UnityPy reference implementation)
 
 ### How to Build and Run
+
+#### First-time setup
+```bash
+# Install required .NET workload for Blazor WebAssembly
+dotnet workload install wasm-tools
+```
 
 #### Build the Blazor WASM app
 ```bash
