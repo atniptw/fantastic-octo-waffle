@@ -356,22 +356,43 @@ jobs:
           echo "### Build Verification (${{ matrix.configuration }})" >> $GITHUB_STEP_SUMMARY
           echo "Build artifacts:" >> $GITHUB_STEP_SUMMARY
           
-          # List framework files
-          if [ -d "dist-${{ matrix.configuration }}/_framework" ]; then
-            echo "- Framework directory: $(du -sh dist-${{ matrix.configuration }}/_framework | cut -f1)" >> $GITHUB_STEP_SUMMARY
-            WASM_COUNT=$(find dist-${{ matrix.configuration }}/_framework -name "*.wasm" 2>/dev/null | wc -l)
-            echo "- WASM files found: $WASM_COUNT" >> $GITHUB_STEP_SUMMARY
+          # Check repository root for dist directory
+          DIST_DIR="dist-${{ matrix.configuration }}"
+          
+          if [ ! -d "$DIST_DIR" ]; then
+            echo "❌ Build output directory not found: $DIST_DIR" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Debug Information:**" >> $GITHUB_STEP_SUMMARY
+            echo "- Current working directory: $(pwd)" >> $GITHUB_STEP_SUMMARY
+            echo "- Repository contents:" >> $GITHUB_STEP_SUMMARY
+            ls -la . 2>&1 | grep -E "^d|^-" | head -15 | sed 's/^/  /' >> $GITHUB_STEP_SUMMARY
+            exit 1
           fi
-
-          # Verify critical files exist
-          if [ -f "dist-${{ matrix.configuration }}/index.html" ] && \
-             [ -d "dist-${{ matrix.configuration }}/_framework" ]; then
+          
+          # The StaticWebAssetBasePath is set to /fantastic-octo-waffle, so assets are under wwwroot/<repo-name>/
+          APP_ROOT="$DIST_DIR/wwwroot/fantastic-octo-waffle"
+          
+          if [ -f "$APP_ROOT/index.html" ] && [ -d "$APP_ROOT/_framework" ]; then
+            FRAMEWORK_SIZE=$(du -sh "$APP_ROOT/_framework" | cut -f1)
             echo "✅ Critical files present" >> $GITHUB_STEP_SUMMARY
+            echo "- Framework directory size: $FRAMEWORK_SIZE" >> $GITHUB_STEP_SUMMARY
+            
+            # Count framework artifacts
+            JS_COUNT=$(find "$APP_ROOT/_framework" -name "*.js" 2>/dev/null | wc -l)
+            WASM_COUNT=$(find "$APP_ROOT/_framework" -name "*.wasm" 2>/dev/null | wc -l)
+            WOFF_COUNT=$(find "$APP_ROOT/_framework" -name "*.woff2" 2>/dev/null | wc -l)
+            
+            echo "- JS files: $JS_COUNT" >> $GITHUB_STEP_SUMMARY
+            echo "- WASM files: $WASM_COUNT (expected: 0 for Debug, >0 for Release)" >> $GITHUB_STEP_SUMMARY
+            echo "- Font files: $WOFF_COUNT" >> $GITHUB_STEP_SUMMARY
           else
             echo "❌ Missing critical build artifacts" >> $GITHUB_STEP_SUMMARY
-            echo "Debug: Current directory: $(pwd)" >> $GITHUB_STEP_SUMMARY
-            echo "Debug: dist-${{ matrix.configuration }} contents:" >> $GITHUB_STEP_SUMMARY
-            ls -la dist-${{ matrix.configuration }} 2>&1 | head -20 >> $GITHUB_STEP_SUMMARY || echo "Directory not found" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Debug Information:**" >> $GITHUB_STEP_SUMMARY
+            echo "- Checking for index.html: $([ -f "$APP_ROOT/index.html" ] && echo "✅ Found" || echo "❌ Not found")" >> $GITHUB_STEP_SUMMARY
+            echo "- Checking for _framework dir: $([ -d "$APP_ROOT/_framework" ] && echo "✅ Found" || echo "❌ Not found")" >> $GITHUB_STEP_SUMMARY
+            echo "- $DIST_DIR directory structure:" >> $GITHUB_STEP_SUMMARY
+            find "$DIST_DIR" -type f -o -type d 2>&1 | head -30 | sed 's/^/  /' >> $GITHUB_STEP_SUMMARY
             exit 1
           fi
 
