@@ -6,10 +6,10 @@ using Xunit.Abstractions;
 namespace BlazorApp.E2E.Tests;
 
 /// <summary>
-/// End-to-end tests for the Blazor WebAssembly Hello World app.
-/// Verifies the app builds successfully and loads without runtime errors.
+/// End-to-end tests for page navigation in the Blazor WebAssembly app.
+/// Verifies the app builds successfully and navigation works correctly.
 /// </summary>
-public sealed class HelloWorldE2ETests : IAsyncLifetime
+public sealed class PageNavigationE2ETests : IAsyncLifetime
 {
     private readonly ITestOutputHelper _output;
     private Process? _serverProcess;
@@ -20,7 +20,7 @@ public sealed class HelloWorldE2ETests : IAsyncLifetime
     private const int PageLoadTimeoutSeconds = 15;
     private readonly Stopwatch _stopwatch = new();
 
-    public HelloWorldE2ETests(ITestOutputHelper output)
+    public PageNavigationE2ETests(ITestOutputHelper output)
     {
         _output = output;
     }
@@ -89,6 +89,139 @@ public sealed class HelloWorldE2ETests : IAsyncLifetime
     }
 
     /// <summary>
+    /// E2E Test: Verify the Index page loads successfully and displays cosmetic mods list.
+    /// </summary>
+    [Fact]
+    public async Task Index_LoadsSuccessfully_ShowsModGrid()
+    {
+        Assert.NotNull(_browser);
+        var page = await _browser.NewPageAsync();
+
+        await page.GotoAsync(ServerUrl, new() { WaitUntil = WaitUntilState.NetworkIdle });
+
+        // Verify heading
+        var heading = await page.QuerySelectorAsync("h1");
+        Assert.NotNull(heading);
+        var text = await heading.TextContentAsync();
+        Assert.Equal("Cosmetic Mods", text);
+
+        // Verify mod cards exist
+        var modCards = await page.QuerySelectorAllAsync(".card");
+        Assert.True(modCards.Count >= 2, "Expected at least 2 placeholder mods");
+
+        await page.CloseAsync();
+    }
+
+    /// <summary>
+    /// E2E Test: Click on mod card and navigate to detail page.
+    /// </summary>
+    [Fact]
+    public async Task Index_ClickModCard_NavigatesToDetail()
+    {
+        Assert.NotNull(_browser);
+        var page = await _browser.NewPageAsync();
+
+        await page.GotoAsync(ServerUrl, new() { WaitUntil = WaitUntilState.NetworkIdle });
+
+        // Click first "View Details" button
+        await page.ClickAsync("text=View Details");
+        await page.WaitForURLAsync("**/mod/**");
+
+        // Verify we're on detail page
+        Assert.Contains("/mod/", page.Url);
+        
+        await page.CloseAsync();
+    }
+
+    /// <summary>
+    /// E2E Test: Click preview button on detail page and navigate to viewer.
+    /// </summary>
+    [Fact]
+    public async Task ModDetail_ClickPreview_NavigatesToViewer()
+    {
+        Assert.NotNull(_browser);
+        var page = await _browser.NewPageAsync();
+
+        // Navigate directly to a detail page
+        await page.GotoAsync($"{ServerUrl}/mod/TestAuthor/Cigar", 
+            new() { WaitUntil = WaitUntilState.NetworkIdle });
+
+        // Click preview button
+        await page.ClickAsync("text=Preview 3D Assets");
+        await page.WaitForURLAsync("**/viewer?mod=**");
+
+        // Verify we're on viewer page
+        Assert.Contains("/viewer", page.Url);
+        
+        await page.CloseAsync();
+    }
+
+    /// <summary>
+    /// E2E Test: Viewer page shows file list and canvas.
+    /// </summary>
+    [Fact]
+    public async Task Viewer3D_ShowsFileList_AndCanvas()
+    {
+        Assert.NotNull(_browser);
+        var page = await _browser.NewPageAsync();
+
+        await page.GotoAsync($"{ServerUrl}/viewer?mod=TestAuthor-Cigar",
+            new() { WaitUntil = WaitUntilState.NetworkIdle });
+
+        // Verify file list
+        var fileItems = await page.QuerySelectorAllAsync("ul.list-group li");
+        Assert.NotEmpty(fileItems);
+
+        // Verify canvas
+        var canvas = await page.QuerySelectorAsync("canvas#threeJsCanvas");
+        Assert.NotNull(canvas);
+        
+        // Verify canvas dimensions
+        var box = await canvas.BoundingBoxAsync();
+        Assert.NotNull(box);
+        Assert.True(box.Height >= 500, "Canvas should be at least 500px tall");
+
+        await page.CloseAsync();
+    }
+
+    /// <summary>
+    /// E2E Test: Full user flow from index to detail to viewer.
+    /// </summary>
+    [Fact]
+    public async Task FullUserFlow_BrowseToDetailToViewer_Succeeds()
+    {
+        Assert.NotNull(_browser);
+        var page = await _browser.NewPageAsync();
+        var consoleErrors = new List<string>();
+
+        page.Console += (_, msg) =>
+        {
+            if (msg.Type == "error")
+                consoleErrors.Add(msg.Text);
+        };
+
+        // 1. Start at index
+        await page.GotoAsync(ServerUrl, new() { WaitUntil = WaitUntilState.NetworkIdle });
+        
+        // 2. Click mod detail
+        await page.ClickAsync("text=View Details");
+        await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        
+        // 3. Click preview
+        await page.ClickAsync("text=Preview 3D Assets");
+        await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+
+        // 4. Verify no console errors
+        Assert.Empty(consoleErrors);
+
+        // 5. Verify canvas rendered
+        var canvas = await page.QuerySelectorAsync("canvas#threeJsCanvas");
+        Assert.NotNull(canvas);
+
+        await page.CloseAsync();
+    }
+
+    /// <summary>
     /// E2E Test: Verify the app loads successfully and displays expected content without errors.
     /// </summary>
     [Fact]
@@ -136,13 +269,13 @@ public sealed class HelloWorldE2ETests : IAsyncLifetime
         var heading = await page.QuerySelectorAsync("h1");
         Assert.NotNull(heading);
         var headingText = await heading.TextContentAsync();
-        Assert.Equal("Hello, world!", headingText);
+        Assert.Equal("Cosmetic Mods", headingText);
         _output.WriteLine($"✅ Found heading: \"{headingText}\"");
 
         var paragraph = await page.QuerySelectorAsync("p");
         Assert.NotNull(paragraph);
         var paragraphText = await paragraph.TextContentAsync();
-        Assert.Equal("Welcome to your new app.", paragraphText);
+        Assert.Contains("Browse R.E.P.O. cosmetic mods", paragraphText);
         _output.WriteLine($"✅ Found paragraph: \"{paragraphText}\"");
 
         // Assert: No console errors
