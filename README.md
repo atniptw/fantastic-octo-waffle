@@ -7,7 +7,36 @@ A project to showcase browser-first cosmetic viewing for mods.
 
 ## Getting Started
 
-To get started with development, see the documentation in the `docs/` directory.
+### Running Locally
+
+```bash
+cd src/BlazorApp
+dotnet run
+```
+
+Access the app at `http://localhost:5000/`
+
+### Building for Production
+
+```bash
+cd src/BlazorApp
+dotnet publish -c Release
+```
+
+Output: `dist/` folder (configured for GitHub Pages)
+
+**Custom Deployment:**
+```bash
+# Custom base path
+dotnet publish -c Release /p:StaticWebAssetBasePath=/custom-path
+
+# Custom output directory
+dotnet publish -c Release /p:PublishDir=/var/www/app
+```
+
+### Documentation
+
+For detailed documentation, see the `docs/` directory.
 
 ### Code Quality
 

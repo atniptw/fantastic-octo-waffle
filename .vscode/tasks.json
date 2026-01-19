@@ -1,0 +1,109 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Run App (Dev)",
+      "type": "shell",
+      "command": "dotnet",
+      "args": ["watch", "run"],
+      "options": {
+        "cwd": "${workspaceFolder}/src/BlazorApp"
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "isBackground": true,
+      "problemMatcher": {
+        "base": "$msCompile",
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^\\s*Building\\.\\.\\.",
+          "endsPattern": "^\\s*Application started\\."
+        }
+      }
+    },
+    {
+      "label": "Build (Debug)",
+      "type": "shell",
+      "command": "dotnet build",
+      "options": {
+        "cwd": "${workspaceFolder}/src/BlazorApp"
+      },
+      "group": "build",
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "Build (Release)",
+      "type": "shell",
+      "command": "dotnet build -c Release",
+      "options": {
+        "cwd": "${workspaceFolder}/src/BlazorApp"
+      },
+      "group": "build",
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "Publish for GitHub Pages",
+      "type": "shell",
+      "command": "dotnet publish -c Release",
+      "options": {
+        "cwd": "${workspaceFolder}/src/BlazorApp"
+      },
+      "group": "build",
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "Publish (Custom Path)",
+      "type": "shell",
+      "command": "dotnet publish -c Release /p:StaticWebAssetBasePath=${input:basePath}",
+      "options": {
+        "cwd": "${workspaceFolder}/src/BlazorApp"
+      },
+      "group": "build",
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "Clean",
+      "type": "shell",
+      "command": "dotnet clean && rm -rf bin obj",
+      "options": {
+        "cwd": "${workspaceFolder}/src/BlazorApp"
+      },
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Restore",
+      "type": "shell",
+      "command": "dotnet restore",
+      "options": {
+        "cwd": "${workspaceFolder}/src/BlazorApp"
+      },
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Run Tests",
+      "type": "shell",
+      "command": "dotnet test",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": "test",
+      "problemMatcher": "$msCompile"
+    }
+  ],
+  "inputs": [
+    {
+      "id": "basePath",
+      "type": "promptString",
+      "description": "Enter base path (e.g., / or /my-app):",
+      "default": "/"
+    }
+  ]
+}

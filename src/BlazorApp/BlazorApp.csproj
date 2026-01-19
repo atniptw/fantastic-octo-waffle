@@ -6,9 +6,10 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <OverrideHtmlAssetPlaceholders>true</OverrideHtmlAssetPlaceholders>
     
-    <!-- GitHub Pages Configuration -->
+    <!-- Deployment Configuration -->
     <PublishDir>../../dist/</PublishDir>
-    <StaticWebAssetBasePath>/fantastic-octo-waffle</StaticWebAssetBasePath>
+    <!-- GitHub Pages base path (Release only). Override via: dotnet publish /p:StaticWebAssetBasePath=/custom -->
+    <StaticWebAssetBasePath Condition="'$(Configuration)' == 'Release'">/fantastic-octo-waffle</StaticWebAssetBasePath>
     
     <!-- Code Analysis Settings -->
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
@@ -26,6 +27,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="10.0.2" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.1" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.0.1" PrivateAssets="all" />
     
