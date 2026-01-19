@@ -7,7 +7,8 @@
     <OverrideHtmlAssetPlaceholders>true</OverrideHtmlAssetPlaceholders>
     
     <!-- Deployment Configuration -->
-    <PublishDir>../../dist/</PublishDir>
+    <PublishDir Condition="'$(Configuration)' == 'Debug'">../../dist-Debug/</PublishDir>
+    <PublishDir Condition="'$(Configuration)' == 'Release'">../../dist-Release/</PublishDir>
     <!-- GitHub Pages base path (Release only). Override via: dotnet publish /p:StaticWebAssetBasePath=/custom -->
     <StaticWebAssetBasePath Condition="'$(Configuration)' == 'Release'">/fantastic-octo-waffle</StaticWebAssetBasePath>
     
