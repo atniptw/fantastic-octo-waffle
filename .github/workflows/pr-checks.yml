@@ -261,13 +261,37 @@ jobs:
         run: dotnet workload install wasm-tools
         working-directory: src/BlazorApp
 
+      - name: Restore dependencies
+        run: dotnet restore
+        working-directory: Tests/BlazorApp.E2E.Tests
+
+      - name: Build E2E test project
+        run: dotnet build --no-restore
+        working-directory: Tests/BlazorApp.E2E.Tests
+
+      - name: Install Playwright browsers
+        run: pwsh bin/Debug/net10.0/playwright.ps1 install chromium
+        working-directory: Tests/BlazorApp.E2E.Tests
+
+      - name: Run E2E Tests
+        run: |
+          echo "### E2E Tests" >> $GITHUB_STEP_SUMMARY
+          echo "Running end-to-end tests for Blazor app..." >> $GITHUB_STEP_SUMMARY
+          
+          if dotnet test --no-build --logger "console;verbosity=detailed"; then
+            echo "✅ All E2E tests passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ E2E tests failed - check logs for details" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+        working-directory: Tests/BlazorApp.E2E.Tests
+
       - name: Run Integration Tests
         run: |
           # Check for integration test projects
           if find .. -name "*IntegrationTests.csproj" -o -name "*Integration.Tests.csproj" | grep -q .; then
             dotnet test --filter "Category=Integration" --logger "console;verbosity=detailed"
           else
-            echo "⚠️ No integration test projects found."
             echo "### Integration Tests Status" >> $GITHUB_STEP_SUMMARY
             echo "⚠️ Integration test suite not yet implemented. Critical flows to test:" >> $GITHUB_STEP_SUMMARY
             echo "- Bundle parsing → Three.js render pipeline" >> $GITHUB_STEP_SUMMARY
