@@ -7,6 +7,15 @@ A project to showcase browser-first cosmetic viewing for mods.
 
 ## Getting Started
 
+### First-Time Setup
+
+```bash
+# Download Bootstrap (required for styling)
+mkdir -p src/BlazorApp/wwwroot/lib/bootstrap/dist/css
+curl -sL https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css \
+  -o src/BlazorApp/wwwroot/lib/bootstrap/dist/css/bootstrap.min.css
+```
+
 ### Running Locally
 
 ```bash
