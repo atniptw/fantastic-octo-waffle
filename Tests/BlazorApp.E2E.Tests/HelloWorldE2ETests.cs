@@ -165,7 +165,7 @@ public sealed class HelloWorldE2ETests : IAsyncLifetime
     private async Task<int> RunBuildAsync()
     {
         var projectPath = GetBlazorAppPath();
-        var buildProcess = new Process
+        using var buildProcess = new Process
         {
             StartInfo = new ProcessStartInfo
             {
@@ -287,8 +287,8 @@ public sealed class HelloWorldE2ETests : IAsyncLifetime
         };
 
         var serverReady = new TaskCompletionSource<bool>();
-        var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(ServerStartTimeoutSeconds));
-        timeout.Token.Register(() => serverReady.TrySetCanceled());
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(ServerStartTimeoutSeconds));
+        using var timeoutRegistration = timeout.Token.Register(() => serverReady.TrySetCanceled());
 
         var allServerOutput = new List<string>();
 
@@ -327,8 +327,9 @@ public sealed class HelloWorldE2ETests : IAsyncLifetime
         try
         {
             await serverReady.Task;
-            // Give server a moment to fully initialize
-            await Task.Delay(2000);
+            
+            // Perform health check by polling the server endpoint
+            await WaitForServerHealthAsync();
         }
         catch (OperationCanceledException)
         {
@@ -344,6 +345,44 @@ public sealed class HelloWorldE2ETests : IAsyncLifetime
         {
             throw new InvalidOperationException($"Server process exited prematurely with code {_serverProcess.ExitCode}");
         }
+    }
+
+    /// <summary>
+    /// Wait for server to be fully ready by polling the health endpoint.
+    /// </summary>
+    private async Task WaitForServerHealthAsync()
+    {
+        using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
+        var maxAttempts = 10;
+        var delayBetweenAttempts = TimeSpan.FromMilliseconds(500);
+
+        for (int attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            try
+            {
+                var response = await httpClient.GetAsync(ServerUrl);
+                if (response.IsSuccessStatusCode)
+                {
+                    _output.WriteLine($"  ✓ Server health check passed (attempt {attempt}/{maxAttempts})");
+                    return;
+                }
+            }
+            catch (HttpRequestException)
+            {
+                // Server not ready yet, continue polling
+            }
+            catch (TaskCanceledException)
+            {
+                // Request timeout, continue polling
+            }
+
+            if (attempt < maxAttempts)
+            {
+                await Task.Delay(delayBetweenAttempts);
+            }
+        }
+
+        throw new TimeoutException($"Server failed health check after {maxAttempts} attempts");
     }
 
     /// <summary>

@@ -261,7 +261,7 @@ jobs:
         run: dotnet workload install wasm-tools
         working-directory: src/BlazorApp
 
-n       - name: Restore Blazor app dependencies
+      - name: Restore Blazor app dependencies
         run: dotnet restore
         working-directory: src/BlazorApp
 
