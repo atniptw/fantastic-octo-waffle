@@ -261,7 +261,7 @@ jobs:
         run: dotnet workload install wasm-tools
         working-directory: src/BlazorApp
 
-      - name: Restore Blazor app dependencies
+n       - name: Restore Blazor app dependencies
         run: dotnet restore
         working-directory: src/BlazorApp
 
@@ -397,8 +397,14 @@ jobs:
             exit 1
           fi
           
-          # The StaticWebAssetBasePath is set to /fantastic-octo-waffle, so assets are under wwwroot/<repo-name>/
-          APP_ROOT="$DIST_DIR/wwwroot/fantastic-octo-waffle"
+          # StaticWebAssetBasePath is different for Debug vs Release
+          # Debug: no base path, so wwwroot/ is root
+          # Release: base path is /fantastic-octo-waffle, so wwwroot/fantastic-octo-waffle/
+          if [ "${{ matrix.configuration }}" == "Release" ]; then
+            APP_ROOT="$DIST_DIR/wwwroot/fantastic-octo-waffle"
+          else
+            APP_ROOT="$DIST_DIR/wwwroot"
+          fi
           
           if [ -f "$APP_ROOT/index.html" ] && [ -d "$APP_ROOT/_framework" ]; then
             FRAMEWORK_SIZE=$(du -sh "$APP_ROOT/_framework" | cut -f1)
@@ -417,6 +423,8 @@ jobs:
             echo "❌ Missing critical build artifacts" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "**Debug Information:**" >> $GITHUB_STEP_SUMMARY
+            echo "- Configuration: ${{ matrix.configuration }}" >> $GITHUB_STEP_SUMMARY
+            echo "- Expected app root: $APP_ROOT" >> $GITHUB_STEP_SUMMARY
             echo "- Checking for index.html: $([ -f "$APP_ROOT/index.html" ] && echo "✅ Found" || echo "❌ Not found")" >> $GITHUB_STEP_SUMMARY
             echo "- Checking for _framework dir: $([ -d "$APP_ROOT/_framework" ] && echo "✅ Found" || echo "❌ Not found")" >> $GITHUB_STEP_SUMMARY
             echo "- $DIST_DIR directory structure:" >> $GITHUB_STEP_SUMMARY
