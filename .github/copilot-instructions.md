@@ -193,6 +193,32 @@ dotnet restore && dotnet build
 - **Thunderstore API**: https://new.thunderstore.io/api/docs
 - **R.E.P.O. Community**: https://new.thunderstore.io/c/repo/ (slug: `repo`)
 
+## Context7 MCP Server
+
+**Purpose**: Fetch up-to-date code documentation for libraries used in this project.
+
+**When to Use**:
+- Looking for API docs, code examples, or reference material for dependencies
+- Need current documentation for libraries like Three.js, Blazor, xUnit, Playwright
+- Resolving questions about library usage, API methods, or integration patterns
+
+**How to Use**:
+- Tool: `mcp_context7_resolve-library-id` — converts library names to Context7-compatible IDs
+- Tool: `mcp_context7_get-library-docs` — fetches documentation with code examples (mode: `code` for API refs, `info` for conceptual guides)
+- Example: When implementing Three.js geometry rendering, use Context7 to fetch current Three.js BufferGeometry API docs
+
+**Relevant Libraries for This Project**:
+- **Three.js** — mesh rendering, BufferGeometry, materials, scene management
+- **Blazor WebAssembly** — C# components, JavaScript interop, WebAssembly lifecycle
+- **xUnit** — C# testing framework, assertions, fixtures
+- **Playwright** — headless browser automation, E2E testing
+- **Thunderstore API** — package data schemas, API endpoints
+- **System.Text.Json** — C# JSON serialization/deserialization
+
+**When NOT to Use**:
+- Do NOT use Context7 for UnityPy Python reference (already documented in copilot-instructions.md)
+- Do NOT use for internal project architecture (use [Documentation Map](#documentation-map) instead)
+
 ## Documentation Map
 
 Detailed design docs in [docs/](docs/):
