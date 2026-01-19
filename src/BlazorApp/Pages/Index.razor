@@ -1,0 +1,57 @@
+@page "/"
+@using BlazorApp.Models
+<PageTitle>R.E.P.O. Mod Browser</PageTitle>
+
+<div class="container mt-4">
+    <h1>Cosmetic Mods</h1>
+    <p class="text-muted">Browse R.E.P.O. cosmetic mods from Thunderstore</p>
+    
+    <div class="row">
+        @foreach (var mod in _mods)
+        {
+            <div class="col-md-4 mb-3">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">@mod.Name</h5>
+                        <p class="card-text text-muted">@mod.FullName</p>
+                        <p class="card-text"><small>Version: @mod.VersionNumber</small></p>
+                        <a href="/mod/@GetNamespace(mod)/@mod.Name" class="btn btn-primary">View Details</a>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    // TODO (#127): Replace with real data from IThunderstoreService
+    private readonly List<PackageVersion> _mods = new()
+    {
+        new() { Name = "Cigar", FullName = "TestAuthor-Cigar", VersionNumber = "1.0.0" },
+        new() { Name = "FrogHat", FullName = "TestAuthor-FrogHat", VersionNumber = "1.2.0" }
+    };
+
+    /// <summary>
+    /// Extracts the namespace or author portion from a package version's <see cref="PackageVersion.FullName"/>.
+    /// </summary>
+    /// <param name="mod">
+    /// The package version whose namespace/author should be extracted. The <see cref="PackageVersion.FullName"/>
+    /// property is expected to follow the format "AuthorName-ModName" (e.g., "TestAuthor-Cigar").
+    /// </param>
+    /// <returns>
+    /// The substring of <see cref="PackageVersion.FullName"/> before the first '-' character. If
+    /// <see cref="PackageVersion.FullName"/> is null, empty, or does not contain '-', returns "Unknown".
+    /// </returns>
+    private string GetNamespace(PackageVersion mod)
+    {
+        if (string.IsNullOrEmpty(mod?.FullName))
+        {
+            return "Unknown";
+        }
+
+        var parts = mod.FullName.Split('-', 2);
+        return parts.Length > 0 && !string.IsNullOrWhiteSpace(parts[0])
+            ? parts[0]
+            : "Unknown";
+    }
+}
