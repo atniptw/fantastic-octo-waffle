@@ -1,0 +1,48 @@
+@page "/viewer"
+@using BlazorApp.Models
+
+<PageTitle>3D Asset Viewer</PageTitle>
+
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-md-3">
+            <h4>Files</h4>
+            <ul class="list-group">
+                @foreach (var file in _placeholderFiles)
+                {
+                    <li class="list-group-item d-flex justify-content-between align-items-start">
+                        <div class="ms-2 me-auto">
+                            <div class="fw-bold">@file.FileName</div>
+                            <small class="text-muted">@FormatBytes(file.SizeBytes) · @file.Type</small>
+                        </div>
+                        @if (file.Renderable)
+                        {
+                            <span class="badge bg-success rounded-pill">Renderable</span>
+                        }
+                    </li>
+                }
+            </ul>
+        </div>
+        
+        <div class="col-md-9">
+            <canvas id="threeJsCanvas" style="width: 100%; height: 600px; border: 1px solid #ddd;"></canvas>
+        </div>
+    </div>
+</div>
+
+@code {
+    // TODO (#127): Replace with real data from IZipIndexer + IAssetScanner
+    private List<FileIndexItem> _placeholderFiles = new()
+    {
+        new("cigar.hhh", 12345, FileType.UnityFS, true),
+        new("icon.png", 2048, FileType.Unknown, false),
+        new("manifest.json", 256, FileType.Unknown, false)
+    };
+
+    private string FormatBytes(long bytes)
+    {
+        if (bytes < 1024) return $"{bytes} B";
+        if (bytes < 1024 * 1024) return $"{bytes / 1024:F1} KB";
+        return $"{bytes / (1024 * 1024):F1} MB";
+    }
+}

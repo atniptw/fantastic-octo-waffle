@@ -1,0 +1,49 @@
+@page "/mod/{namespace}/{name}"
+@using BlazorApp.Models
+@inject NavigationManager Nav
+
+<PageTitle>@Name - Mod Details</PageTitle>
+
+<div class="container mt-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="/">Browse</a></li>
+            <li class="breadcrumb-item active" aria-current="page">@Name</li>
+        </ol>
+    </nav>
+    
+    <h1>@Name</h1>
+    <p class="lead">by @Namespace</p>
+    
+    <div class="card mt-3">
+        <div class="card-body">
+            <h5>Mod Information</h5>
+            <dl class="row">
+                <dt class="col-sm-3">Full Name:</dt>
+                <dd class="col-sm-9">@Namespace-@Name</dd>
+                
+                <dt class="col-sm-3">Status:</dt>
+                <dd class="col-sm-9">
+                    <span class="badge bg-secondary">Not downloaded (placeholder)</span>
+                </dd>
+            </dl>
+        </div>
+    </div>
+    
+    <div class="mt-3">
+        <button class="btn btn-success btn-lg" @onclick="PreviewMod">
+            🎨 Preview 3D Assets
+        </button>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string Namespace { get; set; } = string.Empty;
+    [Parameter] public string Name { get; set; } = string.Empty;
+
+    private void PreviewMod()
+    {
+        // TODO (#127): Add download/index flow before navigation
+        Nav.NavigateTo($"/viewer?mod={Namespace}-{Name}");
+    }
+}

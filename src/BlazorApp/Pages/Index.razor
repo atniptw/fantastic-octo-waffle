@@ -1,0 +1,36 @@
+@page "/"
+@using BlazorApp.Models
+<PageTitle>R.E.P.O. Mod Browser</PageTitle>
+
+<div class="container mt-4">
+    <h1>Cosmetic Mods</h1>
+    <p class="text-muted">Browse R.E.P.O. cosmetic mods from Thunderstore</p>
+    
+    <div class="row">
+        @foreach (var mod in _mods)
+        {
+            <div class="col-md-4 mb-3">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">@mod.Name</h5>
+                        <p class="card-text text-muted">@mod.FullName</p>
+                        <p class="card-text"><small>Version: @mod.VersionNumber</small></p>
+                        <a href="/mod/@GetNamespace(mod)/@mod.Name" class="btn btn-primary">View Details</a>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    // TODO (#127): Replace with real data from IThunderstoreService
+    private List<PackageVersion> _mods = new()
+    {
+        new() { Name = "Cigar", FullName = "TestAuthor-Cigar", VersionNumber = "1.0.0" },
+        new() { Name = "FrogHat", FullName = "TestAuthor-FrogHat", VersionNumber = "1.2.0" }
+    };
+
+    private string GetNamespace(PackageVersion mod) => 
+        mod.FullName.Split('-').FirstOrDefault() ?? "Unknown";
+}
