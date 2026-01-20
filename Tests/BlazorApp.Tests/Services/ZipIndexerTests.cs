@@ -10,15 +10,12 @@ public class ZipIndexerTests
     [Fact]
     public async Task IndexAsync_NullZipStream_ThrowsArgumentNullException()
     {
-        // Arrange
-        var items = new List<FileIndexItem>();
-
         // Act & Assert
         var exception = await Assert.ThrowsAsync<ArgumentNullException>(async () =>
         {
-            await foreach (var item in _sut.IndexAsync(null!))
+            await foreach (var _ in _sut.IndexAsync(null!))
             {
-                items.Add(item);
+                // Intentionally left blank; should throw before enumeration.
             }
         });
         Assert.Equal("zipStream", exception.ParamName);
@@ -46,16 +43,15 @@ public class ZipIndexerTests
     {
         // Arrange
         var zipStream = EmptyAsyncEnumerable();
-        var cts = new CancellationTokenSource();
+        using var cts = new CancellationTokenSource();
         cts.Cancel();
-        var items = new List<FileIndexItem>();
 
         // Act & Assert
         await Assert.ThrowsAsync<OperationCanceledException>(async () =>
         {
-            await foreach (var item in _sut.IndexAsync(zipStream, cts.Token))
+            await foreach (var _ in _sut.IndexAsync(zipStream, cts.Token))
             {
-                items.Add(item);
+                // Intentionally left blank; should throw before enumeration.
             }
         });
     }

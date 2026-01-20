@@ -64,7 +64,7 @@ public class ViewerServiceTests
     public async Task InitializeAsync_CancelledToken_ThrowsOperationCanceledException()
     {
         // Arrange
-        var cts = new CancellationTokenSource();
+        using var cts = new CancellationTokenSource();
         cts.Cancel();
 
         // Act & Assert
@@ -116,7 +116,7 @@ public class ViewerServiceTests
     {
         // Arrange
         var geometry = CreateValidGeometry();
-        var cts = new CancellationTokenSource();
+        using var cts = new CancellationTokenSource();
         cts.Cancel();
 
         // Act & Assert
@@ -156,7 +156,7 @@ public class ViewerServiceTests
     public async Task UpdateMaterialAsync_CancelledToken_ThrowsOperationCanceledException()
     {
         // Arrange
-        var cts = new CancellationTokenSource();
+        using var cts = new CancellationTokenSource();
         cts.Cancel();
 
         // Act & Assert
@@ -177,7 +177,7 @@ public class ViewerServiceTests
     public async Task ClearAsync_CancelledToken_ThrowsOperationCanceledException()
     {
         // Arrange
-        var cts = new CancellationTokenSource();
+        using var cts = new CancellationTokenSource();
         cts.Cancel();
 
         // Act & Assert
@@ -198,7 +198,7 @@ public class ViewerServiceTests
     public async Task DisposeAsync_CancelledToken_ThrowsOperationCanceledException()
     {
         // Arrange
-        var cts = new CancellationTokenSource();
+        using var cts = new CancellationTokenSource();
         cts.Cancel();
 
         // Act & Assert

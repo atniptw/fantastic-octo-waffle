@@ -3,7 +3,7 @@ using BlazorApp.Services;
 
 namespace BlazorApp.Tests.Services;
 
-public class ZipDownloaderTests
+public class ZipDownloaderTests : IDisposable
 {
     private readonly HttpClient _httpClient = new();
     private readonly ZipDownloader _sut;
@@ -11,6 +11,11 @@ public class ZipDownloaderTests
     public ZipDownloaderTests()
     {
         _sut = new ZipDownloader(_httpClient);
+    }
+
+    public void Dispose()
+    {
+        _httpClient.Dispose();
     }
 
     [Fact]
@@ -48,7 +53,7 @@ public class ZipDownloaderTests
     {
         // Arrange
         var version = new PackageVersion { Name = "TestMod" };
-        var cts = new CancellationTokenSource();
+        using var cts = new CancellationTokenSource();
         cts.Cancel();
 
         // Act & Assert
@@ -59,15 +64,12 @@ public class ZipDownloaderTests
     [Fact]
     public async Task StreamZipAsync_NullVersion_ThrowsArgumentNullException()
     {
-        // Arrange
-        var chunks = new List<byte[]>();
-
         // Act & Assert
         var exception = await Assert.ThrowsAsync<ArgumentNullException>(async () =>
         {
-            await foreach (var chunk in _sut.StreamZipAsync(null!))
+            await foreach (var _ in _sut.StreamZipAsync(null!))
             {
-                chunks.Add(chunk);
+                // Intentionally left blank; should throw before enumeration.
             }
         });
         Assert.Equal("version", exception.ParamName);
@@ -95,16 +97,15 @@ public class ZipDownloaderTests
     {
         // Arrange
         var version = new PackageVersion { Name = "TestMod" };
-        var cts = new CancellationTokenSource();
+        using var cts = new CancellationTokenSource();
         cts.Cancel();
-        var chunks = new List<byte[]>();
 
         // Act & Assert
         await Assert.ThrowsAsync<OperationCanceledException>(async () =>
         {
-            await foreach (var chunk in _sut.StreamZipAsync(version, cts.Token))
+            await foreach (var _ in _sut.StreamZipAsync(version, cts.Token))
             {
-                chunks.Add(chunk);
+                // Intentionally left blank; should throw before enumeration.
             }
         });
     }

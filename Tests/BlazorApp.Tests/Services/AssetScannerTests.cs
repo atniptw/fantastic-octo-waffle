@@ -34,7 +34,7 @@ public class AssetScannerTests
     {
         // Arrange
         var file = new FileIndexItem("test.hhh", 1024, FileType.UnityFS, false);
-        var cts = new CancellationTokenSource();
+        using var cts = new CancellationTokenSource();
         cts.Cancel();
 
         // Act & Assert
