@@ -1,3 +1,29 @@
+:root {
+    /* Color tokens */
+    --color-primary: #1b6ec2;
+    --color-primary-hover: #1861ac;
+    --color-link: #0071c1;
+    --color-sidebar-bg-start: rgb(5, 39, 103);
+    --color-sidebar-bg-end: #3a0647;
+    --color-border: #d6d5d5;
+    --color-top-row-bg: #f7f7f7;
+    --color-nav-bg: rgba(0, 0, 0, 0.4);
+    --color-nav-toggler: rgba(255, 255, 255, 0.1);
+    --color-nav-link: #d7d7d7;
+    --color-nav-active: rgba(255, 255, 255, 0.37);
+    --color-nav-hover: rgba(255, 255, 255, 0.1);
+    
+    /* Spacing tokens */
+    --spacing-xs: 0.5rem;
+    --spacing-sm: 1rem;
+    --spacing-md: 1.5rem;
+    --spacing-lg: 2rem;
+    
+    /* Focus indicator */
+    --focus-outline-width: 2px;
+    --focus-outline-offset: 2px;
+}
+
 html, body {
     font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
 }
@@ -7,17 +33,36 @@ h1:focus {
 }
 
 a, .btn-link {
-    color: #0071c1;
+    color: var(--color-link);
 }
 
 .btn-primary {
     color: #fff;
-    background-color: #1b6ec2;
-    border-color: #1861ac;
+    background-color: var(--color-primary);
+    border-color: var(--color-primary-hover);
 }
 
-.btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
-  box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #258cfb;
+/* Focus indicators for accessibility */
+a:focus, 
+.btn:focus, 
+.btn:active:focus, 
+.btn-link.nav-link:focus, 
+.form-control:focus, 
+.form-check-input:focus {
+    outline: var(--focus-outline-width) solid var(--color-primary);
+    outline-offset: var(--focus-outline-offset);
+    box-shadow: none;
+}
+
+/* Keyboard navigation - visible focus for all interactive elements */
+.navbar-toggler:focus {
+    outline: var(--focus-outline-width) solid var(--color-primary);
+    outline-offset: var(--focus-outline-offset);
+}
+
+.nav-link:focus {
+    outline: var(--focus-outline-width) solid var(--color-primary);
+    outline-offset: var(--focus-outline-offset);
 }
 
 .content {
@@ -112,4 +157,103 @@ code {
 
 .form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
     text-align: start;
+}
+
+/* Mod Card Styling */
+.mod-card {
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+    height: 100%;
+}
+
+.mod-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.mod-card .card-title {
+    font-weight: 600;
+    margin-bottom: var(--spacing-xs);
+}
+
+.mod-card .card-text {
+    margin-bottom: var(--spacing-xs);
+}
+
+/* File List Styling */
+.file-list {
+    border: 1px solid var(--color-border);
+    border-radius: 0.375rem;
+    max-height: 600px;
+    overflow-y: auto;
+}
+
+.file-list .list-group-item {
+    border-left: none;
+    border-right: none;
+}
+
+.file-list .list-group-item:first-child {
+    border-top: none;
+    border-top-left-radius: 0.375rem;
+    border-top-right-radius: 0.375rem;
+}
+
+.file-list .list-group-item:last-child {
+    border-bottom: none;
+    border-bottom-left-radius: 0.375rem;
+    border-bottom-right-radius: 0.375rem;
+}
+
+/* Viewer Canvas Styling */
+.viewer-canvas {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border: 1px solid var(--color-border);
+    border-radius: 0.375rem;
+    background-color: #f8f9fa;
+}
+
+/* Progress Badge */
+.progress-badge {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+}
+
+/* Responsive Grid for Mod Cards */
+@media (max-width: 768px) {
+    /* Stack cards on mobile */
+    .mod-card-grid .col-md-4 {
+        flex: 0 0 100%;
+        max-width: 100%;
+    }
+    
+    /* File list full width on mobile */
+    .file-list-column {
+        flex: 0 0 100%;
+        max-width: 100%;
+        margin-bottom: var(--spacing-md);
+    }
+    
+    /* Canvas responsive height on mobile */
+    .viewer-canvas {
+        aspect-ratio: 4 / 3;
+        min-height: 300px;
+    }
+}
+
+@media (min-width: 769px) and (max-width: 991px) {
+    /* 2 columns on tablets */
+    .mod-card-grid .col-md-4 {
+        flex: 0 0 50%;
+        max-width: 50%;
+    }
+}
+
+/* Smooth transitions for nav collapse */
+.navbar-toggler {
+    transition: background-color 0.2s ease-in-out;
+}
+
+.collapse {
+    transition: height 0.3s ease-in-out;
 }
