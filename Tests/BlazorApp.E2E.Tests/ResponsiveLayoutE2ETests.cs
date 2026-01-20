@@ -15,7 +15,7 @@ public sealed class ResponsiveLayoutE2ETests : IAsyncLifetime
     private Process? _serverProcess;
     private IPlaywright? _playwright;
     private IBrowser? _browser;
-    private string? _serverUrl;
+    private const string ServerUrl = "http://localhost:5000";
     private const int ServerStartTimeoutSeconds = 30;
     private const int PageLoadTimeoutSeconds = 15;
     private readonly Stopwatch _stopwatch = new();
@@ -94,7 +94,7 @@ public sealed class ResponsiveLayoutE2ETests : IAsyncLifetime
 
         // Set viewport to mobile size (iPhone SE)
         await page.SetViewportSizeAsync(375, 667);
-        await page.GotoAsync(_serverUrl!, new() { WaitUntil = WaitUntilState.NetworkIdle });
+        await page.GotoAsync(ServerUrl, new() { WaitUntil = WaitUntilState.NetworkIdle });
 
         _output.WriteLine("📱 Testing mobile layout (375px width)...");
 
@@ -119,7 +119,7 @@ public sealed class ResponsiveLayoutE2ETests : IAsyncLifetime
         Assert.NotNull(_browser);
         var page = await _browser.NewPageAsync();
 
-        await page.GotoAsync(_serverUrl!, new() { WaitUntil = WaitUntilState.NetworkIdle });
+        await page.GotoAsync(ServerUrl, new() { WaitUntil = WaitUntilState.NetworkIdle });
 
         _output.WriteLine("🔍 Testing navbar brand text...");
 
@@ -143,7 +143,7 @@ public sealed class ResponsiveLayoutE2ETests : IAsyncLifetime
 
         // Set viewport to mobile size
         await page.SetViewportSizeAsync(375, 667);
-        await page.GotoAsync(_serverUrl!, new() { WaitUntil = WaitUntilState.NetworkIdle });
+        await page.GotoAsync(ServerUrl, new() { WaitUntil = WaitUntilState.NetworkIdle });
 
         _output.WriteLine("📱 Testing mod card stacking on mobile...");
 
@@ -175,7 +175,7 @@ public sealed class ResponsiveLayoutE2ETests : IAsyncLifetime
         Assert.NotNull(_browser);
         var page = await _browser.NewPageAsync();
 
-        await page.GotoAsync($"{_serverUrl!}/viewer?mod=TestAuthor-Cigar", 
+        await page.GotoAsync($"{ServerUrl}/viewer?mod=TestAuthor-Cigar", 
             new() { WaitUntil = WaitUntilState.NetworkIdle });
 
         _output.WriteLine("🖼️ Testing canvas responsive behavior...");
@@ -235,7 +235,7 @@ public sealed class ResponsiveLayoutE2ETests : IAsyncLifetime
 
         // Set viewport to mobile size
         await page.SetViewportSizeAsync(375, 667);
-        await page.GotoAsync($"{_serverUrl!}/viewer?mod=TestAuthor-Cigar",
+        await page.GotoAsync($"{ServerUrl}/viewer?mod=TestAuthor-Cigar",
             new() { WaitUntil = WaitUntilState.NetworkIdle });
 
         _output.WriteLine("📱 Testing file list width on mobile...");
@@ -263,7 +263,7 @@ public sealed class ResponsiveLayoutE2ETests : IAsyncLifetime
         Assert.NotNull(_browser);
         var page = await _browser.NewPageAsync();
 
-        await page.GotoAsync(_serverUrl!, new() { WaitUntil = WaitUntilState.NetworkIdle });
+        await page.GotoAsync(ServerUrl, new() { WaitUntil = WaitUntilState.NetworkIdle });
 
         _output.WriteLine("⌨️ Testing keyboard navigation focus indicators...");
 
@@ -344,7 +344,6 @@ public sealed class ResponsiveLayoutE2ETests : IAsyncLifetime
 
     /// <summary>
     /// Start the development server and wait for it to be ready.
-    /// Uses dynamic port allocation (port 0) to avoid conflicts.
     /// </summary>
     private async Task StartDevelopmentServerAsync()
     {
@@ -364,7 +363,7 @@ public sealed class ResponsiveLayoutE2ETests : IAsyncLifetime
                 Environment =
                 {
                     ["ASPNETCORE_ENVIRONMENT"] = "Development",
-                    ["ASPNETCORE_URLS"] = "http://localhost:0",  // Port 0 = dynamic allocation
+                    ["ASPNETCORE_URLS"] = ServerUrl,
                     ["DOTNET_LAUNCH_BROWSER"] = "false"
                 }
             }
@@ -382,26 +381,11 @@ public sealed class ResponsiveLayoutE2ETests : IAsyncLifetime
             {
                 allServerOutput.Add($"[OUT] {e.Data}");
                 _output.WriteLine($"  [SERVER] {e.Data}");
-                
-                // Extract dynamic URL from "Now listening on: http://localhost:XXXXX"
-                if (e.Data.Contains("Now listening on:", StringComparison.OrdinalIgnoreCase))
+                if (e.Data.Contains("Now listening on:", StringComparison.OrdinalIgnoreCase) ||
+                    e.Data.Contains("Application started", StringComparison.OrdinalIgnoreCase) ||
+                    e.Data.Contains("Content root path:", StringComparison.OrdinalIgnoreCase))
                 {
-                    var match = System.Text.RegularExpressions.Regex.Match(e.Data, @"http://[^:\s]+:\d+");
-                    if (match.Success)
-                    {
-                        _serverUrl = match.Value;
-                        _output.WriteLine($"  📍 Server URL captured: {_serverUrl}");
-                        serverReady.TrySetResult(true);
-                    }
-                }
-                else if (e.Data.Contains("Application started", StringComparison.OrdinalIgnoreCase) ||
-                         e.Data.Contains("Content root path:", StringComparison.OrdinalIgnoreCase))
-                {
-                    // Fallback in case URL wasn't captured yet
-                    if (_serverUrl != null && !serverReady.Task.IsCompleted)
-                    {
-                        serverReady.TrySetResult(true);
-                    }
+                    serverReady.TrySetResult(true);
                 }
             }
         };
@@ -425,12 +409,6 @@ public sealed class ResponsiveLayoutE2ETests : IAsyncLifetime
         try
         {
             await serverReady.Task;
-            
-            if (_serverUrl == null)
-            {
-                throw new InvalidOperationException("Server URL was not captured from server output");
-            }
-            
             await WaitForServerHealthAsync();
         }
         catch (OperationCanceledException)
@@ -454,11 +432,6 @@ public sealed class ResponsiveLayoutE2ETests : IAsyncLifetime
     /// </summary>
     private async Task WaitForServerHealthAsync()
     {
-        if (_serverUrl == null)
-        {
-            throw new InvalidOperationException("Server URL is null");
-        }
-
         using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
         var maxAttempts = 10;
         var delayBetweenAttempts = TimeSpan.FromMilliseconds(500);
@@ -467,7 +440,7 @@ public sealed class ResponsiveLayoutE2ETests : IAsyncLifetime
         {
             try
             {
-                var response = await httpClient.GetAsync(_serverUrl);
+                var response = await httpClient.GetAsync(ServerUrl);
                 if (response.IsSuccessStatusCode)
                 {
                     _output.WriteLine($"  ✓ Server health check passed (attempt {attempt}/{maxAttempts})");

@@ -15,7 +15,7 @@ public sealed class PageNavigationE2ETests : IAsyncLifetime
     private Process? _serverProcess;
     private IPlaywright? _playwright;
     private IBrowser? _browser;
-    private string? _serverUrl;
+    private const string ServerUrl = "http://localhost:5000";
     private const int ServerStartTimeoutSeconds = 30;
     private const int PageLoadTimeoutSeconds = 15;
     private readonly Stopwatch _stopwatch = new();
@@ -97,7 +97,7 @@ public sealed class PageNavigationE2ETests : IAsyncLifetime
         Assert.NotNull(_browser);
         var page = await _browser.NewPageAsync();
 
-        await page.GotoAsync(_serverUrl!, new() { WaitUntil = WaitUntilState.NetworkIdle });
+        await page.GotoAsync(ServerUrl, new() { WaitUntil = WaitUntilState.NetworkIdle });
 
         // Verify heading
         var heading = await page.QuerySelectorAsync("h1");
@@ -121,7 +121,7 @@ public sealed class PageNavigationE2ETests : IAsyncLifetime
         Assert.NotNull(_browser);
         var page = await _browser.NewPageAsync();
 
-        await page.GotoAsync(_serverUrl!, new() { WaitUntil = WaitUntilState.NetworkIdle });
+        await page.GotoAsync(ServerUrl, new() { WaitUntil = WaitUntilState.NetworkIdle });
 
         // Click first "View Details" button
         await page.ClickAsync("text=View Details");
@@ -143,7 +143,7 @@ public sealed class PageNavigationE2ETests : IAsyncLifetime
         var page = await _browser.NewPageAsync();
 
         // Navigate directly to a detail page
-        await page.GotoAsync($"{_serverUrl}/mod/TestAuthor/Cigar", 
+        await page.GotoAsync($"{ServerUrl}/mod/TestAuthor/Cigar", 
             new() { WaitUntil = WaitUntilState.NetworkIdle });
 
         // Click preview button
@@ -165,7 +165,7 @@ public sealed class PageNavigationE2ETests : IAsyncLifetime
         Assert.NotNull(_browser);
         var page = await _browser.NewPageAsync();
 
-        await page.GotoAsync($"{_serverUrl}/viewer?mod=TestAuthor-Cigar",
+        await page.GotoAsync($"{ServerUrl}/viewer?mod=TestAuthor-Cigar",
             new() { WaitUntil = WaitUntilState.NetworkIdle });
 
         // Verify file list
@@ -205,7 +205,7 @@ public sealed class PageNavigationE2ETests : IAsyncLifetime
         };
 
         // 1. Start at index
-        await page.GotoAsync(_serverUrl!, new() { WaitUntil = WaitUntilState.NetworkIdle });
+        await page.GotoAsync(ServerUrl, new() { WaitUntil = WaitUntilState.NetworkIdle });
         
         // 2. Click mod detail
         await page.ClickAsync("text=View Details");
@@ -253,8 +253,8 @@ public sealed class PageNavigationE2ETests : IAsyncLifetime
         };
 
         // Act: Navigate to the app
-        _output.WriteLine($"🌐 Navigating to {_serverUrl}...");
-        var response = await page.GotoAsync(_serverUrl!, new PageGotoOptions
+        _output.WriteLine($"🌐 Navigating to {ServerUrl}...");
+        var response = await page.GotoAsync(ServerUrl, new PageGotoOptions
         {
             WaitUntil = WaitUntilState.NetworkIdle,
             Timeout = PageLoadTimeoutSeconds * 1000
@@ -398,7 +398,6 @@ public sealed class PageNavigationE2ETests : IAsyncLifetime
 
     /// <summary>
     /// Start the development server and wait for it to be ready.
-    /// Uses dynamic port allocation (port 0) to avoid conflicts.
     /// </summary>
     private async Task StartDevelopmentServerAsync()
     {
@@ -418,7 +417,7 @@ public sealed class PageNavigationE2ETests : IAsyncLifetime
                 Environment =
                 {
                     ["ASPNETCORE_ENVIRONMENT"] = "Development",
-                    ["ASPNETCORE_URLS"] = "http://localhost:0",  // Port 0 = dynamic allocation
+                    ["ASPNETCORE_URLS"] = ServerUrl,
                     ["DOTNET_LAUNCH_BROWSER"] = "false"  // Disable auto-launch of browser
                 }
             }
@@ -436,26 +435,11 @@ public sealed class PageNavigationE2ETests : IAsyncLifetime
             {
                 allServerOutput.Add($"[OUT] {e.Data}");
                 _output.WriteLine($"  [SERVER] {e.Data}");
-                
-                // Extract dynamic URL from "Now listening on: http://localhost:XXXXX"
-                if (e.Data.Contains("Now listening on:", StringComparison.OrdinalIgnoreCase))
+                if (e.Data.Contains("Now listening on:", StringComparison.OrdinalIgnoreCase) ||
+                    e.Data.Contains("Application started", StringComparison.OrdinalIgnoreCase) ||
+                    e.Data.Contains("Content root path:", StringComparison.OrdinalIgnoreCase))
                 {
-                    var match = System.Text.RegularExpressions.Regex.Match(e.Data, @"http://[^:\s]+:\d+");
-                    if (match.Success)
-                    {
-                        _serverUrl = match.Value;
-                        _output.WriteLine($"  📍 Server URL captured: {_serverUrl}");
-                        serverReady.TrySetResult(true);
-                    }
-                }
-                else if (e.Data.Contains("Application started", StringComparison.OrdinalIgnoreCase) ||
-                         e.Data.Contains("Content root path:", StringComparison.OrdinalIgnoreCase))
-                {
-                    // Fallback in case URL wasn't captured yet
-                    if (_serverUrl != null && !serverReady.Task.IsCompleted)
-                    {
-                        serverReady.TrySetResult(true);
-                    }
+                    serverReady.TrySetResult(true);
                 }
             }
         };
@@ -481,11 +465,6 @@ public sealed class PageNavigationE2ETests : IAsyncLifetime
         {
             await serverReady.Task;
             
-            if (_serverUrl == null)
-            {
-                throw new InvalidOperationException("Server URL was not captured from server output");
-            }
-            
             // Perform health check by polling the server endpoint
             await WaitForServerHealthAsync();
         }
@@ -510,11 +489,6 @@ public sealed class PageNavigationE2ETests : IAsyncLifetime
     /// </summary>
     private async Task WaitForServerHealthAsync()
     {
-        if (_serverUrl == null)
-        {
-            throw new InvalidOperationException("Server URL is null");
-        }
-
         using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
         var maxAttempts = 10;
         var delayBetweenAttempts = TimeSpan.FromMilliseconds(500);
@@ -523,7 +497,7 @@ public sealed class PageNavigationE2ETests : IAsyncLifetime
         {
             try
             {
-                var response = await httpClient.GetAsync(_serverUrl);
+                var response = await httpClient.GetAsync(ServerUrl);
                 if (response.IsSuccessStatusCode)
                 {
                     _output.WriteLine($"  ✓ Server health check passed (attempt {attempt}/{maxAttempts})");
