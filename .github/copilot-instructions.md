@@ -90,6 +90,9 @@ BlazorModViewer/
 
 ## Development Workflow
 
+### Commit Messages (Copilot)
+When generating commit messages, read and follow the repository prompt at [.github/commit.prompt.md](.github/commit.prompt.md). Use Conventional Commits with concise, imperative summaries, appropriate scopes (e.g., blazor, worker, parser, tests, docs, ci), and include issue links (e.g., Closes #123) or `BREAKING CHANGE:` footers when applicable.
+
 ### Prerequisites
 - .NET 10.0 SDK or later
 - Blazor WebAssembly workload: `dotnet workload install wasm-tools`
