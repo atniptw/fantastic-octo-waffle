@@ -91,6 +91,7 @@ public sealed class PageNavigationE2ETests
 
     /// <summary>
     /// E2E Test: Viewer page shows file list and canvas.
+    /// Canvas uses responsive aspect-ratio (16:9) with min-height of 300px on mobile.
     /// </summary>
     [Fact]
     public async Task Viewer3D_ShowsFileList_AndCanvas()
@@ -105,14 +106,22 @@ public sealed class PageNavigationE2ETests
         var fileItems = await page.QuerySelectorAllAsync("ul.list-group li");
         Assert.NotEmpty(fileItems);
 
-        // Verify canvas
+        // Verify canvas exists and is visible
         var canvas = await page.QuerySelectorAsync("canvas#threeJsCanvas");
         Assert.NotNull(canvas);
         
-        // Verify canvas dimensions
+        // Verify canvas dimensions (responsive 16:9 aspect ratio with min 300px height)
         var box = await canvas.BoundingBoxAsync();
         Assert.NotNull(box);
-        Assert.True(box.Height >= 500, "Canvas should be at least 500px tall");
+        _output.WriteLine($"Canvas dimensions: {box.Width}px × {box.Height}px (aspect ratio: {box.Width / box.Height:F2})");
+        
+        // Canvas should maintain minimum height (CSS sets min-height: 300px on mobile)
+        Assert.True(box.Height >= 300, $"Canvas should be at least 300px tall (actual: {box.Height}px)");
+        
+        // Canvas should maintain reasonable aspect ratio (16:9 = 1.78)
+        var aspectRatio = box.Width / box.Height;
+        Assert.True(aspectRatio >= 1.3 && aspectRatio <= 2.0, 
+            $"Canvas aspect ratio should be between 1.3 and 2.0 (actual: {aspectRatio:F2})");
 
         await page.CloseAsync();
     }
