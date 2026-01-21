@@ -15,8 +15,8 @@ public class Viewer3DPageTests : Bunit.TestContext
         // Assert
         var canvas = cut.Find("canvas#threeJsCanvas");
         Assert.NotNull(canvas);
-        Assert.Contains("width: 100%", canvas.GetAttribute("style"));
-        Assert.Contains("height: 600px", canvas.GetAttribute("style"));
+        Assert.Contains("viewer-canvas", canvas.GetAttribute("class"));
+        Assert.Equal("3D model preview canvas", canvas.GetAttribute("aria-label"));
     }
 
     [Fact]

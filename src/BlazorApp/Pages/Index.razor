@@ -6,11 +6,11 @@
     <h1>Cosmetic Mods</h1>
     <p class="text-muted">Browse R.E.P.O. cosmetic mods from Thunderstore</p>
     
-    <div class="row">
+    <div class="row mod-card-grid">
         @foreach (var mod in _mods)
         {
-            <div class="col-md-4 mb-3">
-                <div class="card">
+            <div class="col-md-4 col-sm-6 mb-3">
+                <div class="card mod-card">
                     <div class="card-body">
                         <h5 class="card-title">@mod.Name</h5>
                         <p class="card-text text-muted">@mod.FullName</p>
