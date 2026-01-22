@@ -14,11 +14,29 @@ public sealed class PageNavigationE2ETests
 {
     private readonly ITestOutputHelper _output;
     private readonly BlazorServerFixture _fixture;
+    private const string FixturePath = "Fixtures/thunderstore-packages.json";
 
     public PageNavigationE2ETests(BlazorServerFixture fixture, ITestOutputHelper output)
     {
         _fixture = fixture;
         _output = output;
+    }
+
+    /// <summary>
+    /// Sets up API mocking for Thunderstore packages endpoint.
+    /// </summary>
+    private async Task SetupApiMockAsync(IPage page)
+    {
+        var fixtureJson = await File.ReadAllTextAsync(FixturePath);
+        await page.RouteAsync("**/api/packages", async route =>
+        {
+            await route.FulfillAsync(new()
+            {
+                Status = 200,
+                ContentType = "application/json",
+                Body = fixtureJson
+            });
+        });
     }
 
     /// <summary>
@@ -30,6 +48,9 @@ public sealed class PageNavigationE2ETests
         Assert.NotNull(_fixture.Browser);
         var page = await _fixture.Browser.NewPageAsync();
 
+        // Mock API before navigation
+        await SetupApiMockAsync(page);
+
         await page.GotoAsync(BlazorServerFixture.ServerUrl, new() { WaitUntil = WaitUntilState.NetworkIdle });
 
         // Verify heading
@@ -38,9 +59,9 @@ public sealed class PageNavigationE2ETests
         var text = await heading.TextContentAsync();
         Assert.Equal("Cosmetic Mods", text);
 
-        // Verify mod cards exist
+        // Verify mod cards exist (from mocked API data)
         var modCards = await page.QuerySelectorAllAsync(".card");
-        Assert.True(modCards.Count >= 2, "Expected at least 2 placeholder mods");
+        Assert.True(modCards.Count >= 2, "Expected at least 2 mods from fixture");
 
         await page.CloseAsync();
     }
@@ -53,6 +74,9 @@ public sealed class PageNavigationE2ETests
     {
         Assert.NotNull(_fixture.Browser);
         var page = await _fixture.Browser.NewPageAsync();
+
+        // Mock API before navigation
+        await SetupApiMockAsync(page);
 
         await page.GotoAsync(BlazorServerFixture.ServerUrl, new() { WaitUntil = WaitUntilState.NetworkIdle });
 
@@ -146,6 +170,9 @@ public sealed class PageNavigationE2ETests
             }
         };
 
+        // Mock API before navigation
+        await SetupApiMockAsync(page);
+
         // 1. Start at index
         await page.GotoAsync(BlazorServerFixture.ServerUrl, new() { WaitUntil = WaitUntilState.NetworkIdle });
         
@@ -192,6 +219,9 @@ public sealed class PageNavigationE2ETests
                 consoleErrors.Add(text);
             }
         };
+
+        // Mock API before navigation
+        await SetupApiMockAsync(page);
 
         // Act: Navigate to the app
         await page.GotoAsync(BlazorServerFixture.ServerUrl, new() { Timeout = 15000, WaitUntil = WaitUntilState.NetworkIdle });
