@@ -1,6 +1,6 @@
 /**
  * Unit tests for Core CORS & Error Utilities
- * Uses Vitest with Cloudflare Workers pool (Miniflare runtime)
+ * Uses Vitest with standard Node.js/Web API environment
  */
 import { describe, it, expect } from 'vitest';
 import {

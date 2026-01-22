@@ -67,7 +67,7 @@ Validates URLs against Thunderstore allowlist (`thunderstore.io`, `gcdn.thunders
 
 **Current Coverage**: 100% lines, 100% functions, 100% branches, 100% statements
 
-Tests run using Vitest with Node.js's built-in Web Standard APIs (Response, Headers, URL), which are identical to the APIs available in Cloudflare Workers runtime.
+Tests use standard Vitest with Node.js's built-in Web Standard APIs (Response, Headers, URL). Since all utility functions are pure and use only Web Standard APIs that are identical between Node.js and Cloudflare Workers runtime, this approach provides accurate validation without requiring the Miniflare runtime overhead.
 
 ## Development Notes
 
