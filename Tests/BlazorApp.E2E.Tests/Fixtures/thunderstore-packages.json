@@ -1,0 +1,48 @@
+[
+  {
+    "name": "MoreHead",
+    "full_name": "YMC_MHZ-MoreHead",
+    "owner": "YMC_MHZ",
+    "categories": ["Cosmetics"],
+    "icon": "https://gcdn.thunderstore.io/live/repository/icons/YMC_MHZ-MoreHead-1.4.3.png",
+    "rating_score": 124,
+    "is_deprecated": false,
+    "has_nsfw_content": false,
+    "date_updated": "2025-12-20T12:34:56.000000Z",
+    "versions": [
+      {
+        "name": "MoreHead",
+        "full_name": "YMC_MHZ-MoreHead",
+        "version_number": "1.4.3",
+        "description": "Customizable cosmetics",
+        "download_url": "https://thunderstore.io/package/download/YMC_MHZ/MoreHead/1.4.3/",
+        "downloads": 25123,
+        "file_size": 2202890,
+        "dependencies": []
+      }
+    ]
+  },
+  {
+    "name": "FrogHatSmile",
+    "full_name": "TestAuthor-FrogHatSmile",
+    "owner": "TestAuthor",
+    "categories": ["Cosmetics"],
+    "icon": "https://gcdn.thunderstore.io/live/repository/icons/TestAuthor-FrogHatSmile-1.0.0.png",
+    "rating_score": 85,
+    "is_deprecated": false,
+    "has_nsfw_content": false,
+    "date_updated": "2025-11-15T10:22:33.000000Z",
+    "versions": [
+      {
+        "name": "FrogHatSmile",
+        "full_name": "TestAuthor-FrogHatSmile",
+        "version_number": "1.0.0",
+        "description": "Frog hat cosmetic",
+        "download_url": "https://thunderstore.io/package/download/TestAuthor/FrogHatSmile/1.0.0/",
+        "downloads": 5432,
+        "file_size": 1234567,
+        "dependencies": []
+      }
+    ]
+  }
+]

@@ -8,10 +8,22 @@ var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 
-// Configure HttpClient for Cloudflare Worker API
+// Configure HttpClient for ThunderstoreService
+var workerUrl = builder.Configuration["WorkerBaseUrl"] ?? "http://localhost:8787";
+builder.Services.AddHttpClient<IThunderstoreService, ThunderstoreService>(client =>
+{
+    client.BaseAddress = new Uri(workerUrl);
+    client.Timeout = TimeSpan.FromSeconds(30);
+    // Note: User-Agent cannot be set in Blazor WASM (Fetch API restriction)
+    // Set User-Agent on the Worker's upstream requests instead
+    client.DefaultRequestHeaders.Add("Accept", "application/json");
+});
+
+// Configure HttpClient for Cloudflare Worker API (used by other services)
 builder.Services.AddHttpClient("WorkerAPI", client =>
 {
     // TODO: Update with actual Worker URL when available (see docs/CloudflareWorker.md)
+    // Note: ThunderstoreService has its own dedicated HttpClient configured above
     client.BaseAddress = new Uri("https://api.worker.dev");
     client.DefaultRequestHeaders.Add("User-Agent", "RepoModViewer/0.1 (+https://atniptw.github.io)");
     client.DefaultRequestHeaders.Add("Accept", "application/json");

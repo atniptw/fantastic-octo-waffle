@@ -14,11 +14,29 @@ public sealed class ResponsiveLayoutE2ETests
 {
     private readonly ITestOutputHelper _output;
     private readonly BlazorServerFixture _fixture;
+    private const string FixturePath = "Fixtures/thunderstore-packages.json";
 
     public ResponsiveLayoutE2ETests(BlazorServerFixture fixture, ITestOutputHelper output)
     {
         _fixture = fixture;
         _output = output;
+    }
+
+    /// <summary>
+    /// Sets up API mocking for Thunderstore packages endpoint.
+    /// </summary>
+    private async Task SetupApiMockAsync(IPage page)
+    {
+        var fixtureJson = await File.ReadAllTextAsync(FixturePath);
+        await page.RouteAsync("**/api/packages", async route =>
+        {
+            await route.FulfillAsync(new()
+            {
+                Status = 200,
+                ContentType = "application/json",
+                Body = fixtureJson
+            });
+        });
     }
 
     /// <summary>
@@ -29,6 +47,9 @@ public sealed class ResponsiveLayoutE2ETests
     {
         Assert.NotNull(_fixture.Browser);
         var page = await _fixture.Browser.NewPageAsync();
+
+        // Mock API before navigation
+        await SetupApiMockAsync(page);
 
         // Set viewport to mobile size (iPhone SE)
         await page.SetViewportSizeAsync(375, 667);
@@ -57,6 +78,9 @@ public sealed class ResponsiveLayoutE2ETests
         Assert.NotNull(_fixture.Browser);
         var page = await _fixture.Browser.NewPageAsync();
 
+        // Mock API before navigation
+        await SetupApiMockAsync(page);
+
         await page.GotoAsync(BlazorServerFixture.ServerUrl, new() { WaitUntil = WaitUntilState.NetworkIdle });
 
         _output.WriteLine("🔍 Testing navbar brand text...");
@@ -79,11 +103,17 @@ public sealed class ResponsiveLayoutE2ETests
         Assert.NotNull(_fixture.Browser);
         var page = await _fixture.Browser.NewPageAsync();
 
+        // Mock API before navigation
+        await SetupApiMockAsync(page);
+
         // Set viewport to mobile size
         await page.SetViewportSizeAsync(375, 667);
         await page.GotoAsync(BlazorServerFixture.ServerUrl, new() { WaitUntil = WaitUntilState.NetworkIdle });
 
         _output.WriteLine("📱 Testing mod card stacking on mobile...");
+
+        // Wait for mod cards to render
+        await page.WaitForSelectorAsync(".mod-card", new() { Timeout = 10000 });
 
         // Get all mod cards
         var cards = await page.QuerySelectorAllAsync(".mod-card");
@@ -201,9 +231,15 @@ public sealed class ResponsiveLayoutE2ETests
         Assert.NotNull(_fixture.Browser);
         var page = await _fixture.Browser.NewPageAsync();
 
+        // Mock API before navigation
+        await SetupApiMockAsync(page);
+
         await page.GotoAsync(BlazorServerFixture.ServerUrl, new() { WaitUntil = WaitUntilState.NetworkIdle });
 
         _output.WriteLine("⌨️ Testing keyboard navigation focus indicators...");
+
+        // Wait for mod cards to render
+        await page.WaitForSelectorAsync(".btn-primary", new() { Timeout = 10000 });
 
         // Focus first button (View Details)
         var button = await page.QuerySelectorAsync(".btn-primary");
