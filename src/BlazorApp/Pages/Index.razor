@@ -1,57 +1,110 @@
 @page "/"
 @using BlazorApp.Models
+@using BlazorApp.Services
+@inject IThunderstoreService ThunderstoreService
 <PageTitle>R.E.P.O. Mod Browser</PageTitle>
 
 <div class="container mt-4">
     <h1>Cosmetic Mods</h1>
     <p class="text-muted">Browse R.E.P.O. cosmetic mods from Thunderstore</p>
     
-    <div class="row mod-card-grid">
-        @foreach (var mod in _mods)
-        {
-            <div class="col-md-4 col-sm-6 mb-3">
-                <div class="card mod-card">
-                    <div class="card-body">
-                        <h5 class="card-title">@mod.Name</h5>
-                        <p class="card-text text-muted">@mod.FullName</p>
-                        <p class="card-text"><small>Version: @mod.VersionNumber</small></p>
-                        <a href="/mod/@GetNamespace(mod)/@mod.Name" class="btn btn-primary">View Details</a>
+    @if (_loading)
+    {
+        <div class="text-center my-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-3 text-muted">Loading mods...</p>
+        </div>
+    }
+    else if (_error != null)
+    {
+        <div class="alert alert-danger" role="alert">
+            <h4 class="alert-heading">Error Loading Mods</h4>
+            <p>@_error</p>
+            <hr>
+            <button class="btn btn-primary" @onclick="LoadPackagesAsync">Retry</button>
+        </div>
+    }
+    else if (_packages == null || _packages.Count == 0)
+    {
+        <div class="alert alert-info" role="alert">
+            <p class="mb-0">No cosmetic mods found.</p>
+        </div>
+    }
+    else
+    {
+        <div class="row mod-card-grid">
+            @foreach (var package in _packages)
+            {
+                var latestVersion = package.LatestVersion;
+                if (latestVersion == null) continue;
+                
+                <div class="col-md-4 col-sm-6 mb-3">
+                    <div class="card mod-card">
+                        @if (package.Icon != null)
+                        {
+                            <img src="@package.Icon" class="card-img-top" alt="@package.Name icon" />
+                        }
+                        <div class="card-body">
+                            <h5 class="card-title">@package.Name</h5>
+                            <p class="card-text text-muted">by @package.Owner</p>
+                            <p class="card-text"><small>@latestVersion.Description</small></p>
+                            <p class="card-text"><small>Version: @latestVersion.VersionNumber</small></p>
+                            <a href="/mod/@package.Owner/@package.Name" class="btn btn-primary">View Details</a>
+                        </div>
                     </div>
                 </div>
-            </div>
-        }
-    </div>
+            }
+        </div>
+    }
 </div>
 
 @code {
-    // TODO (#127): Replace with real data from IThunderstoreService
-    private readonly List<PackageVersion> _mods = new()
-    {
-        new() { Name = "Cigar", FullName = "TestAuthor-Cigar", VersionNumber = "1.0.0" },
-        new() { Name = "FrogHat", FullName = "TestAuthor-FrogHat", VersionNumber = "1.2.0" }
-    };
+    private List<ThunderstorePackage>? _packages;
+    private bool _loading = true;
+    private string? _error;
 
-    /// <summary>
-    /// Extracts the namespace or author portion from a package version's <see cref="PackageVersion.FullName"/>.
-    /// </summary>
-    /// <param name="mod">
-    /// The package version whose namespace/author should be extracted. The <see cref="PackageVersion.FullName"/>
-    /// property is expected to follow the format "AuthorName-ModName" (e.g., "TestAuthor-Cigar").
-    /// </param>
-    /// <returns>
-    /// The substring of <see cref="PackageVersion.FullName"/> before the first '-' character. If
-    /// <see cref="PackageVersion.FullName"/> is null, empty, or does not contain '-', returns "Unknown".
-    /// </returns>
-    private string GetNamespace(PackageVersion mod)
+    protected override async Task OnInitializedAsync()
     {
-        if (string.IsNullOrEmpty(mod?.FullName))
+        await LoadPackagesAsync();
+    }
+
+    private async Task LoadPackagesAsync()
+    {
+        _loading = true;
+        _error = null;
+        
+        try
         {
-            return "Unknown";
+            var allPackages = await ThunderstoreService.GetPackagesAsync();
+            
+            // Filter for Cosmetics category and non-deprecated
+            _packages = allPackages
+                .Where(p => p.Categories.Contains("Cosmetics") && !p.IsDeprecated)
+                .OrderByDescending(p => p.DateUpdated)
+                .ToList();
         }
-
-        var parts = mod.FullName.Split('-', 2);
-        return parts.Length > 0 && !string.IsNullOrWhiteSpace(parts[0])
-            ? parts[0]
-            : "Unknown";
+        catch (HttpRequestException ex)
+        {
+            _error = ex.StatusCode switch
+            {
+                System.Net.HttpStatusCode.NotFound => "Mod service temporarily unavailable",
+                System.Net.HttpStatusCode.InternalServerError => "Mod service temporarily unavailable",
+                _ => "Unable to connect to mod service"
+            };
+        }
+        catch (TaskCanceledException)
+        {
+            _error = "Unable to connect to mod service";
+        }
+        catch (Exception)
+        {
+            _error = "An error occurred. Please try again.";
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
 }

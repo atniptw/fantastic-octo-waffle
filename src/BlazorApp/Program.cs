@@ -8,6 +8,16 @@ var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 
+// Configure HttpClient for ThunderstoreService
+var workerUrl = builder.Configuration["WorkerBaseUrl"] ?? "http://localhost:8787";
+builder.Services.AddHttpClient<IThunderstoreService, ThunderstoreService>(client =>
+{
+    client.BaseAddress = new Uri(workerUrl);
+    client.Timeout = TimeSpan.FromSeconds(30);
+    client.DefaultRequestHeaders.Add("User-Agent", "RepoModViewer/0.1 (+https://atniptw.github.io)");
+    client.DefaultRequestHeaders.Add("Accept", "application/json");
+});
+
 // Configure HttpClient for Cloudflare Worker API
 builder.Services.AddHttpClient("WorkerAPI", client =>
 {
