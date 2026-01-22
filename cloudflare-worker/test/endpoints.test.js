@@ -331,6 +331,104 @@ describe('GET /api/packages', () => {
     });
   });
   
+  describe('HEAD Method Support', () => {
+    let mockFetch;
+    let originalFetch;
+    
+    beforeEach(() => {
+      originalFetch = global.fetch;
+      mockFetch = vi.fn();
+      global.fetch = mockFetch;
+    });
+    
+    afterEach(() => {
+      global.fetch = originalFetch;
+    });
+    
+    it('HEAD request returns 200 with no body', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify([{ name: 'test' }])
+      });
+      
+      const request = createRequest('/api/packages', 'HEAD');
+      const response = await worker.fetch(request, {}, {});
+      
+      expect(response.status).toBe(200);
+      const body = await response.text();
+      expect(body).toBe('');
+    });
+    
+    it('HEAD request includes CORS headers', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: async () => '[]'
+      });
+      
+      const request = createRequest('/api/packages', 'HEAD');
+      const response = await worker.fetch(request, {}, {});
+      
+      expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*');
+      expect(response.headers.get('Access-Control-Allow-Methods')).toBe('GET, HEAD, OPTIONS');
+      expect(response.headers.get('Access-Control-Allow-Headers')).toBe('Content-Type');
+    });
+    
+    it('HEAD request includes Content-Type header', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: async () => '[]'
+      });
+      
+      const request = createRequest('/api/packages', 'HEAD');
+      const response = await worker.fetch(request, {}, {});
+      
+      expect(response.headers.get('Content-Type')).toBe('application/json');
+    });
+    
+    it('HEAD request fetches from upstream', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: async () => '[]'
+      });
+      
+      const request = createRequest('/api/packages', 'HEAD');
+      await worker.fetch(request, {}, {});
+      
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://thunderstore.io/c/repo/api/v1/package/',
+        expect.any(Object)
+      );
+    });
+    
+    it('HEAD request returns 502 when upstream fails', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 500,
+        text: async () => 'Internal Server Error'
+      });
+      
+      const request = createRequest('/api/packages', 'HEAD');
+      const response = await worker.fetch(request, {}, {});
+      
+      expect(response.status).toBe(502);
+    });
+    
+    it('HEAD request returns 504 on timeout', async () => {
+      const abortError = new Error('The operation was aborted');
+      abortError.name = 'AbortError';
+      mockFetch.mockRejectedValue(abortError);
+      
+      const request = createRequest('/api/packages', 'HEAD');
+      const response = await worker.fetch(request, {}, {});
+      
+      expect(response.status).toBe(504);
+    });
+  });
+  
   describe('Environment Configuration', () => {
     it('respects env.SITE_ORIGIN in CORS headers', async () => {
       mockFetch.mockResolvedValue({

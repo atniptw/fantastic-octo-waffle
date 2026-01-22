@@ -13,9 +13,9 @@ export default {
       return handlePreflight(env);
     }
     
-    // Route: GET /api/packages
-    if (url.pathname === '/api/packages' && request.method === 'GET') {
-      return handlePackagesRequest(env);
+    // Route: GET/HEAD /api/packages
+    if (url.pathname === '/api/packages' && (request.method === 'GET' || request.method === 'HEAD')) {
+      return handlePackagesRequest(env, request.method);
     }
     
     // 404 for unknown routes
@@ -24,12 +24,13 @@ export default {
 };
 
 /**
- * Handles GET /api/packages endpoint
+ * Handles GET/HEAD /api/packages endpoint
  * Proxies Thunderstore package list with CORS support
  * @param {Object} env - Worker environment bindings
+ * @param {string} method - HTTP method (GET or HEAD)
  * @returns {Response} JSON response with package list or error
  */
-async function handlePackagesRequest(env) {
+async function handlePackagesRequest(env, method = 'GET') {
   const upstreamUrl = 'https://thunderstore.io/c/repo/api/v1/package/';
   
   // Validate URL (defense-in-depth, should never fail)
@@ -38,10 +39,11 @@ async function handlePackagesRequest(env) {
     return jsonError(validation.error, 400, env);
   }
   
+  let timeoutId;
   try {
     // Fetch from upstream with timeout
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    timeoutId = setTimeout(() => controller.abort(), 10000);
     
     const response = await fetch(upstreamUrl, {
       signal: controller.signal,
@@ -51,8 +53,6 @@ async function handlePackagesRequest(env) {
       }
     });
     
-    clearTimeout(timeoutId);
-    
     // Handle upstream errors
     if (!response.ok) {
       return jsonError('Upstream service unavailable', 502, env);
@@ -60,6 +60,18 @@ async function handlePackagesRequest(env) {
     
     // Proxy response with CORS
     const body = await response.text();
+    
+    // For HEAD requests, return headers and status without body
+    if (method === 'HEAD') {
+      return new Response(null, {
+        status: response.status,
+        headers: {
+          'Content-Type': 'application/json',
+          ...corsHeaders(env)
+        }
+      });
+    }
+    
     return new Response(body, {
       status: response.status,
       headers: {
@@ -76,5 +88,10 @@ async function handlePackagesRequest(env) {
     }
     
     return jsonError('Upstream service unavailable', 502, env);
+  } finally {
+    // Always clear the timeout to prevent memory leaks
+    if (timeoutId !== undefined) {
+      clearTimeout(timeoutId);
+    }
   }
 }
