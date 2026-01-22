@@ -18,10 +18,11 @@ builder.Services.AddHttpClient<IThunderstoreService, ThunderstoreService>(client
     client.DefaultRequestHeaders.Add("Accept", "application/json");
 });
 
-// Configure HttpClient for Cloudflare Worker API
+// Configure HttpClient for Cloudflare Worker API (used by other services)
 builder.Services.AddHttpClient("WorkerAPI", client =>
 {
     // TODO: Update with actual Worker URL when available (see docs/CloudflareWorker.md)
+    // Note: ThunderstoreService has its own dedicated HttpClient configured above
     client.BaseAddress = new Uri("https://api.worker.dev");
     client.DefaultRequestHeaders.Add("User-Agent", "RepoModViewer/0.1 (+https://atniptw.github.io)");
     client.DefaultRequestHeaders.Add("Accept", "application/json");
