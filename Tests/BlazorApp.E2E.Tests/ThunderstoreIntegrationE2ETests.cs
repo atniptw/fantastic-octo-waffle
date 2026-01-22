@@ -222,8 +222,8 @@ public sealed class ThunderstoreIntegrationE2ETests
 
             await page.RouteAsync("**/api/packages", async route =>
             {
-                // Delay response to capture loading state
-                await Task.Delay(2000); // Increase delay to reliably catch loading state
+                // Delay response significantly to reliably capture loading state
+                await Task.Delay(3000);
                 routeHandled = true;
                 await route.FulfillAsync(new()
                 {
@@ -233,21 +233,14 @@ public sealed class ThunderstoreIntegrationE2ETests
                 });
             });
 
-            // Navigate without waiting for network idle to catch loading state
-            var navigateTask = page.GotoAsync(BlazorServerFixture.ServerUrl, new() { WaitUntil = WaitUntilState.DOMContentLoaded });
+            // Navigate to page
+            await page.GotoAsync(BlazorServerFixture.ServerUrl, new() { WaitUntil = WaitUntilState.DOMContentLoaded });
 
-            // Try to catch the loading spinner - it's OK if we miss it
-            IElementHandle? spinner = null;
-            for (int i = 0; i < 10 && !routeHandled; i++)
-            {
-                await Task.Delay(100);
-                spinner = await page.QuerySelectorAsync(".spinner-border");
-                if (spinner != null) break;
-            }
+            // Wait for and verify loading spinner appears (deterministic assertion)
+            var spinner = await page.WaitForSelectorAsync(".spinner-border", new() { Timeout = 5000 });
+            Assert.NotNull(spinner);
 
-            await navigateTask;
-
-            // Wait for data to load
+            // Wait for data to load (spinner should disappear)
             await page.WaitForSelectorAsync(".card", new() { Timeout = 10000 });
 
             // Verify spinner is gone after data loads

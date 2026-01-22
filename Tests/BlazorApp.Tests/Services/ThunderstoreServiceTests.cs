@@ -47,20 +47,65 @@ public class ThunderstoreServiceTests : IDisposable
     [Fact]
     public async Task GetPackagesAsync_InvalidUrl_ThrowsHttpRequestException()
     {
-        // Arrange
-        _httpClient.BaseAddress = new Uri("https://invalid-url-that-does-not-exist.com");
+        // Arrange - Use a mocked handler that returns 404
+        var mockHandler = new MockHttpMessageHandler(HttpStatusCode.NotFound, string.Empty);
+        using var httpClient = new HttpClient(mockHandler)
+        {
+            BaseAddress = new Uri("http://localhost:8787")
+        };
+        var service = new ThunderstoreService(httpClient);
 
         // Act & Assert
         await Assert.ThrowsAsync<HttpRequestException>(
-            () => _sut.GetPackagesAsync());
+            () => service.GetPackagesAsync());
     }
 
     [Fact]
     public async Task GetPackagesAsync_EmptyResponse_ReturnsEmptyList()
     {
-        // This test would require a mock HTTP handler, which is out of scope for minimal changes
-        // In a real scenario, we'd use a mocking library like Moq or a test server
-        // For now, we verify the basic contract that an empty list is returned rather than null
-        Assert.NotNull(new List<ThunderstorePackage>());
+        // Arrange - Mock handler returns empty JSON array
+        var mockHandler = new MockHttpMessageHandler(HttpStatusCode.OK, "[]");
+        using var httpClient = new HttpClient(mockHandler)
+        {
+            BaseAddress = new Uri("http://localhost:8787")
+        };
+        var service = new ThunderstoreService(httpClient);
+
+        // Act
+        var result = await service.GetPackagesAsync();
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Empty(result);
+    }
+
+    /// <summary>
+    /// Mock HTTP message handler for testing without real network calls
+    /// </summary>
+    private class MockHttpMessageHandler : HttpMessageHandler
+    {
+        private readonly HttpStatusCode _statusCode;
+        private readonly string _content;
+
+        public MockHttpMessageHandler(HttpStatusCode statusCode, string content)
+        {
+            _statusCode = statusCode;
+            _content = content;
+        }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var response = new HttpResponseMessage(_statusCode)
+            {
+                Content = new StringContent(_content, System.Text.Encoding.UTF8, "application/json")
+            };
+
+            if (!response.IsSuccessStatusCode)
+            {
+                response.Content = new StringContent(string.Empty);
+            }
+
+            return Task.FromResult(response);
+        }
     }
 }

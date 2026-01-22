@@ -14,7 +14,8 @@ builder.Services.AddHttpClient<IThunderstoreService, ThunderstoreService>(client
 {
     client.BaseAddress = new Uri(workerUrl);
     client.Timeout = TimeSpan.FromSeconds(30);
-    client.DefaultRequestHeaders.Add("User-Agent", "RepoModViewer/0.1 (+https://atniptw.github.io)");
+    // Note: User-Agent cannot be set in Blazor WASM (Fetch API restriction)
+    // Set User-Agent on the Worker's upstream requests instead
     client.DefaultRequestHeaders.Add("Accept", "application/json");
 });
 
