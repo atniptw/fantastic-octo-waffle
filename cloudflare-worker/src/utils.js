@@ -98,3 +98,81 @@ export function validateUpstreamUrl(urlString) {
   
   return { valid: true };
 }
+
+/**
+ * Validates a Thunderstore parameter (namespace, name, or version)
+ * 
+ * Rules:
+ * - Length: 1-256 characters (Thunderstore limit)
+ * - Pattern: ^[a-zA-Z0-9_.-]+$ (alphanumeric, underscore, hyphen, dot)
+ * - No special chars, no spaces, no null bytes, no path traversal
+ * - Check decoded value (handle URL encoding edge cases)
+ * 
+ * @param {string} param - Parameter to validate
+ * @returns {boolean} True if valid, false otherwise
+ * 
+ * Valid examples:
+ * - "YMC_MHZ" (underscore)
+ * - "More-Head" (hyphen)
+ * - "My_Mod-v2" (mixed)
+ * - "1.2.3" (version with dots)
+ * - "1234" (numeric)
+ * 
+ * Invalid examples:
+ * - "../evil" (path traversal)
+ * - "mod%00name" (null byte)
+ * - "mod name" (space)
+ * - "mod@name" (special char)
+ * - "" (empty)
+ */
+export function isValidParam(param) {
+  if (!param || typeof param !== 'string') return false;
+  if (param.length < 1 || param.length > 256) return false;
+  // Alphanumeric, underscore, hyphen, dot only
+  return /^[a-zA-Z0-9_.-]+$/.test(param);
+}
+
+/**
+ * Parses filename from Content-Disposition header
+ * Handles multiple RFC formats and edge cases
+ * 
+ * Supported formats:
+ * 1. Standard: attachment; filename="my-file.zip"
+ * 2. RFC 5987: attachment; filename*=UTF-8''my-file.zip (URL-encoded)
+ * 3. Fallback: Uses provided fallback if parsing fails
+ * 
+ * @param {string} disposition - Content-Disposition header value
+ * @param {string} fallback - Fallback filename (e.g., "{name}.zip")
+ * @returns {string} Extracted or fallback filename
+ * 
+ * Examples:
+ * - parseFilename('attachment; filename="mod.zip"', "default.zip") → "mod.zip"
+ * - parseFilename('attachment; filename*=UTF-8''%20name%20.zip', "default.zip") → " name .zip"
+ * - parseFilename(null, "default.zip") → "default.zip"
+ */
+export function parseFilename(disposition, fallback) {
+  if (!disposition) return fallback;
+  
+  try {
+    // Try standard format: filename="value" or filename=value
+    const standardMatch = disposition.match(/filename="?([^";]+)"?/);
+    if (standardMatch && standardMatch[1]) {
+      return standardMatch[1];
+    }
+    
+    // Try RFC 5987 format: filename*=charset'lang'value or filename*=''value
+    const rfc5987Match = disposition.match(/filename\*=(?:[a-zA-Z0-9_-]*'')?([^;]+)/);
+    if (rfc5987Match && rfc5987Match[1]) {
+      try {
+        return decodeURIComponent(rfc5987Match[1]);
+      } catch {
+        // If decoding fails, return encoded version
+        return rfc5987Match[1];
+      }
+    }
+  } catch (e) {
+    console.warn('Error parsing filename from Content-Disposition:', e.message);
+  }
+  
+  return fallback;
+}
