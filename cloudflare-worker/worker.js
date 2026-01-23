@@ -114,7 +114,7 @@ async function handleDownloadMetadata(env, url) {
   const name = parts[4];
   const version = parts[5];
   
-  // Validate parameters (alphanumeric, underscore, hyphen only)
+  // Validate parameters (alphanumeric, underscore, hyphen, and dot)
   if (!isValidParam(namespace) || !isValidParam(name) || !isValidParam(version)) {
     console.warn(`HEAD /api/download: Invalid parameters - ${namespace}/${name}/${version}`);
     return jsonError('Invalid parameters', 400, env);
@@ -131,7 +131,10 @@ async function handleDownloadMetadata(env, url) {
     const response = await fetch(upstreamUrl, { 
       method: 'HEAD',
       redirect: 'follow', // Follow redirects
-      signal: controller.signal 
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'RepoModViewer/0.1 (+https://atniptw.github.io)'
+      }
     });
     
     // Handle upstream errors
