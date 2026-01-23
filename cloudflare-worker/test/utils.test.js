@@ -503,9 +503,9 @@ describe('parseFilename()', () => {
       expect(result).toBe('mod.zip');
     });
 
-    it('handles disposition with semicolons in filename', () => {
+    it('handles disposition with semicolons in quoted filename', () => {
       const result = parseFilename('attachment; filename="test;file.zip"', 'default.zip');
-      expect(result).toBe('test');
+      expect(result).toBe('test;file.zip');
     });
 
     it('handles inline disposition type', () => {

@@ -154,15 +154,21 @@ export function parseFilename(disposition, fallback) {
   if (!disposition) return fallback;
   
   try {
-    // Try standard format: filename="value" or filename=value
-    const standardMatch = disposition.match(/filename="?([^";]+)"?/);
-    if (standardMatch && standardMatch[1]) {
-      return standardMatch[1];
+    // Try standard format with quotes: filename="value"
+    const quotedMatch = disposition.match(/filename="([^"]+)"/);
+    if (quotedMatch && quotedMatch[1] && quotedMatch[1].length > 0) {
+      return quotedMatch[1];
+    }
+    
+    // Try standard format without quotes: filename=value (up to semicolon or end, but not starting with quote)
+    const unquotedMatch = disposition.match(/filename=([^";\s][^;\s]*)/);
+    if (unquotedMatch && unquotedMatch[1] && unquotedMatch[1].length > 0) {
+      return unquotedMatch[1];
     }
     
     // Try RFC 5987 format: filename*=charset'lang'value or filename*=''value
     const rfc5987Match = disposition.match(/filename\*=(?:[a-zA-Z0-9_-]*'')?([^;]+)/);
-    if (rfc5987Match && rfc5987Match[1]) {
+    if (rfc5987Match && rfc5987Match[1] && rfc5987Match[1].length > 0) {
       try {
         return decodeURIComponent(rfc5987Match[1]);
       } catch {
