@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using System.Text.RegularExpressions;
 using BlazorApp.Models;
 using Microsoft.Extensions.Logging;
 
@@ -7,12 +8,16 @@ namespace BlazorApp.Services;
 /// <summary>
 /// Downloads mod ZIP files from Cloudflare Worker with progress tracking and cancellation support.
 /// </summary>
-public class ZipDownloader : IZipDownloader
+public partial class ZipDownloader : IZipDownloader
 {
     private const int ChunkSize = 65536; // 64 KB
     private const int DownloadTimeoutSeconds = 300; // 5 minutes
+    private const double DiskSpaceBufferMultiplier = 1.5; // 1.5x safety buffer
     private const string TempDirectoryName = "repo-mod-viewer";
     private static readonly byte[] ZipMagicBytes = { 0x50, 0x4B, 0x03, 0x04 };
+
+    [GeneratedRegex(@"^\d+\.\d+\.\d+", RegexOptions.Compiled)]
+    private static partial Regex VersionPattern();
 
     private readonly HttpClient _httpClient;
     private readonly ILogger<ZipDownloader>? _logger;
@@ -131,9 +136,10 @@ public class ZipDownloader : IZipDownloader
             try
             {
                 // Download with progress tracking
-                await using (var stream = await response.Content.ReadAsStreamAsync(cts.Token).ConfigureAwait(false))
-                await using (var fileStream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, ChunkSize, useAsync: true))
                 {
+                    await using var stream = await response.Content.ReadAsStreamAsync(cts.Token).ConfigureAwait(false);
+                    await using var fileStream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, ChunkSize, useAsync: true);
+                    
                     var buffer = new byte[ChunkSize];
                     var downloaded = 0L;
                     int bytesRead;
@@ -155,7 +161,7 @@ public class ZipDownloader : IZipDownloader
                     _logger?.LogInformation("Download completed: {Downloaded} bytes", downloaded);
                 }
 
-                // Validate ZIP magic bytes
+                // Validate ZIP magic bytes (after streams are closed)
                 if (!IsValidZipFile(tempPath))
                 {
                     _logger?.LogError("Downloaded file is not a valid ZIP archive");
@@ -219,7 +225,7 @@ public class ZipDownloader : IZipDownloader
         {
             var tempPath = Path.GetTempPath();
             var driveInfo = new DriveInfo(Path.GetPathRoot(tempPath) ?? tempPath);
-            var requiredSpace = contentLength * 3 / 2; // 1.5x buffer
+            var requiredSpace = (long)(contentLength * DiskSpaceBufferMultiplier);
 
             if (driveInfo.AvailableFreeSpace < requiredSpace)
             {
@@ -293,7 +299,7 @@ public class ZipDownloader : IZipDownloader
         if (segments.Length > 1)
         {
             var versionCandidate = segments[^2];
-            if (System.Text.RegularExpressions.Regex.IsMatch(versionCandidate, @"^\d+\.\d+\.\d+"))
+            if (VersionPattern().IsMatch(versionCandidate))
             {
                 return SanitizeFileName(versionCandidate);
             }
