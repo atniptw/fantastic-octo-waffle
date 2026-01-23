@@ -40,7 +40,7 @@ public static class BinaryReaderExtensions
 
     /// <summary>
     /// Calculates padding bytes needed to align to the specified boundary (big-endian).
-    /// Uses the formula: align(position, boundary) = (position + boundary - 1) &amp; ~(boundary - 1)
+    /// Uses the formula: align(position, boundary) = (position + boundary - 1) AND NOT(boundary - 1)
     /// </summary>
     /// <param name="offset">Current offset in bytes.</param>
     /// <param name="alignment">Alignment boundary (must be power of 2: 4, 8, 16).</param>
@@ -253,7 +253,7 @@ public static class BinaryReaderExtensions
             throw new Utf8DecodingException(
                 $"UTF-8 decoding failed at offset {startPosition} for {bytes.Count} bytes", ex);
         }
-        catch (ArgumentException ex) when (ex.Message.Contains("invalid"))
+        catch (ArgumentException ex) when (ex.Message.Contains("invalid", StringComparison.OrdinalIgnoreCase))
         {
             throw new Utf8DecodingException(
                 $"UTF-8 decoding failed at offset {startPosition} for {bytes.Count} bytes", ex);
