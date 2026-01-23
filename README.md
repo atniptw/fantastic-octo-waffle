@@ -9,12 +9,23 @@ A project to showcase browser-first cosmetic viewing for mods.
 
 ### First-Time Setup
 
-```bash
-# Download Bootstrap (required for styling)
-mkdir -p src/BlazorApp/wwwroot/lib/bootstrap/dist/css
-curl -sL https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css \
-  -o src/BlazorApp/wwwroot/lib/bootstrap/dist/css/bootstrap.min.css
-```
+1. **Download Bootstrap** (required for styling)
+   ```bash
+   mkdir -p src/BlazorApp/wwwroot/lib/bootstrap/dist/css
+   curl -sL https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css \
+     -o src/BlazorApp/wwwroot/lib/bootstrap/dist/css/bootstrap.min.css
+   ```
+
+2. **Configure Worker URL** (for Codespaces or local development)
+   ```bash
+   cp src/BlazorApp/wwwroot/appsettings.Development.json.example \
+      src/BlazorApp/wwwroot/appsettings.Development.json
+   ```
+   Then edit `appsettings.Development.json` and replace the placeholder with your Worker URL:
+   - For GitHub Codespaces: `https://your-codespace-name-unique-hash.app.github.dev`
+   - For local development: `http://localhost:8787` (or your Worker port)
+   
+   **Note:** `appsettings.Development.json` is gitignored and should not be committed.
 
 ### Running Locally
 

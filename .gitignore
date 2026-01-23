@@ -22,6 +22,7 @@ _ReSharper*/
 wwwroot/dist/
 wwwroot/_framework/
 blazor.boot.json
+appsettings.Development.json
 
 # Node.js / npm
 node_modules/
