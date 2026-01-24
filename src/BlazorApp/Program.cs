@@ -38,5 +38,6 @@ builder.Services.AddScoped<IZipIndexer, ZipIndexer>();
 builder.Services.AddScoped<IAssetScanner, AssetScanner>();
 builder.Services.AddScoped<IAssetRenderer, AssetRenderer>();
 builder.Services.AddScoped<IViewerService, ViewerService>();
+builder.Services.AddScoped<IModDetailStateService, ModDetailStateService>();
 
 await builder.Build().RunAsync();
