@@ -67,8 +67,8 @@ public class ZipIndexer : IZipIndexer
             var fileType = FileType.Unknown;
             var renderable = false;
 
-            // Skip directories
-            if (entry.FullName.EndsWith('/') || entry.Length == 0)
+            // Skip directories (identified by trailing slash or empty name)
+            if (entry.FullName.EndsWith("/", StringComparison.Ordinal) || string.IsNullOrEmpty(entry.Name))
             {
                 continue;
             }
@@ -78,18 +78,17 @@ public class ZipIndexer : IZipIndexer
             // Limit header size to avoid overflow and memory issues with large files
             var headerSize = (int)Math.Min(HeaderBufferSize, Math.Min(entry.Length, int.MaxValue));
             var header = new byte[headerSize];
-            var bytesRead = await entryStream.ReadAsync(header, ct);
+            var bytesRead = await ReadExactlyAsync(entryStream, header, headerSize, ct);
 
-            if (bytesRead >= 7)
+            // Always detect file type; DetectFileType handles short headers internally.
+            fileType = DetectFileType(entry.FullName, header);
+
+            // For UnityFS files, check if renderable (contains Mesh objects).
+            // Require at least the UnityFS magic length to safely inspect the header.
+            if (fileType == FileType.UnityFS && bytesRead >= UnityFSMagic.Length)
             {
-                fileType = DetectFileType(entry.FullName, header);
-
-                // For UnityFS files, check if renderable (contains Mesh objects)
-                if (fileType == FileType.UnityFS && bytesRead > 0)
-                {
-                    // Pass header buffer instead of stream (which doesn't support seeking)
-                    renderable = IsRenderable(header, bytesRead);
-                }
+                // Pass header buffer instead of stream (which doesn't support seeking)
+                renderable = IsRenderable(header, bytesRead);
             }
 
             yield return new FileIndexItem(
@@ -107,15 +106,13 @@ public class ZipIndexer : IZipIndexer
     private static FileType DetectFileType(string fileName, byte[] header)
     {
         // Check for UnityFS magic bytes
-        if (header.Length >= 7)
+        if (header.Length >= 7 &&
+            (StartsWithMagic(header, UnityFSMagic) ||
+             StartsWithMagic(header, UnityWebMagic) ||
+             StartsWithMagic(header, UnityRawMagic) ||
+             StartsWithMagic(header, UnityArchiveMagic)))
         {
-            if (StartsWithMagic(header, UnityFSMagic) ||
-                StartsWithMagic(header, UnityWebMagic) ||
-                StartsWithMagic(header, UnityRawMagic) ||
-                StartsWithMagic(header, UnityArchiveMagic))
-            {
-                return FileType.UnityFS;
-            }
+            return FileType.UnityFS;
         }
 
         // Check file extension for .resS resource files
@@ -124,13 +121,13 @@ public class ZipIndexer : IZipIndexer
             return FileType.Resource;
         }
 
-        // Check for SerializedFile format (no magic bytes, detected by structure)
-        // SerializedFiles typically start with metadata size and version info
-        if (header.Length >= MinSerializedFileSize)
+        // Check for SerializedFile format.
+        // Full detection would require parsing the SerializedFile header structure,
+        // but many Unity asset metadata files use the .assets extension.
+        if (header.Length >= MinSerializedFileSize &&
+            fileName.EndsWith(".assets", StringComparison.OrdinalIgnoreCase))
         {
-            // SerializedFile detection is complex, so we'll be conservative
-            // and only mark explicit .resS files as Resource type for now
-            // Other detection would require deeper parsing
+            return FileType.SerializedFile;
         }
 
         return FileType.Unknown;
@@ -165,13 +162,16 @@ public class ZipIndexer : IZipIndexer
     {
         try
         {
-            if (length < 8)
+            if (length < 7)
             {
                 return false;
             }
 
-            // Check for UnityFS signature
-            if (!StartsWithMagic(header, UnityFSMagic))
+            // Check for any Unity bundle signature variant
+            if (!StartsWithMagic(header, UnityFSMagic) &&
+                !StartsWithMagic(header, UnityWebMagic) &&
+                !StartsWithMagic(header, UnityRawMagic) &&
+                !StartsWithMagic(header, UnityArchiveMagic))
             {
                 return false;
             }
@@ -195,5 +195,24 @@ public class ZipIndexer : IZipIndexer
             // If we can't parse it, it's not renderable
             return false;
         }
+    }
+
+    /// <summary>
+    /// Reads exactly the requested number of bytes from the stream, looping until
+    /// the buffer is filled or EOF is reached.
+    /// </summary>
+    private static async Task<int> ReadExactlyAsync(Stream stream, byte[] buffer, int count, CancellationToken ct)
+    {
+        var totalRead = 0;
+        while (totalRead < count)
+        {
+            var read = await stream.ReadAsync(buffer.AsMemory(totalRead, count - totalRead), ct);
+            if (read == 0)
+            {
+                break; // EOF reached
+            }
+            totalRead += read;
+        }
+        return totalRead;
     }
 }

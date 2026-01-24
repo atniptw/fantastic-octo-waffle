@@ -169,6 +169,86 @@ public class ZipIndexerTests
         });
     }
 
+    [Fact]
+    public async Task IndexAsync_MultiChunkZipStream_IndexesCorrectly()
+    {
+        // Arrange - Split ZIP into multiple chunks
+        var zipStream = CreateZipWithMultipleChunks();
+        var items = new List<FileIndexItem>();
+
+        // Act
+        await foreach (var item in _sut.IndexAsync(zipStream))
+        {
+            items.Add(item);
+        }
+
+        // Assert - Should successfully parse despite chunk boundaries
+        Assert.Single(items);
+        Assert.Equal("asset.hhh", items[0].FileName);
+        Assert.Equal(FileType.UnityFS, items[0].Type);
+        Assert.True(items[0].Renderable);
+    }
+
+    [Fact]
+    public async Task IndexAsync_UnityWebVariant_DetectsAsUnityFS()
+    {
+        // Arrange
+        var unityWebContent = CreateUnityWebFileContent();
+        var zipStream = CreateZipWithBinaryFile("asset.unity3d", unityWebContent);
+        var items = new List<FileIndexItem>();
+
+        // Act
+        await foreach (var item in _sut.IndexAsync(zipStream))
+        {
+            items.Add(item);
+        }
+
+        // Assert
+        Assert.Single(items);
+        Assert.Equal(FileType.UnityFS, items[0].Type);
+        Assert.True(items[0].Renderable);
+    }
+
+    [Fact]
+    public async Task IndexAsync_AssetsFile_DetectsAsSerializedFile()
+    {
+        // Arrange
+        var assetsContent = CreateSerializedFileContent();
+        var zipStream = CreateZipWithBinaryFile("sharedassets0.assets", assetsContent);
+        var items = new List<FileIndexItem>();
+
+        // Act
+        await foreach (var item in _sut.IndexAsync(zipStream))
+        {
+            items.Add(item);
+        }
+
+        // Assert
+        Assert.Single(items);
+        Assert.Equal("sharedassets0.assets", items[0].FileName);
+        Assert.Equal(FileType.SerializedFile, items[0].Type);
+        Assert.False(items[0].Renderable); // SerializedFile is not renderable on its own
+    }
+
+    [Fact]
+    public async Task IndexAsync_ZeroLengthFile_IsIndexed()
+    {
+        // Arrange - ZIP with zero-length file (not a directory)
+        var zipStream = CreateZipWithZeroLengthFile();
+        var items = new List<FileIndexItem>();
+
+        // Act
+        await foreach (var item in _sut.IndexAsync(zipStream))
+        {
+            items.Add(item);
+        }
+
+        // Assert - Zero-length files should be indexed (not skipped as directories)
+        Assert.Single(items);
+        Assert.Equal("empty.txt", items[0].FileName);
+        Assert.Equal(0, items[0].SizeBytes);
+    }
+
     private static async IAsyncEnumerable<byte[]> EmptyAsyncEnumerable()
     {
         await Task.CompletedTask;
@@ -239,6 +319,41 @@ public class ZipIndexerTests
         yield return new byte[] { 0x00, 0x00 }; // Incomplete/corrupt data
     }
 
+    private static async IAsyncEnumerable<byte[]> CreateZipWithMultipleChunks()
+    {
+        var zipBytes = CreateZipArchive(zip =>
+        {
+            var entry = zip.CreateEntry("asset.hhh");
+            using var stream = entry.Open();
+            var unityFSContent = CreateUnityFSFileContent();
+            stream.Write(unityFSContent, 0, unityFSContent.Length);
+        });
+
+        // Split into multiple chunks to test streaming
+        await Task.CompletedTask;
+        const int chunkSize = 512;
+        for (int i = 0; i < zipBytes.Length; i += chunkSize)
+        {
+            var remaining = Math.Min(chunkSize, zipBytes.Length - i);
+            var chunk = new byte[remaining];
+            Array.Copy(zipBytes, i, chunk, 0, remaining);
+            yield return chunk;
+        }
+    }
+
+    private static async IAsyncEnumerable<byte[]> CreateZipWithZeroLengthFile()
+    {
+        var zipBytes = CreateZipArchive(zip =>
+        {
+            // Create a zero-length file (not a directory)
+            var entry = zip.CreateEntry("empty.txt");
+            // Don't write anything to it
+        });
+
+        await Task.CompletedTask;
+        yield return zipBytes;
+    }
+
     private static byte[] CreateZipArchive(Action<ZipArchive> populateArchive)
     {
         using var ms = new MemoryStream();
@@ -269,6 +384,38 @@ public class ZipIndexerTests
 
         // File size (8 bytes) - just use current size as placeholder
         writer.Write((long)100);
+
+        return ms.ToArray();
+    }
+
+    private static byte[] CreateUnityWebFileContent()
+    {
+        // Create a minimal UnityWeb file header for testing
+        using var ms = new MemoryStream();
+        using var writer = new BinaryWriter(ms);
+
+        // Magic signature "UnityWeb"
+        writer.Write("UnityWeb"u8.ToArray());
+
+        // Format version
+        writer.Write(6);
+
+        // Version string (null-terminated)
+        writer.Write("2021.3.0f1\0"u8.ToArray());
+
+        return ms.ToArray();
+    }
+
+    private static byte[] CreateSerializedFileContent()
+    {
+        // Create a minimal SerializedFile content for testing
+        // SerializedFiles have complex structure, but we just need enough
+        // bytes to pass the MinSerializedFileSize check
+        using var ms = new MemoryStream();
+        using var writer = new BinaryWriter(ms);
+
+        // Write some dummy data to meet minimum size requirement
+        writer.Write(new byte[20]);
 
         return ms.ToArray();
     }
