@@ -130,9 +130,9 @@
                 else if (_state == DownloadState.Processing)
                 {
                     <div class="spinner-border spinner-border-sm me-2" role="status">
-                        <span class="visually-hidden">Indexing files...</span>
+                        <span class="visually-hidden">Downloading and indexing files...</span>
                     </div>
-                    <span>Analyzing mod files...</span>
+                    <span>Downloading & analyzing mod files...</span>
                 }
                 else if (_state == DownloadState.Ready)
                 {
@@ -278,7 +278,7 @@
 
     private async Task StartDownload()
     {
-        if (_state != DownloadState.Idle || _package?.LatestVersion == null) return;
+        if ((_state != DownloadState.Idle && _state != DownloadState.Error) || _package?.LatestVersion == null) return;
         
         _state = DownloadState.Downloading;
         _errorMessage = null;
@@ -289,10 +289,14 @@
         
         try
         {
-            // Step 1: Download ZIP (streaming)
+            // Note: Progress tracking is not implemented because ZipDownloader.StreamZipAsync()
+            // returns a lazy IAsyncEnumerable that's consumed directly by ZipIndexer.IndexAsync().
+            // Download and indexing happen simultaneously. When real implementations are available,
+            // consider wrapping the stream to track bytes or providing progress callbacks.
+            
+            // Step 1: Download & Index ZIP (streaming)
             var downloadStream = ZipDownloader.StreamZipAsync(_package.LatestVersion, _cts.Token);
             
-            // Step 2: Index ZIP while downloading
             _state = DownloadState.Processing;
             StateHasChanged();
             
@@ -303,17 +307,14 @@
             }
             
             // Step 3: Store for Viewer3D
-            if (_package != null)
-            {
-                await StateService.SetCurrentModAsync(ModId, _fileIndex, _package);
-            }
+            await StateService.SetCurrentModAsync(ModId, _fileIndex, _package);
             
             // Step 4: Ready
             _state = DownloadState.Ready;
         }
         catch (OperationCanceledException)
         {
-            _state = DownloadState.Idle;
+            _state = DownloadState.Error;
             _errorMessage = "Download cancelled.";
         }
         catch (HttpRequestException)
@@ -325,11 +326,6 @@
         {
             _state = DownloadState.Error;
             _errorMessage = "Downloaded file is corrupted—try again";
-        }
-        catch (IOException ex) when (ex.Message.Contains("space", StringComparison.OrdinalIgnoreCase))
-        {
-            _state = DownloadState.Error;
-            _errorMessage = "Not enough disk space to download mod";
         }
         catch (Exception)
         {
@@ -360,18 +356,18 @@
     private string FormatDownloadCount(int count)
     {
         if (count < 1000) return count.ToString();
-        if (count < 1_000_000) return $"{count / 1000}K";
-        return $"{count / 1_000_000}M";
+        if (count < 1_000_000) return $"{count / 1000.0:F1}K";
+        return $"{count / 1_000_000.0:F1}M";
     }
 
     private int GetProgressPercentage() => _totalBytes > 0 
         ? (int)((_downloadedBytes * 100) / _totalBytes) 
         : 0;
 
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync()
     {
         _cts?.Cancel();
         _cts?.Dispose();
-        await Task.CompletedTask;
+        return ValueTask.CompletedTask;
     }
 }
