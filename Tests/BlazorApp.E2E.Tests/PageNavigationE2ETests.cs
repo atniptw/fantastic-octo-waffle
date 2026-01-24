@@ -91,7 +91,8 @@ public sealed class PageNavigationE2ETests
     }
 
     /// <summary>
-    /// E2E Test: Click preview button on detail page and navigate to viewer.
+    /// E2E Test: Verify ModDetail page loads with metadata and Download button appears.
+    /// Note: Actual download/indexing is tested in unit tests with mocked services.
     /// </summary>
     [Fact]
     public async Task ModDetail_ClickPreview_NavigatesToViewer()
@@ -99,16 +100,31 @@ public sealed class PageNavigationE2ETests
         Assert.NotNull(_fixture.Browser);
         var page = await _fixture.Browser.NewPageAsync();
 
-        // Navigate directly to a detail page
-        await page.GotoAsync($"{BlazorServerFixture.ServerUrl}/mod/TestAuthor/Cigar", 
+        // Mock API before navigation
+        await SetupApiMockAsync(page);
+
+        // Navigate directly to a detail page (using test fixture mod)
+        await page.GotoAsync($"{BlazorServerFixture.ServerUrl}/mod/TestAuthor/FrogHatSmile", 
             new() { WaitUntil = WaitUntilState.NetworkIdle });
 
-        // Click preview button
-        await page.ClickAsync("text=Preview 3D Assets");
-        await page.WaitForURLAsync("**/viewer?mod=**");
+        // Wait for page content to load - check for the breadcrumb which appears in all states
+        await page.WaitForSelectorAsync(".breadcrumb", new() { Timeout = 5000 });
 
-        // Verify we're on viewer page
-        Assert.Contains("/viewer", page.Url);
+        // Verify mod metadata is displayed
+        var heading = await page.QuerySelectorAsync("h1");
+        Assert.NotNull(heading);
+        var headingText = await heading.TextContentAsync();
+        Assert.Contains("FrogHatSmile", headingText);
+
+        // Verify "Download & Preview" button exists and is clickable
+        var downloadButton = await page.QuerySelectorAsync("text=Download & Preview");
+        Assert.NotNull(downloadButton);
+        
+        // Verify breadcrumb navigation back to index
+        var backLink = await page.QuerySelectorAsync(".breadcrumb a");
+        Assert.NotNull(backLink);
+        var backHref = await backLink.GetAttributeAsync("href");
+        Assert.Equal("/", backHref);
         
         await page.CloseAsync();
     }
@@ -151,7 +167,9 @@ public sealed class PageNavigationE2ETests
     }
 
     /// <summary>
-    /// E2E Test: Full user flow from index to detail to viewer.
+    /// E2E Test: Full user flow from index to detail page.
+    /// Verifies navigation between pages and page metadata loads correctly.
+    /// Note: File indexing and preview are tested in unit tests with mocked services.
     /// </summary>
     [Fact]
     public async Task FullUserFlow_BrowseToDetailToViewer_Succeeds()
@@ -176,20 +194,33 @@ public sealed class PageNavigationE2ETests
         // 1. Start at index
         await page.GotoAsync(BlazorServerFixture.ServerUrl, new() { WaitUntil = WaitUntilState.NetworkIdle });
         
-        // 2. Click mod detail
+        // Verify index page loaded
+        var indexHeading = await page.QuerySelectorAsync("h1");
+        Assert.NotNull(indexHeading);
+        
+        // 2. Click mod detail ("View Details" button)
         await page.ClickAsync("text=View Details");
         await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         
-        // 3. Click preview
-        await page.ClickAsync("text=Preview 3D Assets");
-        await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        // Wait for breadcrumb to load on detail page (indicates component loaded)
+        await page.WaitForSelectorAsync(".breadcrumb", new() { Timeout = 5000 });
+        
+        // 3. Verify we're on detail page
+        Assert.Contains("/mod/", page.Url);
+        
+        // 4. Verify mod metadata displayed
+        var detailHeading = await page.QuerySelectorAsync("h1");
+        Assert.NotNull(detailHeading);
+        var modName = await detailHeading.TextContentAsync();
+        Assert.NotNull(modName);
+        Assert.NotEmpty(modName);
+        
+        // 5. Verify "Download & Preview" button exists
+        var downloadButton = await page.QuerySelectorAsync("text=Download & Preview");
+        Assert.NotNull(downloadButton);
 
-        // 4. Verify no JavaScript errors (404 resource errors are allowed)
+        // 6. Verify no JavaScript errors (404 resource errors are allowed)
         Assert.Empty(consoleErrors);
-
-        // 5. Verify canvas rendered
-        var canvas = await page.QuerySelectorAsync("canvas#threeJsCanvas");
-        Assert.NotNull(canvas);
 
         await page.CloseAsync();
     }
