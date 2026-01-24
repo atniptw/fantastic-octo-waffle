@@ -1170,6 +1170,7 @@ describe('GET /api/download/:namespace/:name/:version', () => {
       expect(mockFetch).toHaveBeenCalledWith(
         'https://thunderstore.io/package/download/YMC_MHZ/MoreHead/1.4.3/',
         expect.objectContaining({
+          redirect: 'follow',
           signal: expect.any(AbortSignal)
         })
       );

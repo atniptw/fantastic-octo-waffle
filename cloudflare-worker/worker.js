@@ -222,11 +222,15 @@ async function handleDownloadRequest(env, url) {
     timeoutId = setTimeout(() => controller.abort(), 30000);
     
     const response = await fetch(upstreamUrl, {
+      redirect: 'follow', // Follow redirects
       signal: controller.signal,
       headers: {
         'User-Agent': 'RepoModViewer/0.1 (+https://atniptw.github.io)'
       }
     });
+    
+    // Clear timeout immediately after fetch completes to prevent aborting during streaming
+    clearTimeout(timeoutId);
     
     // Handle upstream errors
     if (!response.ok) {
@@ -261,7 +265,7 @@ async function handleDownloadRequest(env, url) {
     
     return jsonError('Download service unavailable', 502, env);
   } finally {
-    // Always clear the timeout to prevent memory leaks
+    // Safety net: clear timeout if not already cleared (e.g., on error paths)
     if (timeoutId !== undefined) {
       clearTimeout(timeoutId);
     }
