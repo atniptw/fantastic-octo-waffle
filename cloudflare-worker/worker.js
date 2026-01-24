@@ -23,6 +23,11 @@ export default {
       return handleDownloadMetadata(env, url);
     }
     
+    // Route: GET /api/download/:namespace/:name/:version
+    if (url.pathname.match(/^\/api\/download\/[^\/]+\/[^\/]+\/[^\/]+$/) && request.method === 'GET') {
+      return handleDownloadRequest(env, url);
+    }
+    
     // 404 for unknown routes
     return jsonError('Not Found', 404, env);
   }
@@ -177,6 +182,79 @@ async function handleDownloadMetadata(env, url) {
     
     if (error.name === 'AbortError') {
       console.warn(`HEAD /api/download: Timeout after 10s for ${namespace}/${name}/${version}`);
+      return jsonError('Download service timeout', 504, env);
+    }
+    
+    return jsonError('Download service unavailable', 502, env);
+  } finally {
+    // Always clear the timeout to prevent memory leaks
+    if (timeoutId !== undefined) {
+      clearTimeout(timeoutId);
+    }
+  }
+}
+
+/**
+ * Handles GET /api/download/:namespace/:name/:version endpoint
+ * Streams ZIP file download from Thunderstore without buffering entire file
+ * @param {Object} env - Worker environment bindings
+ * @param {URL} url - Parsed request URL
+ * @returns {Response} Streaming response with ZIP body or error
+ */
+async function handleDownloadRequest(env, url) {
+  const parts = url.pathname.split('/');
+  const namespace = parts[3];
+  const name = parts[4];
+  const version = parts[5];
+  
+  // Validate parameters (same as HEAD endpoint)
+  if (!isValidParam(namespace) || !isValidParam(name) || !isValidParam(version)) {
+    console.warn(`GET /api/download: Invalid parameters - ${namespace}/${name}/${version}`);
+    return jsonError('Invalid parameters', 400, env);
+  }
+  
+  const upstreamUrl = `https://thunderstore.io/package/download/${namespace}/${name}/${version}/`;
+  
+  let timeoutId;
+  try {
+    // 30-second timeout for large file downloads
+    const controller = new AbortController();
+    timeoutId = setTimeout(() => controller.abort(), 30000);
+    
+    const response = await fetch(upstreamUrl, { 
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'RepoModViewer/0.1 (+https://atniptw.github.io)'
+      }
+    });
+    
+    // Handle upstream errors
+    if (!response.ok) {
+      const statusMsg = response.status === 404 ? 'Mod not found' : 'Download service unavailable';
+      const returnCode = response.status === 404 ? 404 : 502;
+      console.error(`GET /api/download upstream error: ${response.status}`);
+      return jsonError(statusMsg, returnCode, env);
+    }
+    
+    // Log success
+    console.log(`GET /api/download/${namespace}/${name}/${version} → 200 streaming`);
+    
+    // Stream response directly (no buffering)
+    return new Response(response.body, {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/zip',
+        'Content-Disposition': response.headers.get('Content-Disposition') || `attachment; filename="${name}.zip"`,
+        'Content-Length': response.headers.get('Content-Length') || '',
+        ...corsHeaders(env)
+      }
+    });
+    
+  } catch (error) {
+    console.error('GET /api/download error:', error.message);
+    
+    if (error.name === 'AbortError') {
+      console.warn(`GET /api/download: Timeout after 30s for ${namespace}/${name}/${version}`);
       return jsonError('Download service timeout', 504, env);
     }
     

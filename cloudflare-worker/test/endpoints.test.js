@@ -956,13 +956,6 @@ describe('HEAD /api/download/:namespace/:name/:version', () => {
   });
   
   describe('Route Matching', () => {
-    it('rejects GET method on download route', async () => {
-      const request = createRequest('/api/download/Author/Mod/1.0.0', 'GET');
-      const response = await worker.fetch(request, {}, {});
-      
-      expect(response.status).toBe(404);
-    });
-    
     it('rejects POST method on download route', async () => {
       const request = createRequest('/api/download/Author/Mod/1.0.0', 'POST');
       const response = await worker.fetch(request, {}, {});
@@ -994,6 +987,399 @@ describe('HEAD /api/download/:namespace/:name/:version', () => {
           ['Content-Length', '1000'],
           ['Content-Disposition', 'attachment; filename="test.zip"']
         ])
+      });
+      
+      const request = createRequest('/api/download/Author/Mod/1.0.0');
+      const env = { SITE_ORIGIN: 'https://atniptw.github.io' };
+      const response = await worker.fetch(request, env, {});
+      
+      expect(response.headers.get('Access-Control-Allow-Origin')).toBe('https://atniptw.github.io');
+    });
+  });
+});
+
+describe('GET /api/download/:namespace/:name/:version', () => {
+  let mockFetch;
+  let originalFetch;
+  
+  beforeEach(() => {
+    originalFetch = global.fetch;
+    mockFetch = vi.fn();
+    global.fetch = mockFetch;
+  });
+  
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
+  
+  // Helper to create request object
+  function createRequest(path, method = 'GET') {
+    return new Request(`http://localhost:8787${path}`, { method });
+  }
+  
+  // Helper to create fake ZIP stream with magic header
+  function createZipStream() {
+    const zipMagicHeader = new Uint8Array([0x50, 0x4B, 0x03, 0x04]); // ZIP magic bytes
+    const fakeContent = new Uint8Array([...zipMagicHeader, ...Array(100).fill(0)]);
+    return new ReadableStream({
+      start(controller) {
+        controller.enqueue(fakeContent);
+        controller.close();
+      }
+    });
+  }
+  
+  describe('Happy Path', () => {
+    it('returns 200 with ZIP body when successful', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Map([
+          ['Content-Length', '2202890'],
+          ['Content-Disposition', 'attachment; filename="YMC_MHZ-MoreHead-1.4.3.zip"']
+        ]),
+        body: createZipStream()
+      });
+      
+      const request = createRequest('/api/download/YMC_MHZ/MoreHead/1.4.3');
+      const response = await worker.fetch(request, {}, {});
+      
+      expect(response.status).toBe(200);
+      expect(response.body).not.toBeNull();
+      
+      // Verify stream contains ZIP magic bytes
+      const reader = response.body.getReader();
+      const { value } = await reader.read();
+      expect(value[0]).toBe(0x50); // 'P'
+      expect(value[1]).toBe(0x4B); // 'K'
+      expect(value[2]).toBe(0x03);
+      expect(value[3]).toBe(0x04);
+    });
+    
+    it('includes Content-Type: application/zip header', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Map([
+          ['Content-Length', '1000'],
+          ['Content-Disposition', 'attachment; filename="test.zip"']
+        ]),
+        body: createZipStream()
+      });
+      
+      const request = createRequest('/api/download/Author/Mod/1.0.0');
+      const response = await worker.fetch(request, {}, {});
+      
+      expect(response.headers.get('Content-Type')).toBe('application/zip');
+    });
+    
+    it('includes Content-Disposition header from upstream', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Map([
+          ['Content-Length', '1000'],
+          ['Content-Disposition', 'attachment; filename="YMC_MHZ-MoreHead-1.4.3.zip"']
+        ]),
+        body: createZipStream()
+      });
+      
+      const request = createRequest('/api/download/YMC_MHZ/MoreHead/1.4.3');
+      const response = await worker.fetch(request, {}, {});
+      
+      expect(response.headers.get('Content-Disposition')).toBe('attachment; filename="YMC_MHZ-MoreHead-1.4.3.zip"');
+    });
+    
+    it('generates synthetic Content-Disposition when upstream missing', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Map([
+          ['Content-Length', '1000']
+        ]),
+        body: createZipStream()
+      });
+      
+      const request = createRequest('/api/download/Author/MyMod/1.0.0');
+      const response = await worker.fetch(request, {}, {});
+      
+      expect(response.headers.get('Content-Disposition')).toBe('attachment; filename="MyMod.zip"');
+    });
+    
+    it('includes Content-Length header from upstream', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Map([
+          ['Content-Length', '2202890'],
+          ['Content-Disposition', 'attachment; filename="test.zip"']
+        ]),
+        body: createZipStream()
+      });
+      
+      const request = createRequest('/api/download/Author/Mod/1.0.0');
+      const response = await worker.fetch(request, {}, {});
+      
+      expect(response.headers.get('Content-Length')).toBe('2202890');
+    });
+    
+    it('includes CORS headers on success', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Map([
+          ['Content-Length', '1000'],
+          ['Content-Disposition', 'attachment; filename="test.zip"']
+        ]),
+        body: createZipStream()
+      });
+      
+      const request = createRequest('/api/download/Author/Mod/1.0.0');
+      const response = await worker.fetch(request, {}, {});
+      
+      expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*');
+      expect(response.headers.get('Access-Control-Allow-Methods')).toBe('GET, HEAD, OPTIONS');
+      expect(response.headers.get('Access-Control-Allow-Headers')).toBe('Content-Type');
+    });
+    
+    it('calls upstream with correct URL', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Map([
+          ['Content-Length', '1000'],
+          ['Content-Disposition', 'attachment; filename="test.zip"']
+        ]),
+        body: createZipStream()
+      });
+      
+      const request = createRequest('/api/download/YMC_MHZ/MoreHead/1.4.3');
+      await worker.fetch(request, {}, {});
+      
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://thunderstore.io/package/download/YMC_MHZ/MoreHead/1.4.3/',
+        expect.any(Object)
+      );
+    });
+    
+    it('includes AbortController signal in fetch', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Map([
+          ['Content-Length', '1000'],
+          ['Content-Disposition', 'attachment; filename="test.zip"']
+        ]),
+        body: createZipStream()
+      });
+      
+      const request = createRequest('/api/download/Author/Mod/1.0.0');
+      await worker.fetch(request, {}, {});
+      
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          signal: expect.any(AbortSignal)
+        })
+      );
+    });
+    
+    it('handles missing Content-Length header gracefully', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Map([
+          ['Content-Disposition', 'attachment; filename="test.zip"']
+        ]),
+        body: createZipStream()
+      });
+      
+      const request = createRequest('/api/download/Author/Mod/1.0.0');
+      const response = await worker.fetch(request, {}, {});
+      
+      expect(response.status).toBe(200);
+      expect(response.headers.get('Content-Length')).toBe('');
+    });
+  });
+  
+  describe('Error Handling', () => {
+    it('returns 404 when mod not found upstream', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 404
+      });
+      
+      const request = createRequest('/api/download/NonExistent/Mod/1.0.0');
+      const response = await worker.fetch(request, {}, {});
+      
+      expect(response.status).toBe(404);
+      const body = await response.json();
+      expect(body.error).toBe('Mod not found');
+    });
+    
+    it('returns 502 for upstream 5xx errors', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 500
+      });
+      
+      const request = createRequest('/api/download/Author/Mod/1.0.0');
+      const response = await worker.fetch(request, {}, {});
+      
+      expect(response.status).toBe(502);
+      const body = await response.json();
+      expect(body.error).toBe('Download service unavailable');
+    });
+    
+    it('returns 502 for upstream 503 errors', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 503
+      });
+      
+      const request = createRequest('/api/download/Author/Mod/1.0.0');
+      const response = await worker.fetch(request, {}, {});
+      
+      expect(response.status).toBe(502);
+      const body = await response.json();
+      expect(body.error).toBe('Download service unavailable');
+    });
+    
+    it('returns 504 on timeout', async () => {
+      const abortError = new Error('The operation was aborted');
+      abortError.name = 'AbortError';
+      mockFetch.mockRejectedValue(abortError);
+      
+      const request = createRequest('/api/download/Author/Mod/1.0.0');
+      const response = await worker.fetch(request, {}, {});
+      
+      expect(response.status).toBe(504);
+      const body = await response.json();
+      expect(body.error).toBe('Download service timeout');
+    });
+    
+    it('returns 502 on network error', async () => {
+      mockFetch.mockRejectedValue(new Error('Network error'));
+      
+      const request = createRequest('/api/download/Author/Mod/1.0.0');
+      const response = await worker.fetch(request, {}, {});
+      
+      expect(response.status).toBe(502);
+      const body = await response.json();
+      expect(body.error).toBe('Download service unavailable');
+    });
+    
+    it('error responses include CORS headers', async () => {
+      mockFetch.mockRejectedValue(new Error('Test error'));
+      
+      const request = createRequest('/api/download/Author/Mod/1.0.0');
+      const response = await worker.fetch(request, {}, {});
+      
+      expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*');
+      expect(response.headers.get('Access-Control-Allow-Methods')).toBe('GET, HEAD, OPTIONS');
+      expect(response.headers.get('Access-Control-Allow-Headers')).toBe('Content-Type');
+    });
+    
+    it('error responses have Content-Type: application/json', async () => {
+      mockFetch.mockRejectedValue(new Error('Test error'));
+      
+      const request = createRequest('/api/download/Author/Mod/1.0.0');
+      const response = await worker.fetch(request, {}, {});
+      
+      expect(response.headers.get('Content-Type')).toBe('application/json');
+    });
+  });
+  
+  describe('Parameter Validation', () => {
+    it('returns 400 for invalid namespace with special chars', async () => {
+      const request = createRequest('/api/download/evil@namespace/Mod/1.0.0');
+      const response = await worker.fetch(request, {}, {});
+      
+      expect(response.status).toBe(400);
+      const body = await response.json();
+      expect(body.error).toBe('Invalid parameters');
+    });
+    
+    it('returns 400 for invalid name', async () => {
+      const request = createRequest('/api/download/Author/mod@name/1.0.0');
+      const response = await worker.fetch(request, {}, {});
+      
+      expect(response.status).toBe(400);
+      const body = await response.json();
+      expect(body.error).toBe('Invalid parameters');
+    });
+    
+    it('returns 400 for invalid version', async () => {
+      const request = createRequest('/api/download/Author/Mod/1.0.0%00');
+      const response = await worker.fetch(request, {}, {});
+      
+      expect(response.status).toBe(400);
+      const body = await response.json();
+      expect(body.error).toBe('Invalid parameters');
+    });
+    
+    it('accepts valid parameters with underscores', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Map([
+          ['Content-Length', '1000'],
+          ['Content-Disposition', 'attachment; filename="test.zip"']
+        ]),
+        body: createZipStream()
+      });
+      
+      const request = createRequest('/api/download/Test_Author_123/My_Mod/1.0.0');
+      const response = await worker.fetch(request, {}, {});
+      
+      expect(response.status).toBe(200);
+    });
+    
+    it('accepts valid parameters with hyphens', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Map([
+          ['Content-Length', '1000'],
+          ['Content-Disposition', 'attachment; filename="test.zip"']
+        ]),
+        body: createZipStream()
+      });
+      
+      const request = createRequest('/api/download/Test-Author/My-Mod/1.0.0-beta');
+      const response = await worker.fetch(request, {}, {});
+      
+      expect(response.status).toBe(200);
+    });
+    
+    it('accepts valid parameters with dots', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Map([
+          ['Content-Length', '1000'],
+          ['Content-Disposition', 'attachment; filename="test.zip"']
+        ]),
+        body: createZipStream()
+      });
+      
+      const request = createRequest('/api/download/Author/Mod.Name/1.2.3.4');
+      const response = await worker.fetch(request, {}, {});
+      
+      expect(response.status).toBe(200);
+    });
+  });
+  
+  describe('Environment Configuration', () => {
+    it('respects env.SITE_ORIGIN in CORS headers', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Map([
+          ['Content-Length', '1000'],
+          ['Content-Disposition', 'attachment; filename="test.zip"']
+        ]),
+        body: createZipStream()
       });
       
       const request = createRequest('/api/download/Author/Mod/1.0.0');
