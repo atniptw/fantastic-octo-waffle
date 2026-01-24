@@ -33,7 +33,6 @@ public static class BinaryReaderExtensions
     /// <param name="alignment">Alignment boundary (must be power of 2: 4, 8, 16).</param>
     /// <returns>Number of padding bytes needed (0 if already aligned).</returns>
     /// <exception cref="ArgumentException">Thrown if alignment is not a power of 2.</exception>
-    /// <exception cref="OverflowException">Thrown if padding calculation would overflow.</exception>
     public static int CalculatePadding(long offset, int alignment = 4)
     {
         if (alignment <= 0 || (alignment & (alignment - 1)) != 0)
@@ -42,20 +41,7 @@ public static class BinaryReaderExtensions
         }
 
         var remainder = offset % alignment;
-        if (remainder == 0)
-        {
-            return 0;
-        }
-
-        var padding = alignment - remainder;
-        
-        // Ensure the padding fits in an int32
-        if (padding > int.MaxValue)
-        {
-            throw new OverflowException($"Padding calculation overflow: alignment={alignment}, remainder={remainder}");
-        }
-
-        return (int)padding;
+        return remainder == 0 ? 0 : (int)(alignment - remainder);
     }
 
     /// <summary>
@@ -198,8 +184,8 @@ public static class BinaryReaderExtensions
         }
 
         // Check for overflow: offset + length > streamLength
-        // Rewritten to avoid overflow: offset > streamLength - length
-        if (offset > streamLength || length > streamLength || offset > streamLength - length)
+        // Rewritten to avoid overflow by checking bounds individually first
+        if (length > streamLength || offset > streamLength || offset > streamLength - length)
         {
             throw new StreamBoundsException(
                 $"Read would exceed stream bounds: offset={offset}, length={length}, streamLength={streamLength}");
