@@ -22,7 +22,7 @@ public partial class ZipDownloader : IZipDownloader
     private readonly HttpClient _httpClient;
     private readonly ILogger<ZipDownloader>? _logger;
     private readonly HashSet<string> _createdTempFiles = new();
-    private bool _disposed;
+    private int _disposed;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ZipDownloader"/> class.
@@ -76,6 +76,8 @@ public partial class ZipDownloader : IZipDownloader
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         cts.CancelAfter(TimeSpan.FromSeconds(DownloadTimeoutSeconds));
 
+        string tempPath = string.Empty;
+
         try
         {
             // Get response headers to check Content-Length
@@ -104,9 +106,14 @@ public partial class ZipDownloader : IZipDownloader
             }
 
             // Validate disk space before download
+            // Check actual size if known, otherwise ensure minimum 100MB free
             if (total > 0)
             {
                 ValidateDiskSpace(total);
+            }
+            else
+            {
+                ValidateMinimumDiskSpace(100 * 1024 * 1024); // 100MB minimum
             }
 
             // Create temp directory if needed
@@ -122,14 +129,14 @@ public partial class ZipDownloader : IZipDownloader
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "Failed to create temp directory: {TempDir}", tempDir);
-                throw new IOException($"Cannot create temp directory: {tempDir}", ex);
+                throw;
             }
 
             // Generate unique temp file name
             var modName = ExtractModNameFromUrl(url);
             var version = ExtractVersionFromUrl(url);
             var guid = Guid.NewGuid().ToString();
-            var tempPath = Path.Combine(tempDir, $"{modName}_{version}_{guid}.zip");
+            tempPath = Path.Combine(tempDir, $"{modName}_{version}_{guid}.zip");
 
             _logger?.LogInformation("Downloading to temp file: {TempPath}", tempPath);
 
@@ -149,13 +156,14 @@ public partial class ZipDownloader : IZipDownloader
                         await fileStream.WriteAsync(buffer.AsMemory(0, bytesRead), cts.Token).ConfigureAwait(false);
                         downloaded += bytesRead;
 
-                        // Fire progress callback, ensuring downloaded never exceeds total
+                        // Fire progress callback, clamping downloaded to total if total is known
                         if (total > 0 && downloaded > total)
                         {
                             _logger?.LogWarning("Downloaded bytes ({Downloaded}) exceeds Content-Length ({Total})", downloaded, total);
                         }
 
-                        onProgress?.Invoke(downloaded, total);
+                        var clampedDownloaded = total > 0 ? Math.Min(downloaded, total) : downloaded;
+                        onProgress?.Invoke(clampedDownloaded, total);
                     }
 
                     _logger?.LogInformation("Download completed: {Downloaded} bytes", downloaded);
@@ -212,10 +220,15 @@ public partial class ZipDownloader : IZipDownloader
                 throw;
             }
         }
-        catch (HttpRequestException ex) when (ex.Message.Contains("connection", StringComparison.OrdinalIgnoreCase))
+        catch (HttpRequestException)
         {
-            _logger?.LogError(ex, "Connection error");
-            throw new HttpRequestException("Cannot reach mod service—verify internet connection", ex);
+            // Re-throw HttpRequestException as-is
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Unexpected error in download method");
+            throw;
         }
     }
 
@@ -246,6 +259,35 @@ public partial class ZipDownloader : IZipDownloader
         catch (Exception ex)
         {
             _logger?.LogWarning(ex, "Failed to validate disk space, continuing anyway");
+        }
+    }
+
+    private void ValidateMinimumDiskSpace(long minimumBytes)
+    {
+        try
+        {
+            var tempPath = Path.GetTempPath();
+            var driveInfo = new DriveInfo(Path.GetPathRoot(tempPath) ?? tempPath);
+
+            if (driveInfo.AvailableFreeSpace < minimumBytes)
+            {
+                var requiredMB = minimumBytes / (1024 * 1024);
+                var availableMB = driveInfo.AvailableFreeSpace / (1024 * 1024);
+                _logger?.LogError("Insufficient disk space. Required: {Required}MB minimum, Available: {Available}MB", requiredMB, availableMB);
+                throw new InvalidOperationException(
+                    $"Not enough disk space to download mod. Required: {requiredMB}MB minimum, Available: {availableMB}MB");
+            }
+
+            _logger?.LogDebug("Minimum disk space validation passed. Available: {Available}MB",
+                driveInfo.AvailableFreeSpace / (1024 * 1024));
+        }
+        catch (InvalidOperationException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex, "Failed to validate minimum disk space, continuing anyway");
         }
     }
 
@@ -287,9 +329,9 @@ public partial class ZipDownloader : IZipDownloader
 
     private static string ExtractModNameFromUrl(Uri url)
     {
-        // Try to extract mod name from URL path
+        // Try to extract mod name from URL path, removing .zip extension
         var segments = url.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
-        return segments.Length > 0 ? SanitizeFileName(segments[^1]) : "mod";
+        return segments.Length > 0 ? SanitizeFileName(Path.GetFileNameWithoutExtension(segments[^1])) : "mod";
     }
 
     private static string ExtractVersionFromUrl(Uri url)
@@ -315,11 +357,11 @@ public partial class ZipDownloader : IZipDownloader
     }
 
     /// <inheritdoc/>
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync()
     {
-        if (_disposed)
+        if (Interlocked.CompareExchange(ref _disposed, 1, 0) == 1)
         {
-            return;
+            return ValueTask.CompletedTask;
         }
 
         _logger?.LogInformation("Disposing ZipDownloader and cleaning up {Count} temp files", _createdTempFiles.Count);
@@ -335,7 +377,7 @@ public partial class ZipDownloader : IZipDownloader
             CleanupTempFile(file);
         }
 
-        _disposed = true;
-        await Task.CompletedTask;
+        GC.SuppressFinalize(this);
+        return ValueTask.CompletedTask;
     }
 }
