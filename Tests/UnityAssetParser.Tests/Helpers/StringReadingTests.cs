@@ -13,8 +13,8 @@ public class StringReadingTests
     public void ReadUtf8NullTerminated_EmptyString_ReturnsEmptyString()
     {
         // Arrange
-        var stream = new MemoryStream(new byte[] { 0x00 }); // Just null terminator
-        var reader = new BinaryReader(stream);
+        using var stream = new MemoryStream(new byte[] { 0x00 }); // Just null terminator
+        using var reader = new BinaryReader(stream);
 
         // Act
         var result = reader.ReadUtf8NullTerminated();
@@ -28,8 +28,8 @@ public class StringReadingTests
     public void ReadUtf8NullTerminated_SingleCharacter_ReturnsCorrectString()
     {
         // Arrange: "A\0"
-        var stream = new MemoryStream(new byte[] { 0x41, 0x00 });
-        var reader = new BinaryReader(stream);
+        using var stream = new MemoryStream(new byte[] { 0x41, 0x00 });
+        using var reader = new BinaryReader(stream);
 
         // Act
         var result = reader.ReadUtf8NullTerminated();
@@ -44,8 +44,8 @@ public class StringReadingTests
     {
         // Arrange: "Hello\0"
         var bytes = Encoding.UTF8.GetBytes("Hello").Concat(new byte[] { 0x00 }).ToArray();
-        var stream = new MemoryStream(bytes);
-        var reader = new BinaryReader(stream);
+        using var stream = new MemoryStream(bytes);
+        using var reader = new BinaryReader(stream);
 
         // Act
         var result = reader.ReadUtf8NullTerminated();
@@ -60,8 +60,8 @@ public class StringReadingTests
     {
         // Arrange: "你好\0" (Chinese "Hello")
         var bytes = Encoding.UTF8.GetBytes("你好").Concat(new byte[] { 0x00 }).ToArray();
-        var stream = new MemoryStream(bytes);
-        var reader = new BinaryReader(stream);
+        using var stream = new MemoryStream(bytes);
+        using var reader = new BinaryReader(stream);
 
         // Act
         var result = reader.ReadUtf8NullTerminated();
@@ -75,8 +75,8 @@ public class StringReadingTests
     {
         // Arrange: "Test🚀\0" (emoji)
         var bytes = Encoding.UTF8.GetBytes("Test🚀").Concat(new byte[] { 0x00 }).ToArray();
-        var stream = new MemoryStream(bytes);
-        var reader = new BinaryReader(stream);
+        using var stream = new MemoryStream(bytes);
+        using var reader = new BinaryReader(stream);
 
         // Act
         var result = reader.ReadUtf8NullTerminated();
@@ -90,8 +90,8 @@ public class StringReadingTests
     {
         // Arrange: "UnityFS\0"
         var bytes = Encoding.UTF8.GetBytes("UnityFS").Concat(new byte[] { 0x00 }).ToArray();
-        var stream = new MemoryStream(bytes);
-        var reader = new BinaryReader(stream);
+        using var stream = new MemoryStream(bytes);
+        using var reader = new BinaryReader(stream);
 
         // Act
         var result = reader.ReadUtf8NullTerminated();
@@ -105,8 +105,8 @@ public class StringReadingTests
     {
         // Arrange: "assets/mesh.serialized\0"
         var bytes = Encoding.UTF8.GetBytes("assets/mesh.serialized").Concat(new byte[] { 0x00 }).ToArray();
-        var stream = new MemoryStream(bytes);
-        var reader = new BinaryReader(stream);
+        using var stream = new MemoryStream(bytes);
+        using var reader = new BinaryReader(stream);
 
         // Act
         var result = reader.ReadUtf8NullTerminated();
@@ -121,8 +121,8 @@ public class StringReadingTests
         // Arrange: String < 8KB threshold
         var testString = new string('A', 1024); // 1KB
         var bytes = Encoding.UTF8.GetBytes(testString).Concat(new byte[] { 0x00 }).ToArray();
-        var stream = new MemoryStream(bytes);
-        var reader = new BinaryReader(stream);
+        using var stream = new MemoryStream(bytes);
+        using var reader = new BinaryReader(stream);
 
         // Act
         var result = reader.ReadUtf8NullTerminated();
@@ -137,8 +137,8 @@ public class StringReadingTests
         // Arrange: String > 8KB threshold (should use ArrayPool)
         var testString = new string('B', 10000); // ~10KB
         var bytes = Encoding.UTF8.GetBytes(testString).Concat(new byte[] { 0x00 }).ToArray();
-        var stream = new MemoryStream(bytes);
-        var reader = new BinaryReader(stream);
+        using var stream = new MemoryStream(bytes);
+        using var reader = new BinaryReader(stream);
 
         // Act
         var result = reader.ReadUtf8NullTerminated();
@@ -154,8 +154,8 @@ public class StringReadingTests
         var maxLength = 1024 * 1024; // 1MB
         var testString = new string('C', maxLength - 1);
         var bytes = Encoding.UTF8.GetBytes(testString).Concat(new byte[] { 0x00 }).ToArray();
-        var stream = new MemoryStream(bytes);
-        var reader = new BinaryReader(stream);
+        using var stream = new MemoryStream(bytes);
+        using var reader = new BinaryReader(stream);
 
         // Act
         var result = reader.ReadUtf8NullTerminated(maxLength);
@@ -171,8 +171,8 @@ public class StringReadingTests
         var maxLength = 100;
         var testString = new string('D', maxLength + 1);
         var bytes = Encoding.UTF8.GetBytes(testString).Concat(new byte[] { 0x00 }).ToArray();
-        var stream = new MemoryStream(bytes);
-        var reader = new BinaryReader(stream);
+        using var stream = new MemoryStream(bytes);
+        using var reader = new BinaryReader(stream);
 
         // Act & Assert
         var exception = Assert.Throws<StringReadException>(() =>
@@ -185,8 +185,8 @@ public class StringReadingTests
     {
         // Arrange: String without null terminator
         var bytes = Encoding.UTF8.GetBytes("NoTerminator");
-        var stream = new MemoryStream(bytes);
-        var reader = new BinaryReader(stream);
+        using var stream = new MemoryStream(bytes);
+        using var reader = new BinaryReader(stream);
 
         // Act & Assert
         var exception = Assert.Throws<StreamBoundsException>(() =>
@@ -200,8 +200,8 @@ public class StringReadingTests
     {
         // Arrange: Invalid UTF-8 sequence (orphaned surrogate high byte)
         var bytes = new byte[] { 0xFF, 0xFE, 0x00 }; // Invalid UTF-8
-        var stream = new MemoryStream(bytes);
-        var reader = new BinaryReader(stream);
+        using var stream = new MemoryStream(bytes);
+        using var reader = new BinaryReader(stream);
 
         // Act & Assert
         var exception = Assert.Throws<Utf8DecodingException>(() =>
@@ -215,8 +215,8 @@ public class StringReadingTests
         // Arrange: UTF-8 BOM + "Test\0"
         var bom = new byte[] { 0xEF, 0xBB, 0xBF };
         var bytes = bom.Concat(Encoding.UTF8.GetBytes("Test")).Concat(new byte[] { 0x00 }).ToArray();
-        var stream = new MemoryStream(bytes);
-        var reader = new BinaryReader(stream);
+        using var stream = new MemoryStream(bytes);
+        using var reader = new BinaryReader(stream);
 
         // Act
         var result = reader.ReadUtf8NullTerminated();
@@ -233,8 +233,8 @@ public class StringReadingTests
         // Arrange: String starts at 4-byte aligned offset
         var padding = new byte[] { 0xFF, 0xFF, 0xFF, 0xFF }; // 4 bytes padding
         var bytes = padding.Concat(Encoding.UTF8.GetBytes("Aligned")).Concat(new byte[] { 0x00 }).ToArray();
-        var stream = new MemoryStream(bytes);
-        var reader = new BinaryReader(stream);
+        using var stream = new MemoryStream(bytes);
+        using var reader = new BinaryReader(stream);
         reader.ReadBytes(4); // Skip padding to position 4
 
         // Act
@@ -250,8 +250,8 @@ public class StringReadingTests
         // Arrange: String starts at unaligned offset (position 3)
         var padding = new byte[] { 0xFF, 0xFF, 0xFF }; // 3 bytes padding
         var bytes = padding.Concat(Encoding.UTF8.GetBytes("Unaligned")).Concat(new byte[] { 0x00 }).ToArray();
-        var stream = new MemoryStream(bytes);
-        var reader = new BinaryReader(stream);
+        using var stream = new MemoryStream(bytes);
+        using var reader = new BinaryReader(stream);
         reader.ReadBytes(3); // Skip to position 3
 
         // Act
@@ -273,8 +273,8 @@ public class StringReadingTests
     public void ReadUtf8NullTerminated_ZeroMaxLength_ThrowsArgumentOutOfRangeException()
     {
         // Arrange
-        var stream = new MemoryStream(new byte[] { 0x00 });
-        var reader = new BinaryReader(stream);
+        using var stream = new MemoryStream(new byte[] { 0x00 });
+        using var reader = new BinaryReader(stream);
 
         // Act & Assert
         Assert.Throws<ArgumentOutOfRangeException>(() =>
@@ -285,8 +285,8 @@ public class StringReadingTests
     public void ReadUtf8NullTerminated_NegativeMaxLength_ThrowsArgumentOutOfRangeException()
     {
         // Arrange
-        var stream = new MemoryStream(new byte[] { 0x00 });
-        var reader = new BinaryReader(stream);
+        using var stream = new MemoryStream(new byte[] { 0x00 });
+        using var reader = new BinaryReader(stream);
 
         // Act & Assert
         Assert.Throws<ArgumentOutOfRangeException>(() =>
@@ -304,8 +304,8 @@ public class StringReadingTests
             .Concat(Encoding.UTF8.GetBytes("Third"))
             .Concat(new byte[] { 0x00 })
             .ToArray();
-        var stream = new MemoryStream(bytes);
-        var reader = new BinaryReader(stream);
+        using var stream = new MemoryStream(bytes);
+        using var reader = new BinaryReader(stream);
 
         // Act
         var first = reader.ReadUtf8NullTerminated();

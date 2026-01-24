@@ -21,12 +21,19 @@ public static class BinaryReaderExtensions
     private const int ArrayPoolThreshold = 8192;
 
     /// <summary>
-    /// Calculates padding bytes needed to align to the specified boundary (little-endian).
+    /// Strict UTF-8 encoding that throws on invalid byte sequences.
+    /// Shared across all string operations for performance.
+    /// </summary>
+    private static readonly UTF8Encoding StrictUtf8 = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
+
+    /// <summary>
+    /// Calculates padding bytes needed to align to the specified boundary.
     /// </summary>
     /// <param name="offset">Current offset in bytes.</param>
     /// <param name="alignment">Alignment boundary (must be power of 2: 4, 8, 16).</param>
     /// <returns>Number of padding bytes needed (0 if already aligned).</returns>
     /// <exception cref="ArgumentException">Thrown if alignment is not a power of 2.</exception>
+    /// <exception cref="OverflowException">Thrown if padding calculation would overflow.</exception>
     public static int CalculatePadding(long offset, int alignment = 4)
     {
         if (alignment <= 0 || (alignment & (alignment - 1)) != 0)
@@ -35,26 +42,20 @@ public static class BinaryReaderExtensions
         }
 
         var remainder = offset % alignment;
-        return remainder == 0 ? 0 : (int)(alignment - remainder);
-    }
-
-    /// <summary>
-    /// Calculates padding bytes needed to align to the specified boundary (big-endian).
-    /// Uses the formula: align(position, boundary) = (position + boundary - 1) AND NOT(boundary - 1)
-    /// </summary>
-    /// <param name="offset">Current offset in bytes.</param>
-    /// <param name="alignment">Alignment boundary (must be power of 2: 4, 8, 16).</param>
-    /// <returns>Number of padding bytes needed (0 if already aligned).</returns>
-    /// <exception cref="ArgumentException">Thrown if alignment is not a power of 2.</exception>
-    public static int CalculatePaddingBigEndian(long offset, int alignment = 4)
-    {
-        if (alignment <= 0 || (alignment & (alignment - 1)) != 0)
+        if (remainder == 0)
         {
-            throw new ArgumentException($"Alignment must be a power of 2, got {alignment}", nameof(alignment));
+            return 0;
         }
 
-        var alignedPosition = (offset + alignment - 1) & ~(alignment - 1);
-        return (int)(alignedPosition - offset);
+        var padding = alignment - remainder;
+        
+        // Ensure the padding fits in an int32
+        if (padding > int.MaxValue)
+        {
+            throw new OverflowException($"Padding calculation overflow: alignment={alignment}, remainder={remainder}");
+        }
+
+        return (int)padding;
     }
 
     /// <summary>
@@ -174,15 +175,7 @@ public static class BinaryReaderExtensions
             return true; // No validation required
         }
 
-        foreach (var b in paddingBytes)
-        {
-            if (b != 0x00)
-            {
-                return false;
-            }
-        }
-
-        return true;
+        return paddingBytes.All(b => b == 0x00);
     }
 
     /// <summary>
@@ -204,7 +197,9 @@ public static class BinaryReaderExtensions
             throw new ArgumentOutOfRangeException(nameof(length), "Length cannot be negative");
         }
 
-        if (offset + length > streamLength)
+        // Check for overflow: offset + length > streamLength
+        // Rewritten to avoid overflow: offset > streamLength - length
+        if (offset > streamLength || length > streamLength || offset > streamLength - length)
         {
             throw new StreamBoundsException(
                 $"Read would exceed stream bounds: offset={offset}, length={length}, streamLength={streamLength}");
@@ -222,16 +217,13 @@ public static class BinaryReaderExtensions
             return string.Empty;
         }
 
-        // Use strict UTF-8 encoding that throws on invalid sequences
-        var strictUtf8 = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
-
         try
         {
             if (bytes.Count <= ArrayPoolThreshold)
             {
                 // Small string: allocate inline
                 var byteArray = bytes.ToArray();
-                return strictUtf8.GetString(byteArray);
+                return StrictUtf8.GetString(byteArray);
             }
             else
             {
@@ -240,7 +232,7 @@ public static class BinaryReaderExtensions
                 try
                 {
                     bytes.CopyTo(buffer);
-                    return strictUtf8.GetString(buffer, 0, bytes.Count);
+                    return StrictUtf8.GetString(buffer, 0, bytes.Count);
                 }
                 finally
                 {

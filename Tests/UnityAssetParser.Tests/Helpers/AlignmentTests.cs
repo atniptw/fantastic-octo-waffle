@@ -48,45 +48,12 @@ public class AlignmentTests
         Assert.Contains("power of 2", exception.Message);
     }
 
-    [Theory]
-    [InlineData(0, 4, 0)]      // Already aligned
-    [InlineData(1, 4, 3)]      // align(1, 4) = 4, padding = 3
-    [InlineData(2, 4, 2)]      // align(2, 4) = 4, padding = 2
-    [InlineData(3, 4, 1)]      // align(3, 4) = 4, padding = 1
-    [InlineData(4, 4, 0)]      // Already aligned
-    [InlineData(5, 4, 3)]      // align(5, 4) = 8, padding = 3
-    [InlineData(0, 16, 0)]     // Already aligned to 16
-    [InlineData(1, 16, 15)]    // align(1, 16) = 16, padding = 15
-    [InlineData(15, 16, 1)]    // align(15, 16) = 16, padding = 1
-    [InlineData(16, 16, 0)]    // Already aligned to 16
-    public void CalculatePaddingBigEndian_ValidAlignment_ReturnsCorrectPadding(long offset, int alignment, int expectedPadding)
-    {
-        // Act
-        var padding = BinaryReaderExtensions.CalculatePaddingBigEndian(offset, alignment);
-
-        // Assert
-        Assert.Equal(expectedPadding, padding);
-    }
-
-    [Theory]
-    [InlineData(0)]   // Zero is not a power of 2
-    [InlineData(-1)]  // Negative alignment
-    [InlineData(3)]   // Not a power of 2
-    [InlineData(5)]   // Not a power of 2
-    public void CalculatePaddingBigEndian_InvalidAlignment_ThrowsArgumentException(int invalidAlignment)
-    {
-        // Act & Assert
-        var exception = Assert.Throws<ArgumentException>(() =>
-            BinaryReaderExtensions.CalculatePaddingBigEndian(0, invalidAlignment));
-        Assert.Contains("power of 2", exception.Message);
-    }
-
     [Fact]
     public void Align_AlreadyAligned_DoesNotSeek()
     {
         // Arrange
-        var stream = new MemoryStream(new byte[] { 0x01, 0x02, 0x03, 0x04 });
-        var reader = new BinaryReader(stream);
+        using var stream = new MemoryStream(new byte[] { 0x01, 0x02, 0x03, 0x04 });
+        using var reader = new BinaryReader(stream);
 
         // Act
         reader.Align(4); // Position 0 is already aligned to 4
@@ -99,8 +66,8 @@ public class AlignmentTests
     public void Align_UnalignedPosition_SkipsPaddingBytes()
     {
         // Arrange
-        var stream = new MemoryStream(new byte[] { 0x01, 0x00, 0x00, 0x00, 0x02 });
-        var reader = new BinaryReader(stream);
+        using var stream = new MemoryStream(new byte[] { 0x01, 0x00, 0x00, 0x00, 0x02 });
+        using var reader = new BinaryReader(stream);
         reader.ReadByte(); // Move to position 1
 
         // Act
@@ -114,8 +81,8 @@ public class AlignmentTests
     public void Align_WithValidation_AllZeroPadding_Succeeds()
     {
         // Arrange
-        var stream = new MemoryStream(new byte[] { 0x01, 0x00, 0x00, 0x00, 0x02 });
-        var reader = new BinaryReader(stream);
+        using var stream = new MemoryStream(new byte[] { 0x01, 0x00, 0x00, 0x00, 0x02 });
+        using var reader = new BinaryReader(stream);
         reader.ReadByte(); // Move to position 1
 
         // Act
@@ -129,8 +96,8 @@ public class AlignmentTests
     public void Align_WithValidation_NonZeroPadding_ThrowsAlignmentValidationException()
     {
         // Arrange
-        var stream = new MemoryStream(new byte[] { 0x01, 0x00, 0xFF, 0x00, 0x02 });
-        var reader = new BinaryReader(stream);
+        using var stream = new MemoryStream(new byte[] { 0x01, 0x00, 0xFF, 0x00, 0x02 });
+        using var reader = new BinaryReader(stream);
         reader.ReadByte(); // Move to position 1
 
         // Act & Assert
@@ -143,8 +110,8 @@ public class AlignmentTests
     public void Align_ExceedsStreamBounds_ThrowsStreamBoundsException()
     {
         // Arrange
-        var stream = new MemoryStream(new byte[] { 0x01, 0x02 }); // Only 2 bytes
-        var reader = new BinaryReader(stream);
+        using var stream = new MemoryStream(new byte[] { 0x01, 0x02 }); // Only 2 bytes
+        using var reader = new BinaryReader(stream);
         reader.ReadByte(); // Move to position 1
 
         // Act & Assert
