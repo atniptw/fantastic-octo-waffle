@@ -9,6 +9,17 @@ namespace BlazorApp.Services;
 /// </summary>
 public class ZipIndexer : IZipIndexer
 {
+    /// <summary>
+    /// Number of bytes to read from file header for type detection and shallow parsing.
+    /// </summary>
+    private const int HeaderBufferSize = 256;
+
+    /// <summary>
+    /// Minimum size in bytes for SerializedFile format detection.
+    /// SerializedFiles have a complex header structure requiring at least 20 bytes.
+    /// </summary>
+    private const int MinSerializedFileSize = 20;
+
     // Unity format magic bytes
     private static readonly byte[] UnityFSMagic = "UnityFS"u8.ToArray();
     private static readonly byte[] UnityWebMagic = "UnityWeb"u8.ToArray();
@@ -64,7 +75,8 @@ public class ZipIndexer : IZipIndexer
 
             // Read first bytes to detect file type
             using var entryStream = entry.Open();
-            var headerSize = Math.Min(256, entry.Length); // Read more bytes for renderable check
+            // Limit header size to avoid overflow and memory issues with large files
+            var headerSize = (int)Math.Min(HeaderBufferSize, Math.Min(entry.Length, int.MaxValue));
             var header = new byte[headerSize];
             var bytesRead = await entryStream.ReadAsync(header, ct);
 
@@ -114,7 +126,7 @@ public class ZipIndexer : IZipIndexer
 
         // Check for SerializedFile format (no magic bytes, detected by structure)
         // SerializedFiles typically start with metadata size and version info
-        if (header.Length >= 20)
+        if (header.Length >= MinSerializedFileSize)
         {
             // SerializedFile detection is complex, so we'll be conservative
             // and only mark explicit .resS files as Resource type for now
