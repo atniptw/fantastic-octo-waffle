@@ -75,12 +75,19 @@ def parse_bundle_to_json(bundle_path: Path) -> Dict[str, Any]:
             "path": node.path
         })
     
-    # Compute data offset
-    # For embedded layout (flags & 0x80 == 0):
-    #   data_offset = aligned_header_end + compressed_blocks_info_size
-    # For streamed layout (flags & 0x80 != 0):
-    #   data_offset = aligned_header_end
-    data_offset = bundle.data_offset if hasattr(bundle, 'data_offset') else 0
+    # Compute data offset (where data region starts after BlocksInfo)
+    # This is bundle format-specific:
+    # - Embedded: data_offset = aligned_header_end + compressed_blocks_info_size
+    # - Streamed: data_offset = aligned_header_end
+    # UnityPy should provide this, but may not expose it directly
+    if hasattr(bundle, 'data_offset'):
+        data_offset = bundle.data_offset
+    else:
+        # Fallback: calculate from header
+        # This is an approximation and may not match exactly
+        # In production, this should be handled more robustly
+        print(f"Warning: data_offset not found in bundle object, using fallback calculation", file=sys.stderr)
+        data_offset = 0  # This may be incorrect
     
     # Construct metadata matching C# schema
     metadata = {

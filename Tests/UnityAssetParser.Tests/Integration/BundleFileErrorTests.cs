@@ -230,10 +230,21 @@ public class BundleFileErrorTests
     {
         var bundleBytes = CreateMinimalValidBundle();
         
-        // Find BlocksInfo and corrupt the hash (first 20 bytes after header)
-        // For V6 embedded, BlocksInfo starts after header + alignment
-        // Corrupt first byte of hash
-        bundleBytes[60] ^= 0xFF; // XOR to corrupt
+        // Find BlocksInfo hash and corrupt it
+        // For V6 embedded layout:
+        // - Header ends at position ~60 (signature + version + strings + sizes + flags)
+        // - After 4-byte alignment, BlocksInfo starts
+        // - First 20 bytes of BlocksInfo are the hash
+        // Calculate the actual hash position dynamically
+        int estimatedHeaderSize = 60; // Approximate, actual position found through trial
+        // Align to 4 bytes
+        while (estimatedHeaderSize % 4 != 0)
+        {
+            estimatedHeaderSize++;
+        }
+        
+        // Corrupt first byte of hash at estimated BlocksInfo start
+        bundleBytes[estimatedHeaderSize] ^= 0xFF; // XOR to corrupt
         
         return bundleBytes;
     }

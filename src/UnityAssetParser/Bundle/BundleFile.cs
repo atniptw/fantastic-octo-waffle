@@ -165,7 +165,11 @@ public sealed class BundleFile
         }
         catch (HashMismatchException ex)
         {
-            errors.Add($"Hash mismatch: expected {BitConverter.ToString(ex.ExpectedHash ?? Array.Empty<byte>())}, got {BitConverter.ToString(ex.ComputedHash ?? Array.Empty<byte>())}");
+            var expectedHash = ex.ExpectedHash ?? Array.Empty<byte>();
+            var computedHash = ex.ComputedHash ?? Array.Empty<byte>();
+            errors.Add(
+                $"Hash mismatch: expected {BitConverter.ToString(expectedHash)}, " +
+                $"got {BitConverter.ToString(computedHash)}");
         }
         catch (DuplicateNodeException ex)
         {
@@ -349,8 +353,42 @@ public sealed class BundleFile
             }
         }
 
-        // Check for overlaps
-        var nodeExtractor = new NodeExtractor(detectOverlaps: true);
-        nodeExtractor.ValidateNoOverlaps(nodes);
+        // Check for overlaps using validation logic (no instance state needed)
+        ValidateNoNodeOverlaps(nodes);
+    }
+
+    /// <summary>
+    /// Validates that nodes don't overlap.
+    /// </summary>
+    private static void ValidateNoNodeOverlaps(IReadOnlyList<NodeInfo> nodes)
+    {
+        if (nodes.Count <= 1)
+        {
+            return;
+        }
+
+        // Sort nodes by offset for overlap detection
+        var sortedNodes = nodes.OrderBy(n => n.Offset).ToList();
+
+        for (int i = 0; i < sortedNodes.Count - 1; i++)
+        {
+            var current = sortedNodes[i];
+            var next = sortedNodes[i + 1];
+
+            // Use overflow-safe end calculation
+            if (current.Size > 0 && current.Offset > long.MaxValue - current.Size)
+            {
+                throw new NodeOverlapException(
+                    $"Node '{current.Path}' offset + size would overflow: offset={current.Offset}, size={current.Size}");
+            }
+
+            long currentEnd = current.Offset + current.Size;
+            
+            if (currentEnd > next.Offset)
+            {
+                throw new NodeOverlapException(
+                    $"Nodes '{current.Path}' [{current.Offset}, {currentEnd}) and '{next.Path}' [{next.Offset}, {next.Offset + next.Size}) overlap");
+            }
+        }
     }
 }
