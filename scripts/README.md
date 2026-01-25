@@ -79,11 +79,13 @@ var expectedJson = File.ReadAllText("fixture_expected.json");
 
 ### CI Integration
 
-Add to CI workflow to regenerate reference JSONs before tests:
+Add to CI workflow to regenerate reference JSONs before tests.
+
+**Note:** Pin UnityPy to a specific trusted version to mitigate supply-chain risks.
 
 ```yaml
 - name: Generate reference JSONs
   run: |
-    pip install UnityPy
+    pip install UnityPy==1.10.14  # Pin to trusted version
     python scripts/generate_reference_json.py --all
 ```

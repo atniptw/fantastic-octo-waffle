@@ -16,7 +16,7 @@ import sys
 import json
 import argparse
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Dict, Any
 
 try:
     import UnityPy
@@ -83,11 +83,19 @@ def parse_bundle_to_json(bundle_path: Path) -> Dict[str, Any]:
     if hasattr(bundle, 'data_offset'):
         data_offset = bundle.data_offset
     else:
-        # Fallback: calculate from header
-        # This is an approximation and may not match exactly
-        # In production, this should be handled more robustly
-        print(f"Warning: data_offset not found in bundle object, using fallback calculation", file=sys.stderr)
-        data_offset = 0  # This may be incorrect
+        # Do not silently guess: an incorrect data_offset corrupts validation.
+        # The correct calculation is implemented in the C# BundleFile; if UnityPy
+        # does not expose data_offset, this script must fail rather than emit
+        # bad reference JSON.
+        msg = (
+            "UnityPy bundle object does not expose 'data_offset'. "
+            "This script requires an accurate data_offset to produce valid "
+            "reference JSON. Please upgrade UnityPy or update this script to "
+            "compute data_offset from the bundle header using the same logic "
+            "as the C# implementation."
+        )
+        print(f"Error: {msg}", file=sys.stderr)
+        raise RuntimeError(msg)
     
     # Construct metadata matching C# schema
     metadata = {

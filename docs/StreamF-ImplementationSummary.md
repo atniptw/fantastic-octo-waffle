@@ -6,7 +6,7 @@ Successfully implemented the BundleFile integration layer that orchestrates Stre
 
 ## Implementation Status: ✅ COMPLETE
 
-All requirements from issue #[number] have been met.
+All requirements from the issue have been met.
 
 ## Components Delivered
 
@@ -272,9 +272,11 @@ dotnet test --filter "JsonValidation"
 
 ### Recommended Workflow
 
+**Note:** Pin UnityPy to a specific trusted version to reduce supply-chain vulnerabilities.
+
 ```yaml
 - name: Install UnityPy
-  run: pip install UnityPy
+  run: pip install UnityPy==1.10.14  # Pin to trusted version
 
 - name: Generate reference JSONs
   run: python scripts/generate_reference_json.py --all

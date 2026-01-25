@@ -116,7 +116,6 @@ public sealed class BundleFile
             stream.Position = dataOffset;
             var dataRegionBuilder = new DataRegionBuilder(decompressor);
             var dataRegion = dataRegionBuilder.Build(stream, dataOffset, blocksInfo.Blocks);
-            currentState = ParsingState.DataRegionReady;
 
             // Success
             currentState = ParsingState.Success;
@@ -345,7 +344,7 @@ public sealed class BundleFile
 
         // Check for duplicate paths
         var pathSet = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var node in nodes)
+        foreach (var node in nodes.Where(n => !string.IsNullOrEmpty(n.Path)))
         {
             if (!pathSet.Add(node.Path))
             {

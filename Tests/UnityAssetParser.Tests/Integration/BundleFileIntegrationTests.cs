@@ -234,8 +234,6 @@ public class BundleFileIntegrationTests
         // Flags: 0 (no compression, embedded BlocksInfo)
         writer.Write((uint)0);
 
-        long headerEnd = bundle.Position;
-
         // Apply 4-byte alignment after header
         while (bundle.Position % 4 != 0)
         {
@@ -249,7 +247,6 @@ public class BundleFileIntegrationTests
         using var blocksInfoWriter = new BinaryWriter(blocksInfo);
 
         // Hash placeholder (20 bytes, will calculate later)
-        long hashPosition = blocksInfo.Position;
         blocksInfoWriter.Write(new byte[20]);
 
         // Block count: 1
@@ -290,8 +287,6 @@ public class BundleFileIntegrationTests
         // Write BlocksInfo to bundle
         writer.Write(blocksInfoBytes);
         long blocksInfoEnd = bundle.Position;
-
-        long dataOffset = blocksInfoEnd;
 
         // === DATA REGION ===
         // Single storage block: 16 bytes of dummy data

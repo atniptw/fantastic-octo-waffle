@@ -258,7 +258,6 @@ public class BundleFileErrorTests
         using var writer = new BinaryWriter(bundle);
 
         WriteHeader(writer, out long sizePos, out long compSizePos, out long uncompSizePos);
-        long headerEnd = bundle.Position;
         AlignTo4(bundle, writer);
         long blocksInfoStart = bundle.Position;
 
@@ -313,7 +312,6 @@ public class BundleFileErrorTests
         using var writer = new BinaryWriter(bundle);
 
         WriteHeader(writer, out long sizePos, out long compSizePos, out long uncompSizePos);
-        long headerEnd = bundle.Position;
         AlignTo4(bundle, writer);
         long blocksInfoStart = bundle.Position;
 
