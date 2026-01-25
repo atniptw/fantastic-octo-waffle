@@ -79,14 +79,17 @@ public sealed class SerializedFile
             throw new CorruptedHeaderException("File too small to contain SerializedFile header");
         }
 
-        using var stream = new MemoryStream(data.ToArray(), false);
+        // Materialize a single backing buffer once and reuse it
+        var buffer = data.ToArray();
+
+        using var stream = new MemoryStream(buffer, false);
         using var reader = new BinaryReader(stream);
 
         // Step 1: Parse header (determines version and endianness)
         var header = ParseHeader(reader);
 
         // Validate header consistency
-        ValidateHeader(header, data.Length);
+        ValidateHeader(header, buffer.Length);
 
         // Step 2: Create endian-aware reader
         bool isBigEndian = header.Endianness == 1;
@@ -134,13 +137,30 @@ public sealed class SerializedFile
 
         // Step 8: Extract object data region
         var dataStartOffset = (int)header.DataOffset;
-        if (dataStartOffset < 0 || dataStartOffset > data.Length)
+        if (dataStartOffset < 0 || dataStartOffset > buffer.Length)
         {
             throw new CorruptedHeaderException(
-                $"Invalid DataOffset {header.DataOffset}: exceeds file size {data.Length}");
+                $"Invalid DataOffset {header.DataOffset}: exceeds file size {buffer.Length}");
         }
 
-        var objectDataRegion = new ReadOnlyMemory<byte>(data.ToArray(), dataStartOffset, data.Length - dataStartOffset);
+        // Bound the object data region using the serialized file size from the header.
+        // This keeps all downstream offsets and sizes consistent with the header metadata.
+        var declaredFileSize = header.FileSize;
+        if (declaredFileSize < 0)
+        {
+            throw new CorruptedHeaderException($"Invalid FileSize {header.FileSize}: must be non-negative");
+        }
+
+        // Clamp end-of-file index to the actual buffer length to avoid overruns if the header is inconsistent.
+        var fileSizeEnd = (int)Math.Min(declaredFileSize, buffer.Length);
+        if (fileSizeEnd < dataStartOffset)
+        {
+            throw new CorruptedHeaderException(
+                $"Invalid DataOffset {header.DataOffset} and FileSize {header.FileSize}: data region is empty or negative");
+        }
+
+        var objectDataRegionLength = fileSizeEnd - dataStartOffset;
+        var objectDataRegion = new ReadOnlyMemory<byte>(buffer, dataStartOffset, objectDataRegionLength);
 
         // Step 9: Validate object bounds
         ValidateObjectBounds(objects, objectDataRegion.Length, header.DataOffset);
@@ -217,6 +237,10 @@ public sealed class SerializedFile
     {
         var header = new SerializedFileHeader();
 
+        // NOTE: The SerializedFile header itself is always little-endian in Unity's format.
+        // The Endianness byte only affects the metadata and object data that follows.
+        // This matches UnityPy's implementation behavior.
+
         // Read first 4 bytes as MetadataSize
         header.MetadataSize = reader.ReadUInt32();
 
@@ -270,15 +294,21 @@ public sealed class SerializedFile
 
     private static void ValidateHeader(SerializedFileHeader header, int dataLength)
     {
-        if (header.Version < 5 || header.Version > 30)
+        if (header.Version < 14 || header.Version > 30)
         {
             throw new InvalidVersionException(
-                $"Unsupported SerializedFile version: {header.Version} (supported: 5-30)", header.Version);
+                $"Unsupported SerializedFile version: {header.Version} (supported: 14-30)", header.Version);
         }
 
-        if (header.FileSize < 0 || header.FileSize > int.MaxValue)
+        if (header.FileSize < 0)
         {
             throw new CorruptedHeaderException($"Invalid FileSize: {header.FileSize}");
+        }
+
+        if (header.FileSize > dataLength)
+        {
+            throw new CorruptedHeaderException(
+                $"FileSize {header.FileSize} exceeds actual data length {dataLength}");
         }
 
         if (header.DataOffset < 0 || header.DataOffset > header.FileSize)
@@ -326,8 +356,6 @@ public sealed class SerializedFile
 
     private static TypeTree ParseTypeTree(EndianBinaryReader reader, uint version, bool enableTypeTree)
     {
-        // TODO: Implement type tree parsing
-        // This is a stub for now
         var types = new List<SerializedType>();
         int typeCount = reader.ReadInt32();
 
@@ -417,7 +445,7 @@ public sealed class SerializedFile
             {
                 Version = reader.ReadInt16(),
                 Level = reader.ReadByte(),
-                TypeFlags = reader.ReadByte(),
+                TypeFlags = reader.ReadUInt16(),
                 Index = i
             };
 
@@ -484,24 +512,14 @@ public sealed class SerializedFile
             }
 
             // PathId
-            if (version >= 14)
-            {
-                obj.PathId = reader.ReadInt64();
-            }
-            else
-            {
-                obj.PathId = reader.ReadInt32();
-            }
+            obj.PathId = version >= 14
+                ? reader.ReadInt64()
+                : reader.ReadInt32();
 
             // ByteStart
-            if (version >= 22)
-            {
-                obj.ByteStart = reader.ReadInt64();
-            }
-            else
-            {
-                obj.ByteStart = reader.ReadUInt32();
-            }
+            obj.ByteStart = version >= 22
+                ? reader.ReadInt64()
+                : reader.ReadUInt32();
 
             // ByteSize
             obj.ByteSize = reader.ReadUInt32();
@@ -540,21 +558,26 @@ public sealed class SerializedFile
 
     private static void ResolveClassIds(List<ObjectInfo> objects, TypeTree typeTree)
     {
-        foreach (var obj in objects)
+        foreach (var obj in objects.Where(o => o.ClassId == 0))
         {
-            if (obj.ClassId == 0) // Not yet resolved
+            // Try to resolve from type tree
+            var classId = typeTree.ResolveClassId(obj.TypeId);
+            if (classId.HasValue)
             {
-                // Try to resolve from type tree
-                var classId = typeTree.ResolveClassId(obj.TypeId);
-                if (classId.HasValue)
-                {
-                    obj.ClassId = classId.Value;
-                }
-                else
-                {
-                    // Fall back to using TypeId as ClassId
-                    obj.ClassId = obj.TypeId;
-                }
+                obj.ClassId = classId.Value;
+            }
+            else if (typeTree.Types.Count > 0)
+            {
+                // docs/UnityParsing.md: when a type tree is present and TypeId
+                // cannot be resolved, treat this as invalid object metadata.
+                throw new InvalidObjectInfoException(
+                    $"Failed to resolve ClassId from TypeTree for object {obj.PathId} with TypeId {obj.TypeId}.",
+                    obj.PathId);
+            }
+            else
+            {
+                // No type tree present, fall back to using TypeId as ClassId
+                obj.ClassId = obj.TypeId;
             }
         }
     }
@@ -591,13 +614,35 @@ public sealed class SerializedFile
     {
         foreach (var obj in objects)
         {
+            // Compute relative bounds as 64-bit to allow overflow checks.
+            long relativeStart = obj.ByteStart;
+            long relativeEnd = relativeStart + obj.ByteSize;
+
+            // Detect overflow in the relative range computation.
+            if (relativeEnd < relativeStart)
+            {
+                throw new InvalidObjectInfoException(
+                    $"Object {obj.PathId} has overflowing bounds: " +
+                    $"ByteStart={obj.ByteStart}, ByteSize={obj.ByteSize}", obj.PathId);
+            }
+
+            // Compute absolute offsets using dataOffset and detect overflow.
+            long absoluteStart = dataOffset + relativeStart;
+            long absoluteEnd = dataOffset + relativeEnd;
+            if (absoluteStart < dataOffset || absoluteEnd < dataOffset)
+            {
+                throw new InvalidObjectInfoException(
+                    $"Object {obj.PathId} has overflowing absolute bounds: " +
+                    $"DataOffset={dataOffset}, ByteStart={obj.ByteStart}, ByteSize={obj.ByteSize}", obj.PathId);
+            }
+
             if (obj.ByteStart < 0)
             {
                 throw new InvalidObjectInfoException(
                     $"Object {obj.PathId} has negative ByteStart: {obj.ByteStart}", obj.PathId);
             }
 
-            if (obj.ByteStart + obj.ByteSize > dataRegionLength)
+            if (relativeEnd > dataRegionLength)
             {
                 throw new InvalidObjectInfoException(
                     $"Object {obj.PathId} bounds exceed data region: " +
