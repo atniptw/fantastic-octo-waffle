@@ -6,7 +6,7 @@ namespace UnityAssetParser.Bundle;
 
 /// <summary>
 /// Parses UnityFS bundle headers and calculates BlocksInfo locations.
-/// Implements the parsing algorithm specified in UnityFS-BundleSpec.md § 13.4 and § 13.5.
+/// Implements the parsing algorithm specified in UnityFS-BundleSpec.md § 15.3 and § 15.4.
 /// </summary>
 public class UnityFSHeaderParser : IUnityFSHeaderParser
 {
@@ -125,26 +125,20 @@ public class UnityFSHeaderParser : IUnityFSHeaderParser
             header.AlignmentSize);
         var alignmentPadding = (int)(alignedPosition - header.HeaderEndPosition);
 
-        if (header.BlocksInfoAtEnd)
+        var blocksInfoPosition = header.BlocksInfoAtEnd
+            ? fileLength - header.CompressedBlocksInfoSize
+            : alignedPosition;
+
+        var dataOffset = header.BlocksInfoAtEnd
+            ? alignedPosition
+            : alignedPosition + header.CompressedBlocksInfoSize;
+
+        return new BlocksInfoLocation
         {
-            // Streamed layout: BlocksInfo at EOF, data starts after aligned header
-            return new BlocksInfoLocation
-            {
-                BlocksInfoPosition = fileLength - header.CompressedBlocksInfoSize,
-                DataOffset = alignedPosition,
-                AlignmentPadding = alignmentPadding
-            };
-        }
-        else
-        {
-            // Embedded layout: BlocksInfo after aligned header
-            return new BlocksInfoLocation
-            {
-                BlocksInfoPosition = alignedPosition,
-                DataOffset = alignedPosition + header.CompressedBlocksInfoSize,
-                AlignmentPadding = alignmentPadding
-            };
-        }
+            BlocksInfoPosition = blocksInfoPosition,
+            DataOffset = dataOffset,
+            AlignmentPadding = alignmentPadding
+        };
     }
 
     /// <summary>

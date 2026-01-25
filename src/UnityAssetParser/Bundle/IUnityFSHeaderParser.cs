@@ -10,9 +10,9 @@ public interface IUnityFSHeaderParser
     /// </summary>
     /// <param name="stream">Binary stream positioned at start of bundle.</param>
     /// <returns>Parsed header with computed properties.</returns>
-    /// <exception cref="InvalidBundleSignatureException">Signature is not "UnityFS".</exception>
-    /// <exception cref="UnsupportedVersionException">Version not in {6, 7}.</exception>
-    /// <exception cref="HeaderParseException">Malformed header data.</exception>
+    /// <exception cref="Exceptions.InvalidBundleSignatureException">Signature is not "UnityFS".</exception>
+    /// <exception cref="Exceptions.UnsupportedVersionException">Version not in {6, 7}.</exception>
+    /// <exception cref="Exceptions.HeaderParseException">Malformed header data.</exception>
     UnityFSHeader Parse(Stream stream);
 
     /// <summary>
