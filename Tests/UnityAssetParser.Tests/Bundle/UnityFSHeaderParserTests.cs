@@ -356,9 +356,7 @@ public class UnityFSHeaderParserTests
         var parser = new UnityFSHeaderParser();
 
         // Act & Assert
-#pragma warning disable CS8625 // Cannot convert null literal to non-nullable reference type.
-        Assert.Throws<ArgumentNullException>(() => parser.Parse(null));
-#pragma warning restore CS8625
+        Assert.Throws<ArgumentNullException>(() => parser.Parse(null!));
     }
 
     [Fact]
@@ -368,9 +366,7 @@ public class UnityFSHeaderParserTests
         var parser = new UnityFSHeaderParser();
 
         // Act & Assert
-#pragma warning disable CS8625 // Cannot convert null literal to non-nullable reference type.
-        Assert.Throws<ArgumentNullException>(() => parser.CalculateBlocksInfoLocation(null, 1000));
-#pragma warning restore CS8625
+        Assert.Throws<ArgumentNullException>(() => parser.CalculateBlocksInfoLocation(null!, 1000));
     }
 
     [Fact]

@@ -13,6 +13,8 @@ public class UnityFSHeaderParser : IUnityFSHeaderParser
     private const uint CompressionTypeMask = 0x3F;      // Bits 0-5
     private const uint BlocksInfoAtEndFlag = 0x80;      // Bit 7
     private const uint NeedsPaddingFlag = 0x200;        // Bit 9
+    // Reserved bits: all bits except 0-5 (compression), 7 (blocks info at end), and 9 (padding)
+    // If future Unity versions define new flags, update this mask accordingly
     private const uint ReservedBitsMask = ~(CompressionTypeMask | BlocksInfoAtEndFlag | NeedsPaddingFlag);
 
     /// <summary>
@@ -83,10 +85,21 @@ public class UnityFSHeaderParser : IUnityFSHeaderParser
                 HeaderEndPosition = headerEndPosition
             };
         }
-        catch (Exception ex) when (ex is not InvalidBundleSignatureException
-                                     and not UnsupportedVersionException
-                                     and not HeaderParseException)
+        catch (InvalidBundleSignatureException)
         {
+            throw; // Re-throw validation exceptions as-is
+        }
+        catch (UnsupportedVersionException)
+        {
+            throw; // Re-throw validation exceptions as-is
+        }
+        catch (HeaderParseException)
+        {
+            throw; // Re-throw our own parsing exceptions as-is
+        }
+        catch (Exception ex)
+        {
+            // Wrap any unexpected exceptions (I/O errors, encoding issues, etc.)
             throw new HeaderParseException("Failed to parse UnityFS header", ex);
         }
     }
