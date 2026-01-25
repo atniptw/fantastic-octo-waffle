@@ -93,11 +93,17 @@ public class Decompressor : IDecompressor
             int lp = (propsByte / 5) % 9;
             int lc = propsByte / 45;
 
+            // Validate LZMA properties are within spec ranges
+            // lc: [0..8], lp: [0..4], pb: [0..4]
+            // The critical validation is lc + lp <= 4 per LZMA spec
             if (lc + lp > 4)
             {
                 throw new LzmaDecompressionException(
                     $"Invalid LZMA properties: lc ({lc}) + lp ({lp}) must be <= 4");
             }
+
+            // pb is validated implicitly by the modulo operation (always 0-4)
+            // Kept for documentation and potential future validation
 
             // Extract dictionary size (bytes 1-4, little-endian)
             // Unity bundles are always little-endian, so no endianness conversion needed
