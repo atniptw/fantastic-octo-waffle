@@ -38,4 +38,8 @@
     <PackageReference Include="SonarAnalyzer.CSharp" Version="10.4.0.108396" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\UnityAssetParser\UnityAssetParser.csproj" />
+  </ItemGroup>
+
 </Project>
