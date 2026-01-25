@@ -45,6 +45,19 @@ public static class BinaryReaderExtensions
     }
 
     /// <summary>
+    /// Calculates the aligned position for a given offset and alignment boundary.
+    /// </summary>
+    /// <param name="offset">Current offset in bytes.</param>
+    /// <param name="alignment">Alignment boundary (must be power of 2: 4, 8, 16).</param>
+    /// <returns>The aligned position (offset + padding).</returns>
+    /// <exception cref="ArgumentException">Thrown if alignment is not a power of 2.</exception>
+    public static long CalculateAlignedPosition(long offset, int alignment = 4)
+    {
+        var padding = CalculatePadding(offset, alignment);
+        return offset + padding;
+    }
+
+    /// <summary>
     /// Aligns the BinaryReader position to the specified boundary by skipping padding bytes.
     /// </summary>
     /// <param name="reader">The BinaryReader to align.</param>
