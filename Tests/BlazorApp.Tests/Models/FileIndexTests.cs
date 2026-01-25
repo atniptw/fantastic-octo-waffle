@@ -214,4 +214,31 @@ public class FileIndexTests
         // Act & Assert
         Assert.IsAssignableFrom<IReadOnlyList<FileIndexItem>>(fileIndex.Items);
     }
+
+    [Fact]
+    public void PerformanceBaseline_10Files_CompletesQuickly()
+    {
+        // Arrange - Create 10 file items (typical mod scenario)
+        var items = Enumerable.Range(0, 10).Select(i => new FileIndexItem(
+            $"file{i}.hhh",
+            1000 + i,
+            FileType.UnityFS,
+            i % 2 == 0 // Half renderable, half not
+        )).ToArray();
+
+        // Act
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var fileIndex = new FileIndex(items);
+        var renderableCount = fileIndex.RenderableCount;
+        var renderableFiles = fileIndex.GetRenderableFiles().ToList();
+        var nonRenderableFiles = fileIndex.GetNonRenderableFiles().ToList();
+        sw.Stop();
+
+        // Assert - Operations should complete in well under 500ms (aim for <10ms)
+        Assert.True(sw.ElapsedMilliseconds < 100,
+            $"FileIndex operations took {sw.ElapsedMilliseconds}ms, should be <100ms");
+        Assert.Equal(5, renderableCount);
+        Assert.Equal(5, renderableFiles.Count);
+        Assert.Equal(5, nonRenderableFiles.Count);
+    }
 }
