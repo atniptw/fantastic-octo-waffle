@@ -195,6 +195,51 @@ public class BundleFileIntegrationTests
     }
 
     /// <summary>
+    /// Tests parsing a V6 bundle with BlocksInfo located at end of file (streamed flag 0x80).
+    /// </summary>
+    [Fact]
+    public void Parse_StreamedBlocksInfoV6_Success()
+    {
+        // Arrange: Create V6 bundle with BlocksInfo at end (flag 0x80 set)
+        var bundleBytes = CreateStreamedBlocksInfoV6Bundle();
+        using var stream = new MemoryStream(bundleBytes);
+
+        // Act
+        var bundle = BundleFile.Parse(stream);
+
+        // Assert
+        Assert.NotNull(bundle);
+        Assert.Equal("UnityFS", bundle.Header.Signature);
+        Assert.Equal(6u, bundle.Header.Version);
+        Assert.NotEmpty(bundle.Nodes);
+        // Verify BlocksInfo was correctly parsed from end of file
+        Assert.True((bundle.Header.Flags & 0x80) != 0, "BlocksInfo should be at end (flag 0x80 set)");
+    }
+
+    /// <summary>
+    /// Tests parsing a V7 bundle with BlocksInfo at end and pre-padding (flag 0x200).
+    /// </summary>
+    [Fact]
+    public void Parse_StreamedBlocksInfoV7WithPadding_Success()
+    {
+        // Arrange: Create V7 bundle with BlocksInfo at end and needs padding (flag 0x80 | 0x200)
+        var bundleBytes = CreateStreamedBlocksInfoV7WithPaddingBundle();
+        using var stream = new MemoryStream(bundleBytes);
+
+        // Act
+        var bundle = BundleFile.Parse(stream);
+
+        // Assert
+        Assert.NotNull(bundle);
+        Assert.Equal("UnityFS", bundle.Header.Signature);
+        Assert.Equal(7u, bundle.Header.Version);
+        Assert.NotEmpty(bundle.Nodes);
+        // Verify both streamed and padding flags are set
+        Assert.True((bundle.Header.Flags & 0x80) != 0, "BlocksInfo should be at end (flag 0x80)");
+        Assert.True((bundle.Header.Flags & 0x200) != 0, "Should need padding at start (flag 0x200)");
+    }
+
+    /// <summary>
     /// Creates a minimal valid V6 UnityFS bundle for testing.
     /// Contains header, uncompressed BlocksInfo, and a single small data block with one node.
     /// </summary>
@@ -296,6 +341,189 @@ public class BundleFileIntegrationTests
             dataBlock[i] = (byte)i;
         }
         writer.Write(dataBlock);
+
+        long bundleEnd = bundle.Position;
+
+        // === FIX UP HEADER ===
+        bundle.Position = sizePosition;
+        writer.Write(bundleEnd);
+
+        uint blocksInfoSize = (uint)(blocksInfoEnd - blocksInfoStart);
+        bundle.Position = compressedSizePosition;
+        writer.Write(blocksInfoSize);
+        bundle.Position = uncompressedSizePosition;
+        writer.Write(blocksInfoSize);
+
+        return bundle.ToArray();
+    }
+
+    /// <summary>
+    /// Creates a V6 bundle with BlocksInfo located at end of file (streamed, flag 0x80).
+    /// </summary>
+    private static byte[] CreateStreamedBlocksInfoV6Bundle()
+    {
+        var bundle = new MemoryStream();
+        var writer = new BinaryWriter(bundle);
+
+        // === HEADER ===
+        writer.Write(Encoding.UTF8.GetBytes("UnityFS\0"));
+        writer.Write((uint)6); // Version
+        writer.Write(Encoding.UTF8.GetBytes("2022.3.48f1\0")); // UnityVersion
+        writer.Write(Encoding.UTF8.GetBytes("abcdef1234567890\0")); // UnityRevision
+        long sizePosition = bundle.Position;
+        writer.Write((long)0); // Size (to fix up later)
+        long compressedSizePosition = bundle.Position;
+        writer.Write((uint)0); // CompressedBlocksInfoSize (to fix up later)
+        long uncompressedSizePosition = bundle.Position;
+        writer.Write((uint)0); // UncompressedBlocksInfoSize (to fix up later)
+        writer.Write((uint)0x80); // Flags: BlocksInfo at end (no compression, 0x80 = streamed)
+
+        // === DATA REGION ===
+        byte[] dataBlock = new byte[16];
+        for (int i = 0; i < 16; i++)
+        {
+            dataBlock[i] = (byte)i;
+        }
+        writer.Write(dataBlock);
+
+        // === BLOCKSINFO AT END (STREAMED) ===
+        long blocksInfoStart = bundle.Position;
+        var blocksInfo = new MemoryStream();
+        var blocksInfoWriter = new BinaryWriter(blocksInfo);
+
+        // Reserve space for hash (20 bytes) - will fill after computing payload hash
+        blocksInfoWriter.Write(new byte[20]);
+
+        // Block count: 1
+        blocksInfoWriter.Write((int)1);
+
+        // Storage block: 16 bytes uncompressed, 16 bytes compressed, flags 0
+        blocksInfoWriter.Write((uint)16);
+        blocksInfoWriter.Write((uint)16);
+        blocksInfoWriter.Write((ushort)0);
+
+        // 4-byte alignment after blocks
+        while (blocksInfo.Position % 4 != 0)
+        {
+            blocksInfoWriter.Write((byte)0);
+        }
+
+        // Node count: 1
+        blocksInfoWriter.Write((int)1);
+
+        // Node: offset 0, size 16, flags 0, path "CAB-test\0"
+        blocksInfoWriter.Write((long)0);
+        blocksInfoWriter.Write((long)16);
+        blocksInfoWriter.Write((int)0);
+        blocksInfoWriter.Write(Encoding.UTF8.GetBytes("CAB-test\0"));
+
+        // Compute and write hash
+        byte[] blocksInfoBytes = blocksInfo.ToArray();
+        byte[] payloadForHash = new byte[blocksInfoBytes.Length - 20];
+        Array.Copy(blocksInfoBytes, 20, payloadForHash, 0, payloadForHash.Length);
+        using (var sha1 = System.Security.Cryptography.SHA1.Create())
+        {
+            byte[] hash = sha1.ComputeHash(payloadForHash);
+            Array.Copy(hash, 0, blocksInfoBytes, 0, 20);
+        }
+
+        writer.Write(blocksInfoBytes);
+        long blocksInfoEnd = bundle.Position;
+
+        long bundleEnd = bundle.Position;
+
+        // === FIX UP HEADER ===
+        bundle.Position = sizePosition;
+        writer.Write(bundleEnd);
+
+        uint blocksInfoSize = (uint)(blocksInfoEnd - blocksInfoStart);
+        bundle.Position = compressedSizePosition;
+        writer.Write(blocksInfoSize);
+        bundle.Position = uncompressedSizePosition;
+        writer.Write(blocksInfoSize);
+
+        return bundle.ToArray();
+    }
+
+    /// <summary>
+    /// Creates a V7 bundle with BlocksInfo at end (flag 0x80) and pre-padding (flag 0x200).
+    /// </summary>
+    private static byte[] CreateStreamedBlocksInfoV7WithPaddingBundle()
+    {
+        var bundle = new MemoryStream();
+        var writer = new BinaryWriter(bundle);
+
+        // === HEADER ===
+        writer.Write(Encoding.UTF8.GetBytes("UnityFS\0"));
+        writer.Write((uint)7); // Version (7 supports padding flag)
+        writer.Write(Encoding.UTF8.GetBytes("2022.3.48f1\0")); // UnityVersion
+        writer.Write(Encoding.UTF8.GetBytes("abcdef1234567890\0")); // UnityRevision
+        long sizePosition = bundle.Position;
+        writer.Write((long)0); // Size (to fix up later)
+        long compressedSizePosition = bundle.Position;
+        writer.Write((uint)0); // CompressedBlocksInfoSize (to fix up later)
+        long uncompressedSizePosition = bundle.Position;
+        writer.Write((uint)0); // UncompressedBlocksInfoSize (to fix up later)
+        long flagsPosition = bundle.Position;
+        writer.Write((uint)(0x80 | 0x200)); // Flags: StreamedAtEnd (0x80) + NeedsPaddingAtStart (0x200)
+
+        // Apply 16-byte alignment before data (due to padding flag)
+        while (bundle.Position % 16 != 0)
+        {
+            writer.Write((byte)0);
+        }
+
+        // === DATA REGION ===
+        byte[] dataBlock = new byte[16];
+        for (int i = 0; i < 16; i++)
+        {
+            dataBlock[i] = (byte)i;
+        }
+        writer.Write(dataBlock);
+
+        // === BLOCKSINFO AT END (STREAMED) ===
+        long blocksInfoStart = bundle.Position;
+        var blocksInfo = new MemoryStream();
+        var blocksInfoWriter = new BinaryWriter(blocksInfo);
+
+        // Reserve space for hash (20 bytes)
+        blocksInfoWriter.Write(new byte[20]);
+
+        // Block count: 1
+        blocksInfoWriter.Write((int)1);
+
+        // Storage block
+        blocksInfoWriter.Write((uint)16);
+        blocksInfoWriter.Write((uint)16);
+        blocksInfoWriter.Write((ushort)0);
+
+        // 4-byte alignment after blocks
+        while (blocksInfo.Position % 4 != 0)
+        {
+            blocksInfoWriter.Write((byte)0);
+        }
+
+        // Node count: 1
+        blocksInfoWriter.Write((int)1);
+
+        // Node
+        blocksInfoWriter.Write((long)0);
+        blocksInfoWriter.Write((long)16);
+        blocksInfoWriter.Write((int)0);
+        blocksInfoWriter.Write(Encoding.UTF8.GetBytes("CAB-test\0"));
+
+        // Compute and write hash
+        byte[] blocksInfoBytes = blocksInfo.ToArray();
+        byte[] payloadForHash = new byte[blocksInfoBytes.Length - 20];
+        Array.Copy(blocksInfoBytes, 20, payloadForHash, 0, payloadForHash.Length);
+        using (var sha1 = System.Security.Cryptography.SHA1.Create())
+        {
+            byte[] hash = sha1.ComputeHash(payloadForHash);
+            Array.Copy(hash, 0, blocksInfoBytes, 0, 20);
+        }
+
+        writer.Write(blocksInfoBytes);
+        long blocksInfoEnd = bundle.Position;
 
         long bundleEnd = bundle.Position;
 
