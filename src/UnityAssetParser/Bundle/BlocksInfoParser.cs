@@ -25,7 +25,7 @@ public class BlocksInfoParser : IBlocksInfoParser
     /// <param name="compressionType">Compression method to use.</param>
     /// <param name="dataOffset">Base offset for node addressing (from Stream B).</param>
     /// <returns>Parsed and validated BlocksInfo structure.</returns>
-    /// <exception cref="ArgumentNullException">Thrown if compressedData is null.</exception>
+    /// <exception cref="ArgumentException">Thrown if compressedData is empty.</exception>
     /// <exception cref="DecompressionSizeMismatchException">Thrown if decompressed size doesn't match expected.</exception>
     /// <exception cref="BlocksInfoParseException">Thrown if parsing fails or data is malformed.</exception>
     /// <exception cref="HashMismatchException">Thrown if SHA1 verification fails.</exception>
@@ -53,7 +53,7 @@ public class BlocksInfoParser : IBlocksInfoParser
         BlocksInfo blocksInfo = ParseTables(uncompressedData);
 
         // Step 4: Validate nodes
-        ValidateNodes(blocksInfo, dataOffset);
+        ValidateNodes(blocksInfo);
 
         return blocksInfo;
     }
@@ -106,11 +106,9 @@ public class BlocksInfoParser : IBlocksInfoParser
         byte[] expectedHash = new byte[20];
         Array.Copy(uncompressedData, 0, expectedHash, 0, 20);
 
-        // Compute hash over payload (bytes 20..end)
-        byte[] payload = new byte[uncompressedData.Length - 20];
-        Array.Copy(uncompressedData, 20, payload, 0, payload.Length);
-
-        byte[] computedHash = SHA1.HashData(payload);
+        // Compute hash over payload (bytes 20..end) without extra allocation
+        ReadOnlySpan<byte> payloadSpan = uncompressedData.AsSpan(20);
+        byte[] computedHash = SHA1.HashData(payloadSpan);
 
         // Compare hashes
         if (!expectedHash.SequenceEqual(computedHash))
@@ -205,7 +203,7 @@ public class BlocksInfoParser : IBlocksInfoParser
     /// <summary>
     /// Validates nodes for uniqueness, bounds, and overlaps.
     /// </summary>
-    private static void ValidateNodes(BlocksInfo blocksInfo, long dataOffset)
+    private static void ValidateNodes(BlocksInfo blocksInfo)
     {
         // Calculate total uncompressed data span
         long totalUncompressedSpan = 0;
