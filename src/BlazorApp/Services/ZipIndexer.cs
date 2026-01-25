@@ -1,6 +1,9 @@
 using System.IO.Compression;
 using System.Runtime.CompilerServices;
 using BlazorApp.Models;
+using Microsoft.Extensions.Logging;
+using UnityAssetParser.Bundle;
+using UnityAssetParser.Services;
 
 namespace BlazorApp.Services;
 
@@ -9,10 +12,23 @@ namespace BlazorApp.Services;
 /// </summary>
 public class ZipIndexer : IZipIndexer
 {
+    private readonly ILogger<ZipIndexer>? _logger;
+
     /// <summary>
     /// Number of bytes to read from file header for type detection and shallow parsing.
     /// </summary>
     private const int HeaderBufferSize = 256;
+
+    /// <summary>
+    /// Maximum file size to process for renderable detection (10 MB).
+    /// Larger files are skipped to avoid memory issues.
+    /// </summary>
+    private const int MaxRenderableDetectionSize = 10 * 1024 * 1024;
+
+    public ZipIndexer(ILogger<ZipIndexer>? logger = null)
+    {
+        _logger = logger;
+    }
 
     /// <summary>
     /// Minimum size in bytes for SerializedFile format detection.
@@ -78,17 +94,39 @@ public class ZipIndexer : IZipIndexer
             // Limit header size to avoid overflow and memory issues with large files
             var headerSize = (int)Math.Min(HeaderBufferSize, Math.Min(entry.Length, int.MaxValue));
             var header = new byte[headerSize];
-            var bytesRead = await ReadExactlyAsync(entryStream, header, headerSize, ct);
+            await ReadExactlyAsync(entryStream, header, headerSize, ct);
 
             // Always detect file type; DetectFileType handles short headers internally.
             fileType = DetectFileType(entry.FullName, header);
 
-            // For UnityFS files, check if renderable (contains Mesh objects).
-            // Require at least the UnityFS magic length to safely inspect the header.
-            if (fileType == FileType.UnityFS && bytesRead >= UnityFSMagic.Length)
+            // For UnityFS and SerializedFile types, check if renderable (contains Mesh objects).
+            // This requires reading the full file and parsing it.
+            if ((fileType == FileType.UnityFS || fileType == FileType.SerializedFile) &&
+                entry.Length > 0 &&
+                entry.Length <= MaxRenderableDetectionSize)
             {
-                // Pass header buffer instead of stream (which doesn't support seeking)
-                renderable = IsRenderable(header, bytesRead);
+                try
+                {
+                    // Reset stream to beginning
+                    entryStream.Position = 0;
+
+                    // Read entire file for renderable detection
+                    var fileBytes = new byte[entry.Length];
+                    var totalRead = await ReadExactlyAsync(entryStream, fileBytes, (int)entry.Length, ct);
+
+                    if (totalRead == entry.Length)
+                    {
+                        renderable = DetectRenderableFromAsset(fileBytes, fileType);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Log but don't fail: renderable detection is best-effort
+                    _logger?.LogWarning(ex,
+                        "Failed to detect renderability for {FileName}: {Message}",
+                        entry.FullName, ex.Message);
+                    renderable = false; // Conservative default
+                }
             }
 
             yield return new FileIndexItem(
@@ -155,44 +193,51 @@ public class ZipIndexer : IZipIndexer
     }
 
     /// <summary>
-    /// Performs shallow check to determine if UnityFS bundle might contain Mesh objects.
-    /// This is a heuristic check based on header data.
+    /// Detects if an asset file contains renderable geometry (Mesh objects).
     /// </summary>
-    private static bool IsRenderable(byte[] header, int length)
+    /// <param name="assetBytes">Full asset file bytes.</param>
+    /// <param name="fileType">Type of the asset file.</param>
+    /// <returns>true if asset contains Mesh objects; false otherwise.</returns>
+    private bool DetectRenderableFromAsset(byte[] assetBytes, FileType fileType)
     {
         try
         {
-            if (length < 7)
+            if (fileType == FileType.UnityFS)
             {
+                // Parse UnityFS bundle to extract SerializedFile (Node 0)
+                using var ms = new MemoryStream(assetBytes);
+                var parseResult = BundleFile.TryParse(ms);
+
+                if (!parseResult.Success || parseResult.Bundle == null)
+                {
+                    _logger?.LogDebug("Failed to parse UnityFS bundle: {Errors}",
+                        string.Join(", ", parseResult.Errors));
+                    return false;
+                }
+
+                var bundle = parseResult.Bundle;
+
+                // Node 0 is typically the SerializedFile containing object metadata
+                if (bundle.Nodes.Count > 0)
+                {
+                    var node0 = bundle.Nodes[0];
+                    var node0Data = bundle.ExtractNode(node0);
+                    return RenderableDetector.DetectRenderable(node0Data.Span);
+                }
+
                 return false;
             }
-
-            // Check for any Unity bundle signature variant
-            if (!StartsWithMagic(header, UnityFSMagic) &&
-                !StartsWithMagic(header, UnityWebMagic) &&
-                !StartsWithMagic(header, UnityRawMagic) &&
-                !StartsWithMagic(header, UnityArchiveMagic))
+            else if (fileType == FileType.SerializedFile)
             {
-                return false;
+                // Direct SerializedFile - pass to detector
+                return RenderableDetector.DetectRenderable(assetBytes);
             }
 
-            // For a full implementation, we would:
-            // 1. Parse the block storage info
-            // 2. Decompress the data blocks
-            // 3. Parse the SerializedFile structure
-            // 4. Read the object type table
-            // 5. Look for ClassID 43 (Mesh)
-            //
-            // However, this is a shallow check with limited header data.
-            // As a heuristic: UnityFS bundles in .hhh files typically contain meshes
-            // A proper implementation would require full bundle parsing
-            
-            // Conservative: assume UnityFS bundles may contain meshes
-            return true;
+            return false;
         }
-        catch
+        catch (Exception ex)
         {
-            // If we can't parse it, it's not renderable
+            _logger?.LogDebug(ex, "Exception during renderable detection");
             return false;
         }
     }
