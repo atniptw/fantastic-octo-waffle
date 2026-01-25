@@ -105,7 +105,7 @@ public class DataRegionEdgeCaseTests
             0xFF80,  // All reserved bits
         ];
 
-        foreach (var flag in invalidFlags)
+        foreach (var flag in invalidFlags.Select(f => new { Flag = f }))
         {
             var blocks = new[]
             {
@@ -113,7 +113,7 @@ public class DataRegionEdgeCaseTests
                 {
                     UncompressedSize = 10,
                     CompressedSize = 10,
-                    Flags = flag
+                    Flags = flag.Flag
                 }
             };
 
@@ -175,13 +175,10 @@ public class DataRegionEdgeCaseTests
             };
 
             // Act - Should not throw for valid compression types
-            if (flag <= 3)  // 0=None, 1=LZMA (skipped), 2=LZ4 (need compressed data), 3=LZ4HC
+            if (flag <= 3 && flag == 0)  // 0=None, 1=LZMA (skipped), 2=LZ4 (need compressed data), 3=LZ4HC
             {
-                if (flag == 0)  // Only test None here (others need proper compressed data)
-                {
-                    var region = _builder.Build(stream, 0, blocks);
-                    Assert.Equal(data.Length, region.Length);
-                }
+                var region = _builder.Build(stream, 0, blocks);
+                Assert.Equal(data.Length, region.Length);
             }
         }
     }
@@ -308,6 +305,8 @@ public class DataRegionEdgeCaseTests
         };
 
         // Act & Assert - Should detect overflow when summing block sizes
-        Assert.ThrowsAny<Exception>(() => _builder.Build(stream, 0, blocks));
+        // The sum exceeds int.MaxValue, so we expect BlockDecompressionFailedException
+        var exception = Assert.Throws<BlockDecompressionFailedException>(() => _builder.Build(stream, 0, blocks));
+        Assert.Contains("exceeds maximum buffer size", exception.Message);
     }
 }

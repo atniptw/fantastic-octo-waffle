@@ -46,13 +46,32 @@ public sealed class StreamingInfoResolver
                 $"StreamingInfo size cannot be negative: {info.Size}");
         }
 
-        if (info.Offset + info.Size > node.Size)
+        // Validate slice bounds within the node without risking integer overflow
+        if (info.Size > node.Size)
+        {
+            throw new StreamingInfoException(
+                $"StreamingInfo size {info.Size} exceeds node '{node.Path}' size {node.Size}");
+        }
+
+        if (info.Offset > node.Size - info.Size)
         {
             throw new StreamingInfoException(
                 $"StreamingInfo slice [{info.Offset}, {info.Offset + info.Size}) exceeds node '{node.Path}' size {node.Size}");
         }
 
-        // Calculate absolute offset in data region
+        // Calculate absolute offset in data region, guarding against overflow
+        if (node.Offset < 0)
+        {
+            throw new StreamingInfoException(
+                $"Node offset cannot be negative for path '{node.Path}': {node.Offset}");
+        }
+
+        if (node.Offset > long.MaxValue - info.Offset)
+        {
+            throw new StreamingInfoException(
+                $"StreamingInfo absolute offset would overflow: node offset {node.Offset} + info offset {info.Offset}");
+        }
+
         long absoluteOffset = node.Offset + info.Offset;
 
         // Read slice from data region

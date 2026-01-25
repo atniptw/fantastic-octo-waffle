@@ -352,7 +352,7 @@ public class DataRegionIntegrationTests
         };
 
         // Act
-        var region = _builder.Build(stream, 0, blocks);
+        _builder.Build(stream, 0, blocks);
 
         // Assert
         var ex = Assert.Throws<NodeOverlapException>(() => _extractor.ValidateNoOverlaps(nodes));

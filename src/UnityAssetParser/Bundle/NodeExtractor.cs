@@ -50,7 +50,8 @@ public sealed class NodeExtractor
             throw new BoundsException($"Node '{node.Path}' has negative size: {node.Size}");
         }
 
-        if (node.Offset + node.Size > region.Length)
+        // Use overflow-safe bounds check: node.Offset + node.Size can overflow
+        if (node.Offset > region.Length || node.Size > region.Length - node.Offset)
         {
             throw new BoundsException(
                 $"Node '{node.Path}' bounds [{node.Offset}, {node.Offset + node.Size}) exceed data region length {region.Length}");
@@ -78,6 +79,13 @@ public sealed class NodeExtractor
         {
             var current = sortedNodes[i];
             var next = sortedNodes[i + 1];
+
+            // Use overflow-safe end calculation: current.Offset + current.Size can overflow
+            if (current.Size > 0 && current.Offset > long.MaxValue - current.Size)
+            {
+                throw new NodeOverlapException(
+                    $"Node '{current.Path}' offset + size would overflow: offset={current.Offset}, size={current.Size}");
+            }
 
             long currentEnd = current.Offset + current.Size;
             

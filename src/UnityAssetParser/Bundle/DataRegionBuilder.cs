@@ -53,8 +53,9 @@ public sealed class DataRegionBuilder
                 $"Total uncompressed size ({totalUncompressedSize} bytes) exceeds maximum buffer size ({int.MaxValue} bytes)");
         }
 
-        // Allocate output buffer
-        byte[] dataRegionBuffer = new byte[totalUncompressedSize];
+        // Allocate output buffer (cast is safe after validation above)
+        int bufferSize = checked((int)totalUncompressedSize);
+        byte[] dataRegionBuffer = new byte[bufferSize];
         int writeOffset = 0;
 
         // Seek to data region start
@@ -72,14 +73,32 @@ public sealed class DataRegionBuilder
                     $"Block {i} has non-zero reserved flag bits: 0x{block.Flags:X4} (reserved bits: 0x{block.Flags & 0xFF80:X4})");
             }
 
-            // Read compressed block data
-            byte[] compressedData = new byte[block.CompressedSize];
-            int bytesRead = bundleStream.Read(compressedData, 0, compressedData.Length);
-            
-            if (bytesRead != block.CompressedSize)
+            // Validate and convert CompressedSize to int
+            if (block.CompressedSize > int.MaxValue)
             {
                 throw new BlockDecompressionFailedException(
-                    $"Block {i}: failed to read compressed data (expected {block.CompressedSize} bytes, got {bytesRead} bytes)");
+                    $"Block {i}: compressed size {block.CompressedSize} exceeds maximum supported size {int.MaxValue} bytes");
+            }
+
+            int compressedSize = checked((int)block.CompressedSize);
+            byte[] compressedData = new byte[compressedSize];
+            
+            // Read compressed block data - ensure all bytes are read
+            int totalBytesRead = 0;
+            while (totalBytesRead < compressedSize)
+            {
+                int bytesRead = bundleStream.Read(compressedData, totalBytesRead, compressedSize - totalBytesRead);
+                if (bytesRead == 0)
+                {
+                    break; // EOF reached before expected size
+                }
+                totalBytesRead += bytesRead;
+            }
+            
+            if (totalBytesRead != compressedSize)
+            {
+                throw new BlockDecompressionFailedException(
+                    $"Block {i}: failed to read compressed data (expected {compressedSize} bytes, got {totalBytesRead} bytes)");
             }
 
             // Decompress block

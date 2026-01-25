@@ -42,7 +42,8 @@ public sealed class DataRegion
             throw new Exceptions.BoundsException($"Size cannot be negative: {size}");
         }
 
-        if (offset + size > Length)
+        // Use overflow-safe bounds check: offset + size can overflow
+        if (offset > Length || size > Length - offset)
         {
             throw new Exceptions.BoundsException(
                 $"Slice [{offset}, {offset + size}) exceeds data region bounds [0, {Length})");

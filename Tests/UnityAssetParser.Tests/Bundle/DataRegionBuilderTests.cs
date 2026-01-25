@@ -170,7 +170,8 @@ public class DataRegionBuilderTests
         };
 
         // Act & Assert
-        Assert.ThrowsAny<Exception>(() => _builder.Build(stream, 0, blocks));
+        var ex = Assert.Throws<BlockDecompressionFailedException>(() => _builder.Build(stream, 0, blocks));
+        Assert.Contains("decompression failed", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
