@@ -107,14 +107,14 @@ public class ZipIndexer : IZipIndexer
             {
                 try
                 {
-                    // Reset stream to beginning
-                    entryStream.Position = 0;
+                    // Read entire file for renderable detection from a fresh stream
+                    var fileLength = checked((int)entry.Length);
+                    using var fullStream = entry.Open();
 
-                    // Read entire file for renderable detection
-                    var fileBytes = new byte[entry.Length];
-                    var totalRead = await ReadExactlyAsync(entryStream, fileBytes, (int)entry.Length, ct);
+                    var fileBytes = new byte[fileLength];
+                    var totalRead = await ReadExactlyAsync(fullStream, fileBytes, fileLength, ct);
 
-                    if (totalRead == entry.Length)
+                    if (totalRead == fileLength)
                     {
                         renderable = DetectRenderableFromAsset(fileBytes, fileType);
                     }

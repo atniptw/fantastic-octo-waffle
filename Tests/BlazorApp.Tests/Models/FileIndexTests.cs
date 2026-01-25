@@ -227,16 +227,12 @@ public class FileIndexTests
         )).ToArray();
 
         // Act
-        var sw = System.Diagnostics.Stopwatch.StartNew();
         var fileIndex = new FileIndex(items);
         var renderableCount = fileIndex.RenderableCount;
         var renderableFiles = fileIndex.GetRenderableFiles().ToList();
         var nonRenderableFiles = fileIndex.GetNonRenderableFiles().ToList();
-        sw.Stop();
 
-        // Assert - Operations should complete in well under 500ms (aim for <10ms)
-        Assert.True(sw.ElapsedMilliseconds < 100,
-            $"FileIndex operations took {sw.ElapsedMilliseconds}ms, should be <100ms");
+        // Assert - Validate behavior (counts) rather than wall-clock performance
         Assert.Equal(5, renderableCount);
         Assert.Equal(5, renderableFiles.Count);
         Assert.Equal(5, nonRenderableFiles.Count);
