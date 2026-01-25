@@ -85,10 +85,13 @@ public class Decompressor : IDecompressor
             byte[] properties = new byte[5];
             Array.Copy(compressedData, 0, properties, 0, 5);
 
-            // Validate LZMA properties byte (lc + lp * 9 < 45, where lc <= 8, lp <= 4)
+            // Validate LZMA properties byte
+            // Formula: props = (pb * 5 + lp) * 9 + lc
+            // Therefore: lc = props % 9, lp = (props / 9) % 5, pb = props / 45
             byte propsByte = properties[0];
-            int lp = (propsByte / 5) % 9;
-            int lc = (propsByte / 45);
+            int lc = propsByte % 9;
+            int lp = (propsByte / 9) % 5;
+            int pb = propsByte / 45;
 
             if (lc + lp > 4)
             {
@@ -97,6 +100,7 @@ public class Decompressor : IDecompressor
             }
 
             // Extract dictionary size (bytes 1-4, little-endian)
+            // Unity bundles are always little-endian, so no endianness conversion needed
             uint dictionarySize = BitConverter.ToUInt32(properties, 1);
 
             // Validate dictionary size (must not exceed 512 MB)
