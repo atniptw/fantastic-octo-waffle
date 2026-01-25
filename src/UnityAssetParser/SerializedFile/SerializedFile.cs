@@ -220,29 +220,34 @@ public sealed class SerializedFile
         // Read first 4 bytes as MetadataSize
         header.MetadataSize = reader.ReadUInt32();
 
-        // Read next 4 bytes - could be FileSize (uint32) or low 4 bytes of FileSize (int64)
-        uint firstValue = reader.ReadUInt32();
+        // Read next 4 bytes 
+        uint value1 = reader.ReadUInt32();
         
-        // Peek at next 4 bytes
-        uint secondValue = reader.ReadUInt32();
+        // Read following 4 bytes
+        uint value2 = reader.ReadUInt32();
 
-        // Determine version based on reasonable heuristics:
-        // If secondValue < 100, it's likely a version number (version < 22 format)
-        // Otherwise, firstValue + secondValue form int64 FileSize (version >= 22)
-        if (secondValue >= 14 && secondValue < 100)
+        // Determine format based on heuristics:
+        // Version 22+: MetadataSize, FileSize(int64=8bytes), Version, DataOffset(int64)
+        // Version < 22: MetadataSize, FileSize(uint32=4bytes), Version, DataOffset(uint32)
+        
+        // Key insight: For version >= 22, if FileSize < 4GB, the high 32 bits will be 0
+        // So if value2 is 0 and value1 is reasonable, we're likely reading int64 FileSize
+        // Then we need to read the Version next
+        
+        // But this is still ambiguous. Better approach: Check if value2 is a reasonable version number (14-30)
+        // AND value1 is a reasonable file size (> metadata size, < 1GB)
+        
+        if (value2 >= 14 && value2 <= 30 && value1 >= header.MetadataSize && value1 < 1_000_000_000)
         {
-            // Version < 22 format: MetadataSize, FileSize (uint32), Version
-            header.FileSize = firstValue;
-            header.Version = secondValue;
-            
-            // Read DataOffset (uint32 for version < 22)
+            // Version < 22 format: value1=FileSize(uint32), value2=Version
+            header.FileSize = value1;
+            header.Version = value2;
             header.DataOffset = reader.ReadUInt32();
         }
         else
         {
-            // Version >= 22 format: MetadataSize, FileSize (int64), Version, DataOffset (int64)
-            // firstValue and secondValue form the int64 FileSize
-            header.FileSize = (long)firstValue | ((long)secondValue << 32);
+            // Version >= 22 format: value1+value2 = FileSize(int64)
+            header.FileSize = (long)value1 | ((long)value2 << 32);
             header.Version = reader.ReadUInt32();
             header.DataOffset = reader.ReadInt64();
         }
