@@ -56,10 +56,50 @@ public partial class ZipDownloader : IZipDownloader
         ArgumentNullException.ThrowIfNull(version);
         ct.ThrowIfCancellationRequested();
 
-        // TODO: [Future] Implement HTTP GET streaming through Cloudflare Worker proxy
-        // Expected: Stream response in 64KB-256KB chunks for efficient memory usage
-        await Task.CompletedTask;
-        yield break;
+        // Extract namespace, name, version from the DownloadUrl
+        // Format: https://thunderstore.io/package/download/{namespace}/{name}/{version}/
+        var uri = version.DownloadUrl;
+        var segments = uri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length < 5 || segments[0] != "package" || segments[1] != "download")
+        {
+            throw new ArgumentException("Invalid download URL format", nameof(version));
+        }
+
+        var ns = segments[2];
+        var name = segments[3];
+        var ver = segments[4];
+
+        // Build worker proxy URL: /api/download/{namespace}/{name}/{version}
+        var workerPath = $"/api/download/{ns}/{name}/{ver}";
+        _logger?.LogInformation("Streaming ZIP via worker: {Path}", workerPath);
+
+        using var response = await _httpClient.GetAsync(
+            workerPath,
+            HttpCompletionOption.ResponseHeadersRead,
+            ct
+        ).ConfigureAwait(false);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger?.LogError("Streaming failed with status code {StatusCode}", response.StatusCode);
+            throw new HttpRequestException(
+                response.StatusCode == System.Net.HttpStatusCode.NotFound
+                    ? "Mod not found—verify the download link is correct"
+                    : "Cannot reach mod service—verify internet connection");
+        }
+
+        await using var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+        var buffer = new byte[ChunkSize];
+        int bytesRead;
+
+        while ((bytesRead = await stream.ReadAsync(buffer, ct).ConfigureAwait(false)) > 0)
+        {
+            var chunk = new byte[bytesRead];
+            Array.Copy(buffer, 0, chunk, 0, bytesRead);
+            yield return chunk;
+        }
+
+        _logger?.LogInformation("Streaming completed");
     }
 
     /// <inheritdoc/>
@@ -70,7 +110,21 @@ public partial class ZipDownloader : IZipDownloader
     {
         ArgumentNullException.ThrowIfNull(url);
 
-        _logger?.LogInformation("Starting download from {Url}", url);
+        // Extract namespace, name, version from Thunderstore URL
+        // Format: https://thunderstore.io/package/download/{namespace}/{name}/{version}/
+        var segments = url.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length < 5 || segments[0] != "package" || segments[1] != "download")
+        {
+            throw new ArgumentException("Invalid download URL format", nameof(url));
+        }
+
+        var ns = segments[2];
+        var name = segments[3];
+        var ver = segments[4];
+
+        // Build worker proxy URL: /api/download/{namespace}/{name}/{version}
+        var workerPath = $"/api/download/{ns}/{name}/{ver}";
+        _logger?.LogInformation("Starting download via worker: {Path}", workerPath);
 
         // Create timeout token linked to provided cancellation token
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -81,7 +135,7 @@ public partial class ZipDownloader : IZipDownloader
         try
         {
             // Get response headers to check Content-Length
-            using var response = await _httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cts.Token)
+            using var response = await _httpClient.GetAsync(workerPath, HttpCompletionOption.ResponseHeadersRead, cts.Token)
                 .ConfigureAwait(false);
 
             if (!response.IsSuccessStatusCode)

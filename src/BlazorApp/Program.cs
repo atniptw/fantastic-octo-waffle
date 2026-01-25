@@ -19,21 +19,25 @@ builder.Services.AddHttpClient<IThunderstoreService, ThunderstoreService>(client
     client.DefaultRequestHeaders.Add("Accept", "application/json");
 });
 
+// Configure HttpClient for ZipDownloader (uses same worker)
+builder.Services.AddHttpClient<IZipDownloader, ZipDownloader>(client =>
+{
+    client.BaseAddress = new Uri(workerUrl);
+    client.Timeout = TimeSpan.FromSeconds(300); // 5 min for large downloads
+    client.DefaultRequestHeaders.Add("Accept", "application/zip, application/json");
+});
+
 // Configure HttpClient for Cloudflare Worker API (used by other services)
 builder.Services.AddHttpClient("WorkerAPI", client =>
 {
-    // TODO: Update with actual Worker URL when available (see docs/CloudflareWorker.md)
-    // Note: ThunderstoreService has its own dedicated HttpClient configured above
-    client.BaseAddress = new Uri("https://api.worker.dev");
-    client.DefaultRequestHeaders.Add("User-Agent", "RepoModViewer/0.1 (+https://atniptw.github.io)");
+    client.BaseAddress = new Uri(workerUrl);
     client.DefaultRequestHeaders.Add("Accept", "application/json");
 });
 
-// Default HttpClient for components (falls back to app base address)
+// Default HttpClient for components (falls back to worker base address)
 builder.Services.AddScoped(sp => sp.GetRequiredService<IHttpClientFactory>().CreateClient("WorkerAPI"));
 
-// Register service interfaces with stub implementations
-builder.Services.AddScoped<IZipDownloader, ZipDownloader>();
+// Register service interfaces with implementations
 builder.Services.AddScoped<IZipIndexer, ZipIndexer>();
 builder.Services.AddScoped<IAssetScanner, AssetScanner>();
 builder.Services.AddScoped<IAssetRenderer, AssetRenderer>();
