@@ -40,6 +40,11 @@ public static class RenderableDetector
     /// <exception cref="CorruptedHeaderException">If header is corrupted or truncated</exception>
     /// <exception cref="TruncatedMetadataException">If metadata is truncated</exception>
     /// <exception cref="EndiannessMismatchException">If endianness value is invalid</exception>
+    /// <remarks>
+    /// This implementation assumes TypeId equals ClassId directly (common when type tree is empty).
+    /// For asset bundles with populated type trees where TypeId is an index requiring resolution,
+    /// this may produce false negatives (fail to detect existing Mesh objects).
+    /// </remarks>
     public static bool DetectRenderable(ReadOnlySpan<byte> serializedFileData)
     {
         bool foundMesh = false;
@@ -65,6 +70,11 @@ public static class RenderableDetector
     /// <exception cref="CorruptedHeaderException">If header is corrupted or truncated</exception>
     /// <exception cref="TruncatedMetadataException">If metadata is truncated</exception>
     /// <exception cref="EndiannessMismatchException">If endianness value is invalid</exception>
+    /// <remarks>
+    /// This implementation assumes TypeId equals ClassId directly (common when type tree is empty).
+    /// For asset bundles with populated type trees where TypeId is an index requiring resolution,
+    /// this may produce false negatives (fail to detect existing renderable objects).
+    /// </remarks>
     public static IReadOnlySet<int> DetectRenderableClassIds(ReadOnlySpan<byte> serializedFileData)
     {
         var renderableClassIds = new HashSet<int>();
@@ -109,22 +119,8 @@ public static class RenderableDetector
         // Skip past header
         SkipHeader(endianReader, header.Version);
 
-        // Read additional metadata fields based on version
-        if (header.Version < 9)
-        {
-            endianReader.ReadUtf8NullTerminated(); // Unity version string
-        }
-
-        if (header.Version >= 9 && header.Version < 14)
-        {
-            endianReader.ReadUInt32(); // TargetPlatform
-        }
-
-        bool enableTypeTree = true;
-        if (header.Version >= 7 && header.Version < 14)
-        {
-            enableTypeTree = endianReader.ReadBoolean(); // EnableTypeTree flag
-        }
+        // For supported versions (14-30), type tree is always enabled
+        const bool enableTypeTree = true;
 
         // Step 3: Skip type tree
         SkipTypeTree(endianReader, header.Version, enableTypeTree);
@@ -138,20 +134,10 @@ public static class RenderableDetector
         for (int i = 0; i < objectCount; i++)
         {
             // Align before each object entry (version >= 14)
-            if (header.Version >= 14)
-            {
-                endianReader.Align(4);
-            }
+            endianReader.Align(4);
 
-            // PathId
-            if (header.Version >= 14)
-            {
-                endianReader.ReadInt64();
-            }
-            else
-            {
-                endianReader.ReadInt32();
-            }
+            // PathId (version >= 14: int64)
+            endianReader.ReadInt64();
 
             // ByteStart
             if (header.Version >= 22)
@@ -169,19 +155,11 @@ public static class RenderableDetector
             // TypeId (we'll resolve ClassId from this)
             int typeId = endianReader.ReadInt32();
 
-            // For version < 11, ClassId is stored directly
-            int classId = 0;
-            if (header.Version < 11)
-            {
-                classId = endianReader.ReadUInt16();
-            }
-            else
-            {
-                // For version >= 11, TypeId might need type tree resolution
-                // For renderable detection, we'll use TypeId as ClassId directly
-                // (works when type tree is empty or TypeId equals ClassId)
-                classId = typeId;
-            }
+            // For supported versions (14-30), we treat TypeId as ClassId directly.
+            // This matches the SerializedFile version constraints. On bundles with
+            // populated type trees where TypeId indexes the type tree, this may miss
+            // existing Mesh objects (false negatives) during renderable detection.
+            int classId = typeId;
 
             // ScriptTypeIndex (version >= 11 < 17)
             if (header.Version >= 11 && header.Version < 17)
@@ -189,12 +167,8 @@ public static class RenderableDetector
                 endianReader.ReadUInt16();
             }
 
-            // Stripped (version >= 15 or >= 17)
-            if (header.Version >= 15 && header.Version < 17)
-            {
-                endianReader.ReadByte();
-            }
-            else if (header.Version >= 17)
+            // Stripped (version >= 15)
+            if (header.Version >= 15)
             {
                 endianReader.ReadByte();
             }
