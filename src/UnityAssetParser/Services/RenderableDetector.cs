@@ -42,6 +42,52 @@ public static class RenderableDetector
     /// <exception cref="EndiannessMismatchException">If endianness value is invalid</exception>
     public static bool DetectRenderable(ReadOnlySpan<byte> serializedFileData)
     {
+        bool foundMesh = false;
+        ScanObjectTable(serializedFileData, (classId) =>
+        {
+            if (classId == RenderableClassIds.Mesh)
+            {
+                foundMesh = true;
+                return true; // Fast exit
+            }
+            return false; // Continue scanning
+        });
+        return foundMesh;
+    }
+
+    /// <summary>
+    /// Scans and returns all renderable ClassIDs found (not just Mesh).
+    /// Useful for future extensibility (e.g., particles, terrains).
+    /// </summary>
+    /// <param name="serializedFileData">Raw SerializedFile bytes</param>
+    /// <returns>Set of all renderable ClassIDs found in the file</returns>
+    /// <exception cref="InvalidVersionException">If version is unsupported</exception>
+    /// <exception cref="CorruptedHeaderException">If header is corrupted or truncated</exception>
+    /// <exception cref="TruncatedMetadataException">If metadata is truncated</exception>
+    /// <exception cref="EndiannessMismatchException">If endianness value is invalid</exception>
+    public static IReadOnlySet<int> DetectRenderableClassIds(ReadOnlySpan<byte> serializedFileData)
+    {
+        var renderableClassIds = new HashSet<int>();
+        ScanObjectTable(serializedFileData, (classId) =>
+        {
+            // Collect renderable ClassIDs (Mesh, SkinnedMeshRenderer, ParticleSystem)
+            if (classId == RenderableClassIds.Mesh ||
+                classId == RenderableClassIds.SkinnedMeshRenderer ||
+                classId == RenderableClassIds.ParticleSystem)
+            {
+                renderableClassIds.Add(classId);
+            }
+            return false; // Continue scanning all objects
+        });
+        return renderableClassIds;
+    }
+
+    /// <summary>
+    /// Internal helper that scans the object table and invokes a callback for each ClassID.
+    /// The callback can return true to exit early (fast path).
+    /// </summary>
+    private static void ScanObjectTable(ReadOnlySpan<byte> serializedFileData, Func<int, bool> onClassId)
+    {
         if (serializedFileData.Length < 20)
         {
             throw new CorruptedHeaderException("File too small to contain SerializedFile header");
@@ -88,7 +134,7 @@ public static class RenderableDetector
 
         int objectCount = endianReader.ReadInt32();
 
-        // Fast-exit strategy: scan object table for Mesh
+        // Scan object table
         for (int i = 0; i < objectCount; i++)
         {
             // Align before each object entry (version >= 14)
@@ -153,133 +199,12 @@ public static class RenderableDetector
                 endianReader.ReadByte();
             }
 
-            // Fast exit: if we found a Mesh, return immediately
-            if (classId == RenderableClassIds.Mesh)
+            // Invoke callback with ClassID - can fast exit if callback returns true
+            if (onClassId(classId))
             {
-                return true;
+                return; // Early exit requested by callback
             }
         }
-
-        // No Mesh found
-        return false;
-    }
-
-    /// <summary>
-    /// Scans and returns all renderable ClassIDs found (not just Mesh).
-    /// Useful for future extensibility (e.g., particles, terrains).
-    /// </summary>
-    /// <param name="serializedFileData">Raw SerializedFile bytes</param>
-    /// <returns>Set of all renderable ClassIDs found in the file</returns>
-    /// <exception cref="InvalidVersionException">If version is unsupported</exception>
-    /// <exception cref="CorruptedHeaderException">If header is corrupted or truncated</exception>
-    /// <exception cref="TruncatedMetadataException">If metadata is truncated</exception>
-    /// <exception cref="EndiannessMismatchException">If endianness value is invalid</exception>
-    public static IReadOnlySet<int> DetectRenderableClassIds(ReadOnlySpan<byte> serializedFileData)
-    {
-        var renderableClassIds = new HashSet<int>();
-
-        if (serializedFileData.Length < 20)
-        {
-            throw new CorruptedHeaderException("File too small to contain SerializedFile header");
-        }
-
-        var buffer = serializedFileData.ToArray();
-        using var stream = new MemoryStream(buffer, false);
-        using var reader = new BinaryReader(stream);
-
-        var header = ParseHeader(reader);
-
-        bool isBigEndian = header.Endianness == 1;
-        stream.Position = 0;
-        using var endianReader = new EndianBinaryReader(stream, isBigEndian);
-
-        SkipHeader(endianReader, header.Version);
-
-        if (header.Version < 9)
-        {
-            endianReader.ReadUtf8NullTerminated();
-        }
-
-        if (header.Version >= 9 && header.Version < 14)
-        {
-            endianReader.ReadUInt32();
-        }
-
-        bool enableTypeTree = true;
-        if (header.Version >= 7 && header.Version < 14)
-        {
-            enableTypeTree = endianReader.ReadBoolean();
-        }
-
-        SkipTypeTree(endianReader, header.Version, enableTypeTree);
-
-        endianReader.Align(4);
-
-        int objectCount = endianReader.ReadInt32();
-
-        for (int i = 0; i < objectCount; i++)
-        {
-            if (header.Version >= 14)
-            {
-                endianReader.Align(4);
-            }
-
-            if (header.Version >= 14)
-            {
-                endianReader.ReadInt64();
-            }
-            else
-            {
-                endianReader.ReadInt32();
-            }
-
-            if (header.Version >= 22)
-            {
-                endianReader.ReadInt64();
-            }
-            else
-            {
-                endianReader.ReadUInt32();
-            }
-
-            endianReader.ReadUInt32();
-
-            int typeId = endianReader.ReadInt32();
-
-            int classId = 0;
-            if (header.Version < 11)
-            {
-                classId = endianReader.ReadUInt16();
-            }
-            else
-            {
-                classId = typeId;
-            }
-
-            if (header.Version >= 11 && header.Version < 17)
-            {
-                endianReader.ReadUInt16();
-            }
-
-            if (header.Version >= 15 && header.Version < 17)
-            {
-                endianReader.ReadByte();
-            }
-            else if (header.Version >= 17)
-            {
-                endianReader.ReadByte();
-            }
-
-            // Collect renderable ClassIDs (Mesh, SkinnedMeshRenderer, ParticleSystem)
-            if (classId == RenderableClassIds.Mesh ||
-                classId == RenderableClassIds.SkinnedMeshRenderer ||
-                classId == RenderableClassIds.ParticleSystem)
-            {
-                renderableClassIds.Add(classId);
-            }
-        }
-
-        return renderableClassIds;
     }
 
     private static SerializedFileHeader ParseHeader(BinaryReader reader)
@@ -355,7 +280,7 @@ public static class RenderableDetector
         for (int i = 0; i < typeCount; i++)
         {
             // ClassId
-            reader.ReadInt32();
+            int classId = reader.ReadInt32();
 
             // IsStrippedType (version >= 16)
             if (version >= 16)
@@ -369,10 +294,11 @@ public static class RenderableDetector
                 reader.ReadInt16();
             }
 
-            // ScriptId hash (version >= 17 && ClassId == 114)
-            // We already read ClassId above, but we need to check it
-            // For simplicity, we'll skip this optimization for now
-            // and always check if we need to read the hash
+            // ScriptId hash (version >= 17 && ClassId == 114 for MonoBehaviour)
+            if (version >= 17 && classId == 114)
+            {
+                reader.ReadBytes(16);
+            }
 
             // OldTypeHash (version >= 5)
             if (version >= 5)
