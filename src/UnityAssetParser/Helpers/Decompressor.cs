@@ -86,12 +86,12 @@ public class Decompressor : IDecompressor
             Array.Copy(compressedData, 0, properties, 0, 5);
 
             // Validate LZMA properties byte
-            // Formula: props = (pb * 5 + lp) * 9 + lc
-            // Therefore: lc = props % 9, lp = (props / 9) % 5, pb = props / 45
+            // UnityFS spec: props = (lc + lp * 9) * 5 + pb
+            // Therefore: pb = props % 5, lp = (props / 5) % 9, lc = props / 45
             byte propsByte = properties[0];
-            int lc = propsByte % 9;
-            int lp = (propsByte / 9) % 5;
-            int pb = propsByte / 45;
+            int pb = propsByte % 5;
+            int lp = (propsByte / 5) % 9;
+            int lc = propsByte / 45;
 
             if (lc + lp > 4)
             {

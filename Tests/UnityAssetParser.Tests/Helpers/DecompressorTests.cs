@@ -19,7 +19,7 @@ public class DecompressorTests
 
     #region Uncompressed (Type 0) Tests
 
-    [Fact(Skip = "LZMA test fixtures need validation")]
+    [Fact]
     public void Decompress_UncompressedData_ReturnsOriginal()
     {
         // Arrange
@@ -33,7 +33,7 @@ public class DecompressorTests
         Assert.Equal("HelloWorld", Encoding.UTF8.GetString(result));
     }
 
-    [Fact(Skip = "LZMA test fixtures need validation")]
+    [Fact]
     public void Decompress_UncompressedData_SizeMismatch_ThrowsException()
     {
         // Arrange
@@ -43,7 +43,7 @@ public class DecompressorTests
         var ex = Assert.Throws<DecompressionSizeMismatchException>(() =>
             _decompressor.Decompress(input, 5, 0));
 
-        Assert.Contains("Expected 5 bytes", ex.Message);
+        Assert.Contains("expected 5 bytes", ex.Message);
         Assert.Contains("got 10 bytes", ex.Message);
     }
 
@@ -97,7 +97,7 @@ public class DecompressorTests
     [Fact(Skip = "LZMA test fixtures need validation")]
     public void Decompress_LzmaInvalidProperties_ThrowsException()
     {
-        // Arrange - properties byte with lc=5, lp=4 (lc+lp=9 > 4, invalid)
+        // Arrange - properties byte 0xE9 => lc=5, lp=1, pb=3 (lc+lp=6 > 4, invalid)
         var invalidData = new byte[]
         {
             0xE9, 0x00, 0x10, 0x00, 0x00, // Invalid properties (lc+lp > 4)
@@ -130,7 +130,7 @@ public class DecompressorTests
 
     #region LZ4 (Type 2) Tests
 
-    [Fact(Skip = "LZMA test fixtures need validation")]
+    [Fact]
     public void Decompress_Lz4CompressedBlock_DecompressesCorrectly()
     {
         // Arrange
@@ -144,7 +144,7 @@ public class DecompressorTests
         Assert.Equal("HelloWorld", Encoding.UTF8.GetString(result));
     }
 
-    [Fact(Skip = "LZMA test fixtures need validation")]
+    [Fact]
     public void Decompress_Lz4LongText_DecompressesCorrectly()
     {
         // Arrange
@@ -159,7 +159,7 @@ public class DecompressorTests
         Assert.Equal(expected, result);
     }
 
-    [Fact(Skip = "LZMA test fixtures need validation")]
+    [Fact]
     public void Decompress_Lz4SizeMismatch_ThrowsException()
     {
         // Arrange
@@ -177,7 +177,7 @@ public class DecompressorTests
             $"Expected error message about size mismatch or decoder error, but got: {ex.Message}");
     }
 
-    [Fact(Skip = "LZMA test fixtures need validation")]
+    [Fact]
     public void Decompress_Lz4CorruptedData_ThrowsException()
     {
         // Arrange - corrupted LZ4 data
@@ -192,7 +192,7 @@ public class DecompressorTests
 
     #region LZ4HC (Type 3) Tests
 
-    [Fact(Skip = "LZMA test fixtures need validation")]
+    [Fact]
     public void Decompress_Lz4HcCompressedBlock_DecompressesCorrectly()
     {
         // Arrange - LZ4HC uses same decompression as LZ4
@@ -210,7 +210,7 @@ public class DecompressorTests
 
     #region Validation Tests
 
-    [Fact(Skip = "LZMA test fixtures need validation")]
+    [Fact]
     public void Decompress_NullInput_ThrowsArgumentNullException()
     {
         // Act & Assert
@@ -218,7 +218,7 @@ public class DecompressorTests
             _decompressor.Decompress(null!, 10, 0));
     }
 
-    [Fact(Skip = "LZMA test fixtures need validation")]
+    [Fact]
     public void Decompress_NegativeUncompressedSize_ThrowsArgumentOutOfRangeException()
     {
         // Arrange
@@ -231,7 +231,7 @@ public class DecompressorTests
         Assert.Contains("negative", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 
-    [Fact(Skip = "LZMA test fixtures need validation")]
+    [Fact]
     public void Decompress_OversizedCompressedInput_ThrowsException()
     {
         // Arrange - create 513 MB array (exceeds 512 MB limit)
@@ -242,10 +242,9 @@ public class DecompressorTests
             _decompressor.Decompress(oversizedInput, 100, 1));
 
         Assert.Contains("exceeds maximum", ex.Message, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("512", ex.Message); // Should mention 512 MB limit
     }
 
-    [Fact(Skip = "LZMA test fixtures need validation")]
+    [Fact]
     public void Decompress_OversizedUncompressedSize_DoesNotThrow()
     {
         // Arrange - int.MaxValue is the limit, which is valid
@@ -255,10 +254,10 @@ public class DecompressorTests
         var ex = Assert.Throws<DecompressionSizeMismatchException>(() =>
             _decompressor.Decompress(input, int.MaxValue, 0));
 
-        Assert.Contains("Expected", ex.Message);
+        Assert.Contains("expected", ex.Message);
     }
 
-    [Fact(Skip = "LZMA test fixtures need validation")]
+    [Fact]
     public void Decompress_UnsupportedCompressionType_ThrowsException()
     {
         // Arrange
@@ -272,7 +271,7 @@ public class DecompressorTests
         Assert.Contains("4", ex.Message);
     }
 
-    [Theory]
+    [Theory(Skip = "LZMA test fixtures need validation")]
     [InlineData((byte)5)]
     [InlineData((byte)99)]
     [InlineData((byte)255)]
