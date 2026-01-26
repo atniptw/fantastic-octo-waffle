@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using UnityAssetParser.Classes;
 
 namespace UnityAssetParser.Helpers;
@@ -151,11 +150,12 @@ public sealed class MeshHelper
         {
             _use16BitIndices = _mesh.Use16BitIndices.Value;
         }
-        else if (CompareVersion(_version, (2017, 4, 0, 0)) >= 0 ||
-                 (_version.Item1 == 2017 && _version.Item2 == 3 && _mesh.MeshCompression == 0))
+        else if ((CompareVersion(_version, (2017, 4, 0, 0)) >= 0 ||
+                 (_version.Item1 == 2017 && _version.Item2 == 3 && _mesh.MeshCompression == 0)) &&
+                 _mesh.IndexFormat != null)
         {
             // Unity 2017.4+ or 2017.3 with no compression: use IndexFormat field
-            _use16BitIndices = _mesh.IndexFormat == 0;
+            _use16BitIndices = _mesh.IndexFormat.Value == 0;
         }
 
         // Copy index buffer if present
