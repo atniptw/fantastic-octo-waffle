@@ -37,10 +37,9 @@ let nextMeshId = 1;
  * @param {number} options.near - Camera near plane (default: 0.1)
  * @param {number} options.far - Camera far plane (default: 1000)
  * @param {string|number} options.background - Background color (default: 0x1a1a1a)
- * @returns {Promise<void>}
  * @throws {Error} If canvas not found or already initialized
  */
-export async function init(canvasId, options = {}) {
+export function init(canvasId, options = {}) {
     if (renderer) {
         throw new Error('Renderer already initialized');
     }
@@ -117,10 +116,10 @@ function startAnimationLoop() {
  * @param {boolean} [materialOpts.wireframe] - Wireframe mode (default: false)
  * @param {number} [materialOpts.metalness] - Metalness (default: 0.5)
  * @param {number} [materialOpts.roughness] - Roughness (default: 0.5)
- * @returns {Promise<string>} Mesh ID for future operations
+ * @returns {string} Mesh ID for future operations
  * @throws {Error} If renderer not initialized or geometry invalid
  */
-export async function loadMesh(geometry, groups = null, materialOpts = {}) {
+export function loadMesh(geometry, groups = null, materialOpts = {}) {
     validateRendererInitialized();
     validateGeometry(geometry);
 
@@ -157,7 +156,14 @@ function validateGeometry(geometry) {
     }
 
     const vertexCount = geometry.positions.length / 3;
-    const triangleCount = geometry.indices.length / 3;
+    const indexCount = geometry.indices.length;
+
+    // Validate indices are divisible by 3 (triangles)
+    if (indexCount % 3 !== 0) {
+        throw new Error('Invalid geometry: indices length must be divisible by 3');
+    }
+
+    const triangleCount = indexCount / 3;
 
     if (vertexCount < 3 || triangleCount < 1) {
         throw new Error('Invalid geometry: insufficient vertices or triangles');
@@ -275,10 +281,9 @@ function centerCameraOnMesh(mesh) {
  * @param {boolean} [opts.wireframe] - Wireframe mode
  * @param {number} [opts.metalness] - Metalness value
  * @param {number} [opts.roughness] - Roughness value
- * @returns {Promise<void>}
  * @throws {Error} If mesh not found
  */
-export async function updateMaterial(meshId, opts = {}) {
+export function updateMaterial(meshId, opts = {}) {
     const mesh = meshes.get(meshId);
     if (!mesh) {
         throw new Error(`Mesh with ID '${meshId}' not found`);
@@ -301,23 +306,27 @@ export async function updateMaterial(meshId, opts = {}) {
 }
 
 /**
- * Clear all meshes from the scene or dispose a specific mesh.
- * @param {string} [meshId] - Optional specific mesh ID to dispose
- * @returns {Promise<void>}
+ * Dispose a specific mesh from the scene by its ID.
+ * @param {string} meshId - Mesh ID to dispose
  */
-export async function clear(meshId = null) {
-    if (meshId) {
-        // Dispose specific mesh
-        const mesh = meshes.get(meshId);
-        if (mesh) {
-            disposeMesh(mesh);
-            meshes.delete(meshId);
-        }
-    } else {
-        // Clear all meshes
-        meshes.forEach(mesh => disposeMesh(mesh));
-        meshes.clear();
+export function clearMesh(meshId) {
+    if (!meshId) {
+        return;
     }
+
+    const mesh = meshes.get(meshId);
+    if (mesh) {
+        disposeMesh(mesh);
+        meshes.delete(meshId);
+    }
+}
+
+/**
+ * Clear all meshes from the scene.
+ */
+export function clear() {
+    meshes.forEach(mesh => disposeMesh(mesh));
+    meshes.clear();
 }
 
 /**
@@ -342,9 +351,10 @@ function disposeMesh(mesh) {
 
 /**
  * Dispose all viewer resources and cleanup.
- * @returns {Promise<void>}
+ * <strong>Note:</strong> After calling dispose, the renderer cannot be reinitialized.
+ * A page reload or new module instance is required for reuse.
  */
-export async function dispose() {
+export function dispose() {
     // Stop animation
     if (animationId) {
         cancelAnimationFrame(animationId);
@@ -352,7 +362,7 @@ export async function dispose() {
     }
 
     // Clear all meshes
-    await clear();
+    clear();
 
     // Dispose controls
     if (controls) {
@@ -369,6 +379,8 @@ export async function dispose() {
     // Clear references
     scene = null;
     camera = null;
+    // Note: nextMeshId is reset to prevent ID collisions if somehow reused,
+    // but reinitialization is not supported by design
     nextMeshId = 1;
 }
 
@@ -376,9 +388,8 @@ export async function dispose() {
  * Resize the viewport and update camera aspect ratio.
  * @param {number} width - New width in pixels
  * @param {number} height - New height in pixels
- * @returns {Promise<void>}
  */
-export async function resize(width, height) {
+export function resize(width, height) {
     if (!camera || !renderer) {
         return;
     }
@@ -394,6 +405,7 @@ window.meshRenderer = {
     loadMesh,
     updateMaterial,
     clear,
+    clearMesh,
     dispose,
     resize
 };

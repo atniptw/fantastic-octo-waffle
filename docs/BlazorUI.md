@@ -86,44 +86,34 @@ Builds `THREE.BufferGeometry` from typed arrays and adds mesh to scene.
 - If normals are missing, calls `geometry.computeVertexNormals()` automatically
 - Centers camera on mesh bounding box after loading
 - Material uses `THREE.MeshStandardMaterial` with double-sided rendering
+- Validates that indices length is divisible by 3 (proper triangle list)
 
-#### `updateMaterial(meshId, opts)`
-Changes material properties of a displayed mesh.
-
-**Parameters:**
-- `meshId` (string): Mesh ID returned from `loadMesh`
-- `opts` (object):
-  - `color` (string | number, optional): New color
-  - `wireframe` (boolean, optional): Wireframe mode
-  - `metalness` (number, optional): Metalness value
-  - `roughness` (number, optional): Roughness value
-
-**Returns:** `Promise<void>`
-
-**Throws:** Error if mesh not found
-
-#### `clear(meshId)`
-Removes meshes from scene and frees resources.
+#### `clearMesh(meshId)`
+Removes a specific mesh from the scene and frees its resources.
 
 **Parameters:**
-- `meshId` (string, optional): Specific mesh ID to dispose. If omitted, clears all meshes.
-
-**Returns:** `Promise<void>`
+- `meshId` (string): Mesh ID to dispose
 
 **Notes:**
 - Disposes geometry and material resources
 - Removes mesh from Three.js scene
 
+#### `clear()`
+Removes all meshes from the scene.
+
+**Notes:**
+- Disposes geometry and material resources for all meshes
+- Removes all meshes from Three.js scene
+
 #### `dispose()`
 Cleans up all viewer resources.
-
-**Returns:** `Promise<void>`
 
 **Notes:**
 - Stops animation loop
 - Clears all meshes
 - Disposes controls and renderer
 - Resets module state
+- **Important:** After calling dispose, the service cannot be reinitialized. A new service instance or page reload is required.
 
 #### `resize(width, height)`
 Updates viewport and camera aspect ratio.
@@ -132,11 +122,13 @@ Updates viewport and camera aspect ratio.
 - `width` (number): New width in pixels
 - `height` (number): New height in pixels
 
-**Returns:** `Promise<void>`
-
 ### C# Service (ViewerService)
 
 The `ViewerService` class provides C# bindings to the JavaScript functions via `IJSRuntime`.
+
+**Thread Safety:** This service is not thread-safe. Callers must ensure methods are not invoked concurrently from multiple threads.
+
+**Lifecycle:** This service is designed for single-use. After calling `DisposeAsync`, the service cannot be reinitialized and a new instance must be created.
 
 **Usage Example:**
 ```csharp
@@ -195,11 +187,13 @@ public sealed class SubMeshGroup
 ### Implementation Notes
 
 - **Three.js Version:** v0.170.0 loaded via CDN with ES module imports
+  - **CDN Dependency:** Production deployments should consider local hosting or fallback mechanisms if CDN is unavailable
 - **Coordinate System:** Uses raw Unity values; no coordinate flipping applied
 - **Array Marshaling:** Blazor automatically converts C# arrays to JavaScript typed arrays
 - **Animation Loop:** Runs continuously via `requestAnimationFrame` for smooth controls
 - **Lighting:** Scene includes ambient light (0.6 intensity) and directional light (0.8 intensity)
 - **Controls:** OrbitControls with damping enabled, min distance 0.5, max distance 500
+- **Function Signatures:** All JavaScript functions are synchronous (not async) as they perform only synchronous Three.js operations
 
 ### Testing
 

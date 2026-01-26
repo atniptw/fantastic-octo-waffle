@@ -7,8 +7,13 @@ namespace BlazorApp.Services;
 /// Implementation of 3D viewer service using Three.js via JavaScript interop.
 /// </summary>
 /// <remarks>
-/// This service provides C# bindings to the meshRenderer.js Three.js wrapper.
-/// See wwwroot/js/meshRenderer.js for the JavaScript implementation.
+/// <para>This service provides C# bindings to the meshRenderer.js Three.js wrapper.
+/// See wwwroot/js/meshRenderer.js for the JavaScript implementation.</para>
+/// <para><strong>Thread Safety:</strong> This service is not thread-safe. Callers must ensure
+/// that methods are not invoked concurrently from multiple threads.</para>
+/// <para><strong>Lifecycle:</strong> This service is designed for single-use. After calling
+/// <see cref="DisposeAsync"/>, the service cannot be reinitialized and a new instance
+/// must be created.</para>
 /// </remarks>
 public class ViewerService : IViewerService
 {
@@ -32,6 +37,12 @@ public class ViewerService : IViewerService
         {
             throw new ArgumentException("Canvas ID cannot be empty or whitespace", nameof(canvasId));
         }
+        
+        if (_isInitialized)
+        {
+            throw new InvalidOperationException("Viewer is already initialized. Cannot initialize multiple times.");
+        }
+        
         ct.ThrowIfCancellationRequested();
 
         // Call meshRenderer.init(canvasId, options)
@@ -43,8 +54,17 @@ public class ViewerService : IViewerService
             background = 0x1a1a1a
         };
 
-        await _jsRuntime.InvokeVoidAsync("meshRenderer.init", ct, canvasId, options);
-        _isInitialized = true;
+        try
+        {
+            await _jsRuntime.InvokeVoidAsync("meshRenderer.init", ct, canvasId, options);
+            _isInitialized = true;
+        }
+        catch
+        {
+            // Ensure state remains consistent if JavaScript call fails
+            _isInitialized = false;
+            throw;
+        }
     }
 
     /// <inheritdoc/>
