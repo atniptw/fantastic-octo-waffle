@@ -9,6 +9,7 @@ window.meshRenderer = (() => {
     let meshes = new Map(); // Track loaded meshes by ID
     let meshIdCounter = 0;
     let resizeHandler = null; // Track resize handler for proper cleanup
+    let animationFrameId = null; // Track animation frame for cleanup
 
     /**
      * Initialize Three.js scene with canvas element
@@ -55,9 +56,13 @@ window.meshRenderer = (() => {
             controls.dampingFactor = 0.05;
         }
 
-        // Animation loop
+        // Animation loop with safe guards
         function animate() {
-            requestAnimationFrame(animate);
+            if (!renderer || !scene || !camera) {
+                // Stop animation if disposed
+                return;
+            }
+            animationFrameId = requestAnimationFrame(animate);
             if (controls) controls.update();
             renderer.render(scene, camera);
         }
@@ -65,6 +70,7 @@ window.meshRenderer = (() => {
 
         // Handle window resize - store handler for cleanup
         resizeHandler = () => {
+            if (!camera || !renderer) return;
             camera.aspect = canvas.clientWidth / canvas.clientHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(canvas.clientWidth, canvas.clientHeight);
@@ -213,6 +219,12 @@ window.meshRenderer = (() => {
                 meshes.delete(meshId);
             }
         } else {
+            // Stop animation loop
+            if (animationFrameId !== null) {
+                cancelAnimationFrame(animationFrameId);
+                animationFrameId = null;
+            }
+            
             clear();
             if (renderer) {
                 renderer.dispose();

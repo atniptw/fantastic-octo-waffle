@@ -143,16 +143,13 @@
 
     public async ValueTask DisposeAsync()
     {
-        if (_meshId != null)
+        try
         {
-            try
-            {
-                await ViewerService.ClearAsync();
-            }
-            catch
-            {
-                // Ignore disposal errors
-            }
+            await ViewerService.DisposeAsync();
+        }
+        catch
+        {
+            // Ignore disposal errors
         }
     }
 }

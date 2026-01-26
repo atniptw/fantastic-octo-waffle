@@ -29,7 +29,7 @@ public class ViewerService : IViewerService
         }
         ct.ThrowIfCancellationRequested();
 
-        await _jsRuntime.InvokeVoidAsync("meshRenderer.init", ct, canvasId, new { });
+        await _jsRuntime.InvokeVoidAsync("meshRenderer.init", canvasId, new { });
     }
 
     /// <inheritdoc/>
@@ -48,7 +48,7 @@ public class ViewerService : IViewerService
             triangleCount = geometry.TriangleCount
         };
 
-        var meshId = await _jsRuntime.InvokeAsync<string>("meshRenderer.loadMesh", ct, geometryData, null, new { });
+        var meshId = await _jsRuntime.InvokeAsync<string>("meshRenderer.loadMesh", geometryData, null, new { });
         return meshId;
     }
 
@@ -65,20 +65,20 @@ public class ViewerService : IViewerService
         if (color != null) materialOpts["color"] = color;
         if (wireframe.HasValue) materialOpts["wireframe"] = wireframe.Value;
 
-        await _jsRuntime.InvokeVoidAsync("meshRenderer.updateMaterial", ct, meshId, materialOpts);
+        await _jsRuntime.InvokeVoidAsync("meshRenderer.updateMaterial", meshId, materialOpts);
     }
 
     /// <inheritdoc/>
     public async Task ClearAsync(CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
-        await _jsRuntime.InvokeVoidAsync("meshRenderer.clear", ct);
+        await _jsRuntime.InvokeVoidAsync("meshRenderer.clear");
     }
 
     /// <inheritdoc/>
     public async Task DisposeAsync(CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
-        await _jsRuntime.InvokeVoidAsync("meshRenderer.dispose", ct);
+        await _jsRuntime.InvokeVoidAsync("meshRenderer.dispose");
     }
 }
