@@ -1,0 +1,254 @@
+using UnityAssetParser.Bundle;
+using UnityAssetParser.Classes;
+using UnityAssetParser.Helpers;
+using UnityAssetParser.SerializedFile;
+
+namespace UnityAssetParser.Services;
+
+/// <summary>
+/// Service for extracting renderable mesh geometry from Unity bundles.
+/// Wires BundleFile → SerializedFile → Mesh → MeshHelper to produce DTOs.
+/// </summary>
+public sealed class MeshExtractionService
+{
+    /// <summary>
+    /// Extracts all mesh geometries from a Unity bundle.
+    /// </summary>
+    /// <param name="bundleData">Raw bundle bytes (.hhh file)</param>
+    /// <returns>List of extracted mesh geometries ready for rendering</returns>
+    /// <exception cref="ArgumentNullException">If bundleData is null</exception>
+    /// <exception cref="InvalidOperationException">If bundle structure is invalid</exception>
+    public List<MeshGeometryDto> ExtractMeshes(byte[] bundleData)
+    {
+        ArgumentNullException.ThrowIfNull(bundleData);
+
+        var results = new List<MeshGeometryDto>();
+
+        // Step 1: Parse the bundle
+        BundleFile bundle;
+        using (var bundleStream = new MemoryStream(bundleData, false))
+        {
+            bundle = BundleFile.Parse(bundleStream);
+        }
+
+        // Step 2: Find and parse SerializedFile (Node 0)
+        if (bundle.Nodes.Count == 0)
+        {
+            throw new InvalidOperationException("Bundle has no nodes");
+        }
+
+        var node0 = bundle.Nodes[0];
+        var serializedFileData = bundle.ExtractNode(node0);
+
+        SerializedFile.SerializedFile serializedFile;
+        try
+        {
+            serializedFile = SerializedFile.SerializedFile.Parse(serializedFileData.Span);
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException($"Failed to parse SerializedFile from Node 0: {ex.Message}", ex);
+        }
+
+        // Step 3: Find .resS resource node (Node 1) if present
+        ReadOnlyMemory<byte>? resSData = null;
+        if (bundle.Nodes.Count > 1)
+        {
+            var node1 = bundle.Nodes[1];
+            // Check if this is a .resS resource file
+            if (node1.Path.EndsWith(".resS", StringComparison.OrdinalIgnoreCase) ||
+                node1.Path.EndsWith(".resource", StringComparison.OrdinalIgnoreCase))
+            {
+                resSData = bundle.ExtractNode(node1);
+            }
+        }
+
+        // Step 4: Find all Mesh objects (ClassID 43)
+        var meshObjects = serializedFile.Objects
+            .Where(obj => obj.ClassId == RenderableDetector.RenderableClassIds.Mesh)
+            .ToList();
+
+        if (meshObjects.Count == 0)
+        {
+            return results; // No meshes found
+        }
+
+        // Step 5: Extract geometry from each mesh
+        foreach (var meshObj in meshObjects)
+        {
+            try
+            {
+                var meshDto = ExtractMeshGeometry(serializedFile, meshObj, resSData);
+                if (meshDto != null)
+                {
+                    results.Add(meshDto);
+                }
+            }
+            catch (Exception ex)
+            {
+                // Log and skip meshes that fail to extract - continue with others
+                // TODO: Replace with proper logging when ILogger is available
+                System.Diagnostics.Debug.WriteLine(
+                    $"Warning: Failed to extract mesh PathId={meshObj.PathId}, ClassId={meshObj.ClassId}: {ex.Message}");
+            }
+        }
+
+        return results;
+    }
+
+    /// <summary>
+    /// Extracts geometry from a single Mesh object.
+    /// </summary>
+    private MeshGeometryDto? ExtractMeshGeometry(
+        SerializedFile.SerializedFile serializedFile,
+        ObjectInfo meshObj,
+        ReadOnlyMemory<byte>? resSData)
+    {
+        // Read object data
+        var objectData = serializedFile.ReadObjectData(meshObj);
+
+        // Get Unity version from SerializedFile header
+        var version = GetUnityVersion(serializedFile.Header);
+        bool isBigEndian = serializedFile.Header.Endianness == 1;
+
+        // Parse Mesh object
+        var mesh = MeshParser.Parse(objectData.Span, version, isBigEndian, resSData);
+        
+        if (mesh == null)
+        {
+            // Mesh parsing not yet implemented or failed
+            return null;
+        }
+
+        // Use MeshHelper to extract geometry
+        var helper = new MeshHelper(mesh, version, isLittleEndian: !isBigEndian);
+        
+        try
+        {
+            helper.Process();
+        }
+        catch (NotImplementedException)
+        {
+            // External streaming data or other features not yet supported - return null
+            // This is expected during the scaffold phase while MeshParser is being implemented
+            return null;
+        }
+
+        // Convert to DTO
+        var dto = new MeshGeometryDto
+        {
+            Name = mesh.Name,
+            Positions = helper.Positions ?? Array.Empty<float>(),
+            Normals = helper.Normals,
+            UVs = helper.UVs,
+            VertexCount = helper.VertexCount,
+            Use16BitIndices = helper.Use16BitIndices
+        };
+
+        // Extract submesh groups and convert triangles to flat index array
+        // Note: GetTriangles() may convert triangle strips/quads to standard triangles,
+        // so we use its output for both Groups and Indices to ensure consistency
+        if (mesh.SubMeshes != null && mesh.SubMeshes.Length > 0)
+        {
+            try
+            {
+                var triangles = helper.GetTriangles();
+                var indicesList = new List<uint>();
+                int indexOffset = 0;
+                
+                for (int i = 0; i < triangles.Count; i++)
+                {
+                    var submeshTriangles = triangles[i];
+                    var indexCount = submeshTriangles.Count * 3;
+                    
+                    // Add group metadata
+                    dto.Groups.Add(new MeshGeometryDto.SubMeshGroup
+                    {
+                        Start = indexOffset,
+                        Count = indexCount,
+                        MaterialIndex = i
+                    });
+                    
+                    // Flatten triangles to index array
+                    foreach (var tri in submeshTriangles)
+                    {
+                        indicesList.Add(tri.Item1);
+                        indicesList.Add(tri.Item2);
+                        indicesList.Add(tri.Item3);
+                    }
+                    
+                    indexOffset += indexCount;
+                }
+                
+                dto.Indices = indicesList.ToArray();
+            }
+            catch (Exception ex)
+            {
+                // Log and fall back to raw IndexBuffer if submesh extraction fails
+                // TODO: Replace with proper logging when ILogger is available
+                System.Diagnostics.Debug.WriteLine(
+                    $"Warning: Failed to extract submesh groups for mesh '{mesh.Name}': {ex.Message}");
+                dto.Indices = helper.Indices ?? Array.Empty<uint>();
+            }
+        }
+        else
+        {
+            // No submeshes - use raw indices from helper
+            dto.Indices = helper.Indices ?? Array.Empty<uint>();
+        }
+
+        // Calculate triangle count
+        dto.TriangleCount = dto.Indices.Length / 3;
+
+        return dto;
+    }
+
+    /// <summary>
+    /// Extracts Unity version from SerializedFile header.
+    /// Returns a version tuple (major, minor, patch, type) for use with MeshHelper.
+    /// </summary>
+    /// <remarks>
+    /// WARNING: The fallback version estimation is approximate and may produce incorrect
+    /// results for version-specific parsing logic. When UnityVersionString is unavailable,
+    /// the SerializedFile format version is used to estimate the Unity engine version, but
+    /// this mapping is not precise and can lead to parsing errors for assets created with
+    /// Unity versions that don't align with typical format version progressions.
+    /// 
+    /// Consumers should be aware that mesh parsing accuracy depends on correct version
+    /// detection, and bundles without embedded version strings may fail to parse correctly.
+    /// </remarks>
+    private static (int, int, int, int) GetUnityVersion(SerializedFileHeader header)
+    {
+        // Try to parse Unity version string if available
+        if (!string.IsNullOrEmpty(header.UnityVersionString))
+        {
+            var parts = header.UnityVersionString.Split('.');
+            if (parts.Length >= 2 &&
+                int.TryParse(parts[0], out int major) &&
+                int.TryParse(parts[1], out int minor))
+            {
+                int patch = 0;
+                if (parts.Length >= 3)
+                {
+                    // Extract patch number (may have alpha/beta suffix)
+                    var patchStr = new string(parts[2].TakeWhile(char.IsDigit).ToArray());
+                    int.TryParse(patchStr, out patch);
+                }
+
+                return (major, minor, patch, 0);
+            }
+        }
+
+        // Fallback: estimate version from SerializedFile format version
+        // This is a rough approximation based on common version mappings
+        return header.Version switch
+        {
+            >= 22 => (2022, 1, 0, 0),  // Unity 2022+
+            >= 20 => (2021, 1, 0, 0),  // Unity 2021
+            >= 19 => (2020, 1, 0, 0),  // Unity 2020
+            >= 17 => (2019, 1, 0, 0),  // Unity 2019
+            >= 14 => (2018, 1, 0, 0),  // Unity 2018
+            _ => (2017, 1, 0, 0)       // Unity 2017 or earlier
+        };
+    }
+}
