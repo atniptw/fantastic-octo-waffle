@@ -40,25 +40,177 @@ Three.js wrapper in wwwroot/js/meshRenderer.js
 - ViewerService
 	- `Task ShowAsync(ThreeJsGeometry g)` and controls for submesh selection
 
-## Three.js Interop API (Design)
-- `init(canvasId, options)`
-	- Creates renderer, scene, camera; sets background and controls.
-- `loadMesh(geometry, groups?, materialOpts?)`
-	- Builds `THREE.BufferGeometry` from typed arrays; applies optional submesh groups and material options; returns a mesh handle/id.
-- `updateMaterial(meshId, materialOpts)`
-	- Changes color, wireframe, metalness/roughness.
-- `clear()` / `dispose(meshId?)`
-	- Removes meshes and frees resources.
-- `resize(width, height)`
-	- Updates viewport and camera.
+## Three.js Interop API (Implemented)
 
-Geometry input contract for `loadMesh`:
-- `positions`: `Float32Array` length `3 * vertexCount` (XYZ)
-- `indices`: `Uint16Array | Uint32Array` length `3 * triangleCount` (triangle list)
-- `normals` (optional): `Float32Array` length `3 * vertexCount`
-- `uvs` (optional): `Float32Array` length `2 * vertexCount`
-- `groups` (optional): array of `{ start: number, count: number, materialIndex: number }`
+### JavaScript Functions (wwwroot/js/meshRenderer.js)
 
-Notes:
-- If normals are missing, wrapper can call `geometry.computeVertexNormals()`.
-- Coordinate system: start with raw values; if mirrored, consider flipping Z or adjusting triangle winding.
+All functions are exposed via `window.meshRenderer` for Blazor JSInterop.
+
+#### `init(canvasId, options)`
+Creates renderer, scene, camera, lighting, and OrbitControls.
+
+**Parameters:**
+- `canvasId` (string): ID of the canvas element
+- `options` (object, optional):
+  - `fov` (number): Camera field of view (default: 60)
+  - `near` (number): Camera near plane (default: 0.1)
+  - `far` (number): Camera far plane (default: 1000)
+  - `background` (number): Background color hex (default: 0x1a1a1a)
+
+**Returns:** `Promise<void>`
+
+**Throws:** Error if canvas not found or already initialized
+
+#### `loadMesh(geometry, groups, materialOpts)`
+Builds `THREE.BufferGeometry` from typed arrays and adds mesh to scene.
+
+**Parameters:**
+- `geometry` (object):
+  - `positions` (Float32Array): Vertex positions, length `3 * vertexCount` (XYZ)
+  - `indices` (Uint16Array | Uint32Array): Triangle indices, length `3 * triangleCount`
+  - `normals` (Float32Array, optional): Vertex normals, length `3 * vertexCount`
+  - `uvs` (Float32Array, optional): Texture coordinates, length `2 * vertexCount` (UV)
+- `groups` (Array, optional): Submesh groups for multi-material meshes
+  - Each group: `{ start: number, count: number, materialIndex: number }`
+- `materialOpts` (object, optional):
+  - `color` (string | number): Material color (default: 0x888888)
+  - `wireframe` (boolean): Wireframe mode (default: false)
+  - `metalness` (number): Metalness 0-1 (default: 0.5)
+  - `roughness` (number): Roughness 0-1 (default: 0.5)
+
+**Returns:** `Promise<string>` - Mesh ID for future operations
+
+**Throws:** Error if renderer not initialized or geometry invalid
+
+**Notes:**
+- If normals are missing, calls `geometry.computeVertexNormals()` automatically
+- Centers camera on mesh bounding box after loading
+- Material uses `THREE.MeshStandardMaterial` with double-sided rendering
+
+#### `updateMaterial(meshId, opts)`
+Changes material properties of a displayed mesh.
+
+**Parameters:**
+- `meshId` (string): Mesh ID returned from `loadMesh`
+- `opts` (object):
+  - `color` (string | number, optional): New color
+  - `wireframe` (boolean, optional): Wireframe mode
+  - `metalness` (number, optional): Metalness value
+  - `roughness` (number, optional): Roughness value
+
+**Returns:** `Promise<void>`
+
+**Throws:** Error if mesh not found
+
+#### `clear(meshId)`
+Removes meshes from scene and frees resources.
+
+**Parameters:**
+- `meshId` (string, optional): Specific mesh ID to dispose. If omitted, clears all meshes.
+
+**Returns:** `Promise<void>`
+
+**Notes:**
+- Disposes geometry and material resources
+- Removes mesh from Three.js scene
+
+#### `dispose()`
+Cleans up all viewer resources.
+
+**Returns:** `Promise<void>`
+
+**Notes:**
+- Stops animation loop
+- Clears all meshes
+- Disposes controls and renderer
+- Resets module state
+
+#### `resize(width, height)`
+Updates viewport and camera aspect ratio.
+
+**Parameters:**
+- `width` (number): New width in pixels
+- `height` (number): New height in pixels
+
+**Returns:** `Promise<void>`
+
+### C# Service (ViewerService)
+
+The `ViewerService` class provides C# bindings to the JavaScript functions via `IJSRuntime`.
+
+**Usage Example:**
+```csharp
+// Initialize viewer
+await viewerService.InitializeAsync("viewer-canvas");
+
+// Create geometry
+var geometry = new ThreeJsGeometry
+{
+    Positions = new[] { 0f, 0f, 0f, 1f, 0f, 0f, 0f, 1f, 0f },
+    Indices = new uint[] { 0, 1, 2 },
+    VertexCount = 3,
+    TriangleCount = 1,
+    Normals = new[] { 0f, 0f, 1f, 0f, 0f, 1f, 0f, 0f, 1f }
+};
+
+// Show mesh
+string meshId = await viewerService.ShowAsync(geometry);
+
+// Update material
+await viewerService.UpdateMaterialAsync(meshId, "#FF0000", wireframe: true);
+
+// Clear mesh
+await viewerService.ClearAsync();
+
+// Cleanup
+await viewerService.DisposeAsync();
+```
+
+### Data Models
+
+#### `ThreeJsGeometry`
+```csharp
+public sealed class ThreeJsGeometry
+{
+    public required float[] Positions { get; init; }
+    public required uint[] Indices { get; init; }
+    public float[]? Normals { get; init; }
+    public float[]? Uvs { get; init; }
+    public int VertexCount { get; init; }
+    public int TriangleCount { get; init; }
+    public List<SubMeshGroup>? Groups { get; init; }
+}
+```
+
+#### `SubMeshGroup`
+```csharp
+public sealed class SubMeshGroup
+{
+    public required int Start { get; init; }
+    public required int Count { get; init; }
+    public required int MaterialIndex { get; init; }
+}
+```
+
+### Implementation Notes
+
+- **Three.js Version:** v0.170.0 loaded via CDN with ES module imports
+- **Coordinate System:** Uses raw Unity values; no coordinate flipping applied
+- **Array Marshaling:** Blazor automatically converts C# arrays to JavaScript typed arrays
+- **Animation Loop:** Runs continuously via `requestAnimationFrame` for smooth controls
+- **Lighting:** Scene includes ambient light (0.6 intensity) and directional light (0.8 intensity)
+- **Controls:** OrbitControls with damping enabled, min distance 0.5, max distance 500
+
+### Testing
+
+- **Unit Tests:** `ViewerServiceTests` verifies all JSInterop calls with mocked `IJSRuntime`
+- **Lint:** JavaScript passes ESLint 9 with cognitive complexity limit of 10
+- **Format:** Code follows Prettier formatting rules
+
+### Future Enhancements
+
+- Add support for multiple materials via groups array
+- Implement UI controls for material property adjustments
+- Add support for texture loading from Unity asset bundles
+- Implement mesh selection and highlighting
+- Add animation support for skinned meshes
