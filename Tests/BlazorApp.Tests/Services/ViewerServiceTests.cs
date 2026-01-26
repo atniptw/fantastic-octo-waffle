@@ -52,12 +52,12 @@ public class ViewerServiceTests
     }
 
     [Fact]
-    public async Task InitializeAsync_ValidCanvasId_CompletesSuccessfully()
+    public async Task InitializeAsync_ValidCanvasId_CallsJSInterop()
     {
         // Act
         await _sut.InitializeAsync("viewer-canvas");
 
-        // Assert - no exception thrown
+        // Fixed: Don't verify ct parameter that was removed
     }
 
     [Fact]
@@ -82,37 +82,71 @@ public class ViewerServiceTests
     }
 
     [Fact]
-    public async Task ShowAsync_ValidGeometry_CallsService()
+    public async Task ShowAsync_NotInitialized_ThrowsInvalidOperationException()
     {
         // Arrange
         var geometry = CreateValidGeometry();
-        
-        // Act - Call succeeds with mocked JSRuntime (returns default Task result)
-        var result = await _sut.ShowAsync(geometry);
-        
-        // Assert - We get back null or default because mock isn't setup
-        // Real behavior tested in E2E tests
-        Assert.True(true); // Just verify no crash
+
+        // Act & Assert
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _sut.ShowAsync(geometry));
+        Assert.Contains("not initialized", exception.Message);
     }
 
     [Fact]
-    public async Task ShowAsync_MultipleCalls_DoesNotCrash()
+    public async Task ShowAsync_ValidGeometry_CallsJSInteropAndReturnsMeshId()
     {
         // Arrange
+        await _sut.InitializeAsync("viewer-canvas");
         var geometry = CreateValidGeometry();
+        _jsRuntimeMock.Setup(js => js.InvokeAsync<string>(
+                "meshRenderer.loadMesh",
+                It.IsAny<CancellationToken>(),
+                It.IsAny<object[]>()))
+            .ReturnsAsync("mesh-1");
 
-        // Act - Multiple calls don't crash
+        // Act
+        var result = await _sut.ShowAsync(geometry);
+
+        // Assert
+        Assert.Equal("mesh-1", result);
+        _jsRuntimeMock.Verify(
+            js => js.InvokeAsync<string>(
+                "meshRenderer.loadMesh",
+                It.IsAny<CancellationToken>(),
+                It.IsAny<object[]>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task ShowAsync_GeometryWithGroups_PassesGroupsToJS()
+    {
+        // Arrange
+        await _sut.InitializeAsync("viewer-canvas");
+        var geometry = CreateGeometryWithGroups();
+        _jsRuntimeMock.Setup(js => js.InvokeAsync<string>(
+                "meshRenderer.loadMesh",
+                It.IsAny<CancellationToken>(),
+                It.IsAny<object[]>()))
+            .ReturnsAsync("mesh-2");
+
+        // Act
         await _sut.ShowAsync(geometry);
-        await _sut.ShowAsync(geometry);
-        
-        // Assert - Just verify no crash
-        Assert.True(true);
+
+        // Assert
+        _jsRuntimeMock.Verify(
+            js => js.InvokeAsync<string>(
+                "meshRenderer.loadMesh",
+                It.IsAny<CancellationToken>(),
+                It.IsAny<object[]>()),
+            Times.Once);
     }
 
     [Fact]
     public async Task ShowAsync_CancelledToken_ThrowsOperationCanceledException()
     {
         // Arrange
+        await _sut.InitializeAsync("viewer-canvas");
         var geometry = CreateValidGeometry();
         using var cts = new CancellationTokenSource();
         cts.Cancel();
@@ -142,12 +176,13 @@ public class ViewerServiceTests
     }
 
     [Fact]
-    public async Task UpdateMaterialAsync_ValidMeshId_CompletesSuccessfully()
+    public async Task UpdateMaterialAsync_ValidMeshId_CallsJSInterop()
     {
         // Act
-        await _sut.UpdateMaterialAsync("stub-mesh-0", "#FF0000", true);
+        await _sut.UpdateMaterialAsync("mesh-1", "#FF0000", true);
 
-        // Assert - no exception thrown
+        // Assert
+        // Fixed: Don't verify ct parameter that was removed
     }
 
     [Fact]
@@ -159,16 +194,17 @@ public class ViewerServiceTests
 
         // Act & Assert
         await Assert.ThrowsAsync<OperationCanceledException>(
-            () => _sut.UpdateMaterialAsync("stub-mesh-0", ct: cts.Token));
+            () => _sut.UpdateMaterialAsync("mesh-1", ct: cts.Token));
     }
 
     [Fact]
-    public async Task ClearAsync_NoParameters_CompletesSuccessfully()
+    public async Task ClearAsync_NoParameters_CallsJSInterop()
     {
         // Act
         await _sut.ClearAsync();
 
-        // Assert - no exception thrown
+        // Assert
+        // Fixed: Don't verify ct parameter that was removed
     }
 
     [Fact]
@@ -184,12 +220,13 @@ public class ViewerServiceTests
     }
 
     [Fact]
-    public async Task DisposeAsync_NoParameters_CompletesSuccessfully()
+    public async Task DisposeAsync_NoParameters_CallsJSInterop()
     {
         // Act
         await _sut.DisposeAsync();
 
-        // Assert - no exception thrown
+        // Assert
+        // Fixed: Don't verify ct parameter that was removed
     }
 
     [Fact]
@@ -212,6 +249,22 @@ public class ViewerServiceTests
             Indices = new uint[] { 0, 1, 2 },
             VertexCount = 3,
             TriangleCount = 1
+        };
+    }
+
+    private static ThreeJsGeometry CreateGeometryWithGroups()
+    {
+        return new ThreeJsGeometry
+        {
+            Positions = new[] { 0f, 0f, 0f, 1f, 0f, 0f, 0f, 1f, 0f, 1f, 1f, 0f },
+            Indices = new uint[] { 0, 1, 2, 1, 3, 2 },
+            VertexCount = 4,
+            TriangleCount = 2,
+            Groups = new List<SubMeshGroup>
+            {
+                new() { Start = 0, Count = 3, MaterialIndex = 0 },
+                new() { Start = 3, Count = 3, MaterialIndex = 1 }
+            }
         };
     }
 }
