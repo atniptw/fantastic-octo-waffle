@@ -71,7 +71,7 @@ public class ViewerServiceTests
     {
         // Arrange
         using var cts = new CancellationTokenSource();
-        await cts.CancelAsync();
+        cts.Cancel();
 
         // Act & Assert
         await Assert.ThrowsAsync<OperationCanceledException>(
@@ -155,7 +155,7 @@ public class ViewerServiceTests
         await _sut.InitializeAsync("viewer-canvas");
         var geometry = CreateValidGeometry();
         using var cts = new CancellationTokenSource();
-        await cts.CancelAsync();
+        cts.Cancel();
 
         // Act & Assert
         await Assert.ThrowsAsync<OperationCanceledException>(
@@ -201,7 +201,7 @@ public class ViewerServiceTests
     {
         // Arrange
         using var cts = new CancellationTokenSource();
-        await cts.CancelAsync();
+        cts.Cancel();
 
         // Act & Assert
         await Assert.ThrowsAsync<OperationCanceledException>(
@@ -228,7 +228,7 @@ public class ViewerServiceTests
     {
         // Arrange
         using var cts = new CancellationTokenSource();
-        await cts.CancelAsync();
+        cts.Cancel();
 
         // Act & Assert
         await Assert.ThrowsAsync<OperationCanceledException>(
@@ -255,7 +255,7 @@ public class ViewerServiceTests
     {
         // Arrange
         using var cts = new CancellationTokenSource();
-        await cts.CancelAsync();
+        cts.Cancel();
 
         // Act & Assert
         await Assert.ThrowsAsync<OperationCanceledException>(

@@ -13,6 +13,13 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
+// Lighting constants
+const AMBIENT_LIGHT_INTENSITY = 0.6;
+const DIRECTIONAL_LIGHT_INTENSITY = 0.8;
+
+// Camera positioning constant
+const CAMERA_MARGIN_FACTOR = 1.5;
+
 // Module state
 let scene = null;
 let camera = null;
@@ -74,10 +81,10 @@ export async function init(canvasId, options = {}) {
     controls.maxDistance = 500;
 
     // Add lighting
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    const ambientLight = new THREE.AmbientLight(0xffffff, AMBIENT_LIGHT_INTENSITY);
     scene.add(ambientLight);
 
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    const directionalLight = new THREE.DirectionalLight(0xffffff, DIRECTIONAL_LIGHT_INTENSITY);
     directionalLight.position.set(1, 1, 1);
     scene.add(directionalLight);
 
@@ -249,7 +256,7 @@ function centerCameraOnMesh(mesh) {
     const maxDim = Math.max(size.x, size.y, size.z);
     const fov = camera.fov * (Math.PI / 180);
     let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
-    cameraZ *= 1.5; // Add some margin
+    cameraZ *= CAMERA_MARGIN_FACTOR; // Add some margin
 
     camera.position.set(
         center.x + cameraZ * 0.5,
