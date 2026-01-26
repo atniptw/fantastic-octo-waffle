@@ -105,19 +105,21 @@ public sealed class MeshExtractionService
         // Read object data
         var objectData = serializedFile.ReadObjectData(meshObj);
 
-        // Parse Mesh (simplified - in a real implementation, we'd need a full Mesh parser)
-        // For now, we'll create a minimal Mesh object and use MeshHelper
-        var mesh = ParseMeshObject(objectData.Span, resSData);
+        // Get Unity version from SerializedFile header
+        var version = GetUnityVersion(serializedFile.Header);
+        bool isBigEndian = serializedFile.Header.Endianness == 1;
+
+        // Parse Mesh object
+        var mesh = MeshParser.Parse(objectData.Span, version, isBigEndian, resSData);
         
         if (mesh == null)
         {
+            // Mesh parsing not yet implemented or failed
             return null;
         }
 
         // Use MeshHelper to extract geometry
-        // TODO: Get actual Unity version from SerializedFile header
-        var version = (2020, 3, 0, 0); // Default version for now
-        var helper = new MeshHelper(mesh, version, isLittleEndian: true);
+        var helper = new MeshHelper(mesh, version, isLittleEndian: !isBigEndian);
         
         try
         {
@@ -179,24 +181,43 @@ public sealed class MeshExtractionService
     }
 
     /// <summary>
-    /// Parses a Mesh object from SerializedFile object data.
-    /// This is a simplified parser that extracts the minimum fields needed for MeshHelper.
+    /// Extracts Unity version from SerializedFile header.
+    /// Returns a version tuple (major, minor, patch, type) for use with MeshHelper.
     /// </summary>
-    private Mesh? ParseMeshObject(ReadOnlySpan<byte> objectData, ReadOnlyMemory<byte>? resSData)
+    private static (int, int, int, int) GetUnityVersion(SerializedFileHeader header)
     {
-        // TODO: Implement full Mesh parser
-        // For now, return null to indicate we can't parse yet
-        // This will be implemented in a follow-up commit
-        
-        // A full implementation would:
-        // 1. Use EndianBinaryReader to read Mesh fields in order
-        // 2. Handle 4-byte alignment after byte arrays and bool triplets
-        // 3. Parse VertexData structure with channels/streams
-        // 4. Parse IndexBuffer
-        // 5. Parse SubMeshes
-        // 6. Handle StreamingInfo for external .resS
-        // 7. Handle CompressedMesh
-        
-        return null;
+        // Try to parse Unity version string if available
+        if (!string.IsNullOrEmpty(header.UnityVersionString))
+        {
+            var parts = header.UnityVersionString.Split('.');
+            if (parts.Length >= 2)
+            {
+                if (int.TryParse(parts[0], out int major) && 
+                    int.TryParse(parts[1], out int minor))
+                {
+                    int patch = 0;
+                    if (parts.Length >= 3)
+                    {
+                        // Extract patch number (may have alpha/beta suffix)
+                        var patchStr = new string(parts[2].TakeWhile(char.IsDigit).ToArray());
+                        int.TryParse(patchStr, out patch);
+                    }
+                    
+                    return (major, minor, patch, 0);
+                }
+            }
+        }
+
+        // Fallback: estimate version from SerializedFile format version
+        // This is a rough approximation based on common version mappings
+        return header.Version switch
+        {
+            >= 22 => (2022, 1, 0, 0),  // Unity 2022+
+            >= 20 => (2021, 1, 0, 0),  // Unity 2021
+            >= 19 => (2020, 1, 0, 0),  // Unity 2020
+            >= 17 => (2019, 1, 0, 0),  // Unity 2019
+            >= 14 => (2018, 1, 0, 0),  // Unity 2018
+            _ => (2017, 1, 0, 0)       // Unity 2017 or earlier
+        };
     }
 }
