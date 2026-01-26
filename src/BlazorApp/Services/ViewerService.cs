@@ -4,16 +4,21 @@ using Microsoft.JSInterop;
 namespace BlazorApp.Services;
 
 /// <summary>
-/// Stub implementation of 3D viewer service. Provides placeholder behavior for all operations.
+/// Implementation of 3D viewer service using Three.js via JavaScript interop.
 /// </summary>
 /// <remarks>
-/// Temporary stub for development. Real implementation will be added in future issue.
-/// This implementation is not thread-safe due to the _meshCounter field.
+/// <para>This service provides C# bindings to the meshRenderer.js Three.js wrapper.
+/// See wwwroot/js/meshRenderer.js for the JavaScript implementation.</para>
+/// <para><strong>Thread Safety:</strong> This service is not thread-safe. Callers must ensure
+/// that methods are not invoked concurrently from multiple threads.</para>
+/// <para><strong>Lifecycle:</strong> This service is designed for single-use. After calling
+/// <see cref="DisposeAsync"/>, the service cannot be reinitialized and a new instance
+/// must be created.</para>
 /// </remarks>
 public class ViewerService : IViewerService
 {
     private readonly IJSRuntime _jsRuntime;
-    private int _meshCounter = 0;
+    private bool _isInitialized = false;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ViewerService"/> class.
@@ -32,12 +37,34 @@ public class ViewerService : IViewerService
         {
             throw new ArgumentException("Canvas ID cannot be empty or whitespace", nameof(canvasId));
         }
+        
+        if (_isInitialized)
+        {
+            throw new InvalidOperationException("Viewer is already initialized. Cannot initialize multiple times.");
+        }
+        
         ct.ThrowIfCancellationRequested();
 
-        // TODO: [Future] Implement JS interop call to meshRenderer.js init()
-        // Expected: Call window.meshRenderer.init(canvasId, options) to set up
-        // Three.js scene, camera, lights, and OrbitControls
-        await Task.CompletedTask;
+        // Call meshRenderer.init(canvasId, options)
+        var options = new
+        {
+            fov = 60,
+            near = 0.1,
+            far = 1000,
+            background = 0x1a1a1a
+        };
+
+        try
+        {
+            await _jsRuntime.InvokeVoidAsync("meshRenderer.init", ct, canvasId, options);
+            _isInitialized = true;
+        }
+        catch
+        {
+            // Ensure state remains consistent if JavaScript call fails
+            _isInitialized = false;
+            throw;
+        }
     }
 
     /// <inheritdoc/>
@@ -46,11 +73,47 @@ public class ViewerService : IViewerService
         ArgumentNullException.ThrowIfNull(geometry);
         ct.ThrowIfCancellationRequested();
 
-        // TODO: [Future] Implement JS interop call to meshRenderer.js loadMesh()
-        // Expected: Call window.meshRenderer.loadMesh(geometry, groups, materialOpts)
-        // to create BufferGeometry and add mesh to scene
-        await Task.CompletedTask;
-        return $"stub-mesh-{_meshCounter++}";
+        if (!_isInitialized)
+        {
+            throw new InvalidOperationException("Viewer not initialized. Call InitializeAsync first.");
+        }
+
+        // Prepare geometry data for JS interop
+        // Note: Arrays are automatically marshaled to typed arrays by Blazor
+        var geometryData = new
+        {
+            positions = geometry.Positions,
+            indices = geometry.Indices,
+            normals = geometry.Normals,
+            uvs = geometry.Uvs
+        };
+
+        // Prepare groups if present
+        object? groups = null;
+        if (geometry.Groups != null && geometry.Groups.Count > 0)
+        {
+            groups = geometry.Groups.Select(g => new
+            {
+                start = g.Start,
+                count = g.Count,
+                materialIndex = g.MaterialIndex
+            }).ToArray();
+        }
+
+        // Default material options
+        var materialOpts = new
+        {
+            color = 0x888888,
+            wireframe = false,
+            metalness = 0.5,
+            roughness = 0.5
+        };
+
+        // Call meshRenderer.loadMesh(geometry, groups, materialOpts)
+        var meshId = await _jsRuntime.InvokeAsync<string>(
+            "meshRenderer.loadMesh", ct, geometryData, groups, materialOpts);
+
+        return meshId;
     }
 
     /// <inheritdoc/>
@@ -62,10 +125,19 @@ public class ViewerService : IViewerService
         }
         ct.ThrowIfCancellationRequested();
 
-        // TODO: [Future] Implement JS interop call to meshRenderer.js updateMaterial()
-        // Expected: Call window.meshRenderer.updateMaterial(meshId, { color, wireframe })
-        // to update material properties of the displayed mesh
-        await Task.CompletedTask;
+        // Prepare material options (only include non-null values)
+        var opts = new Dictionary<string, object>();
+        if (color != null)
+        {
+            opts["color"] = color;
+        }
+        if (wireframe.HasValue)
+        {
+            opts["wireframe"] = wireframe.Value;
+        }
+
+        // Call meshRenderer.updateMaterial(meshId, opts)
+        await _jsRuntime.InvokeVoidAsync("meshRenderer.updateMaterial", ct, meshId, opts);
     }
 
     /// <inheritdoc/>
@@ -73,9 +145,8 @@ public class ViewerService : IViewerService
     {
         ct.ThrowIfCancellationRequested();
 
-        // TODO: [Future] Implement JS interop call to meshRenderer.js clear()
-        // Expected: Call window.meshRenderer.clear() to remove all meshes from scene
-        await Task.CompletedTask;
+        // Call meshRenderer.clear() to remove all meshes
+        await _jsRuntime.InvokeVoidAsync("meshRenderer.clear", ct);
     }
 
     /// <inheritdoc/>
@@ -83,9 +154,8 @@ public class ViewerService : IViewerService
     {
         ct.ThrowIfCancellationRequested();
 
-        // TODO: [Future] Implement JS interop call to meshRenderer.js dispose()
-        // Expected: Call window.meshRenderer.dispose() to cleanup Three.js resources,
-        // remove event listeners, and dispose geometries/materials
-        await Task.CompletedTask;
+        // Call meshRenderer.dispose() to cleanup all resources
+        await _jsRuntime.InvokeVoidAsync("meshRenderer.dispose", ct);
+        _isInitialized = false;
     }
 }
