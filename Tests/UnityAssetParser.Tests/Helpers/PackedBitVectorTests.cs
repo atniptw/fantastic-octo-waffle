@@ -105,7 +105,8 @@ public class PackedBitVectorTests
         // 4 (numItems) + 4 (range) + 4 (start) + 4 (bitSize) + 4 (data length) + 3 (data) + 1 (padding) = 24
         var expectedPosition = startPosition + 4 + 4 + 4 + 4 + 4 + 3 + 1;
 
-        // Assert
+        // Assert - also verify data was read correctly
+        Assert.Equal(data, packed.Data);
         Assert.Equal(expectedPosition, reader.Position);
         Assert.Equal(0, reader.Position % 4); // Position should be 4-byte aligned
     }
