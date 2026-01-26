@@ -14,7 +14,8 @@ public interface IModDetailStateService
     /// <param name="modId">Unique mod identifier (namespace_name).</param>
     /// <param name="fileIndex">List of indexed files from the mod.</param>
     /// <param name="metadata">Package metadata from Thunderstore.</param>
-    Task SetCurrentModAsync(string modId, List<FileIndexItem> fileIndex, ThunderstorePackage metadata);
+    /// <param name="zipBytes">Raw ZIP bytes for asset extraction.</param>
+    Task SetCurrentModAsync(string modId, List<FileIndexItem> fileIndex, ThunderstorePackage metadata, byte[] zipBytes);
     
     /// <summary>
     /// Retrieve stored mod state (if available).

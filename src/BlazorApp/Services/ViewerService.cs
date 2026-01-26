@@ -4,16 +4,11 @@ using Microsoft.JSInterop;
 namespace BlazorApp.Services;
 
 /// <summary>
-/// Stub implementation of 3D viewer service. Provides placeholder behavior for all operations.
+/// Implementation of 3D viewer service that interops with Three.js meshRenderer.
 /// </summary>
-/// <remarks>
-/// Temporary stub for development. Real implementation will be added in future issue.
-/// This implementation is not thread-safe due to the _meshCounter field.
-/// </remarks>
 public class ViewerService : IViewerService
 {
     private readonly IJSRuntime _jsRuntime;
-    private int _meshCounter = 0;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ViewerService"/> class.
@@ -34,10 +29,7 @@ public class ViewerService : IViewerService
         }
         ct.ThrowIfCancellationRequested();
 
-        // TODO: [Future] Implement JS interop call to meshRenderer.js init()
-        // Expected: Call window.meshRenderer.init(canvasId, options) to set up
-        // Three.js scene, camera, lights, and OrbitControls
-        await Task.CompletedTask;
+        await _jsRuntime.InvokeVoidAsync("meshRenderer.init", ct, canvasId, new { });
     }
 
     /// <inheritdoc/>
@@ -46,11 +38,18 @@ public class ViewerService : IViewerService
         ArgumentNullException.ThrowIfNull(geometry);
         ct.ThrowIfCancellationRequested();
 
-        // TODO: [Future] Implement JS interop call to meshRenderer.js loadMesh()
-        // Expected: Call window.meshRenderer.loadMesh(geometry, groups, materialOpts)
-        // to create BufferGeometry and add mesh to scene
-        await Task.CompletedTask;
-        return $"stub-mesh-{_meshCounter++}";
+        var geometryData = new
+        {
+            positions = geometry.Positions,
+            indices = geometry.Indices,
+            normals = geometry.Normals,
+            uvs = geometry.Uvs,
+            vertexCount = geometry.VertexCount,
+            triangleCount = geometry.TriangleCount
+        };
+
+        var meshId = await _jsRuntime.InvokeAsync<string>("meshRenderer.loadMesh", ct, geometryData, null, new { });
+        return meshId;
     }
 
     /// <inheritdoc/>
@@ -62,30 +61,24 @@ public class ViewerService : IViewerService
         }
         ct.ThrowIfCancellationRequested();
 
-        // TODO: [Future] Implement JS interop call to meshRenderer.js updateMaterial()
-        // Expected: Call window.meshRenderer.updateMaterial(meshId, { color, wireframe })
-        // to update material properties of the displayed mesh
-        await Task.CompletedTask;
+        var materialOpts = new Dictionary<string, object?>();
+        if (color != null) materialOpts["color"] = color;
+        if (wireframe.HasValue) materialOpts["wireframe"] = wireframe.Value;
+
+        await _jsRuntime.InvokeVoidAsync("meshRenderer.updateMaterial", ct, meshId, materialOpts);
     }
 
     /// <inheritdoc/>
     public async Task ClearAsync(CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
-
-        // TODO: [Future] Implement JS interop call to meshRenderer.js clear()
-        // Expected: Call window.meshRenderer.clear() to remove all meshes from scene
-        await Task.CompletedTask;
+        await _jsRuntime.InvokeVoidAsync("meshRenderer.clear", ct);
     }
 
     /// <inheritdoc/>
     public async Task DisposeAsync(CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
-
-        // TODO: [Future] Implement JS interop call to meshRenderer.js dispose()
-        // Expected: Call window.meshRenderer.dispose() to cleanup Three.js resources,
-        // remove event listeners, and dispose geometries/materials
-        await Task.CompletedTask;
+        await _jsRuntime.InvokeVoidAsync("meshRenderer.dispose", ct);
     }
 }

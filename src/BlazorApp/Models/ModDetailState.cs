@@ -15,6 +15,9 @@ public sealed class ModDetailState
     /// <summary>Gets or initializes the package metadata.</summary>
     public required ThunderstorePackage Metadata { get; init; }
     
+    /// <summary>Gets or initializes the raw ZIP bytes for asset extraction.</summary>
+    public required byte[] ZipBytes { get; init; }
+    
     /// <summary>Gets the timestamp when this state was created.</summary>
     public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
 }

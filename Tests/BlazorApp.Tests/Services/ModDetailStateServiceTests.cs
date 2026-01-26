@@ -26,7 +26,7 @@ public class ModDetailStateServiceTests
         };
 
         // Act
-        await service.SetCurrentModAsync(modId, fileIndex, metadata);
+        await service.SetCurrentModAsync(modId, fileIndex, metadata, Array.Empty<byte>());
         var state = await service.GetCurrentModAsync();
 
         // Assert
@@ -65,7 +65,7 @@ public class ModDetailStateServiceTests
             Versions = new List<PackageVersion>()
         };
 
-        await service.SetCurrentModAsync(modId, fileIndex, metadata);
+        await service.SetCurrentModAsync(modId, fileIndex, metadata, Array.Empty<byte>());
 
         // Act
         await service.ClearAsync();
@@ -92,7 +92,7 @@ public class ModDetailStateServiceTests
 
         // Act & Assert
         await Assert.ThrowsAsync<ArgumentNullException>(
-            () => service.SetCurrentModAsync(null!, fileIndex, metadata)
+            () => service.SetCurrentModAsync(null!, fileIndex, metadata, Array.Empty<byte>())
         );
     }
 
@@ -113,7 +113,7 @@ public class ModDetailStateServiceTests
 
         // Act & Assert
         await Assert.ThrowsAsync<ArgumentNullException>(
-            () => service.SetCurrentModAsync(modId, null!, metadata)
+            () => service.SetCurrentModAsync(modId, null!, metadata, Array.Empty<byte>())
         );
     }
 
@@ -127,7 +127,7 @@ public class ModDetailStateServiceTests
 
         // Act & Assert
         await Assert.ThrowsAsync<ArgumentNullException>(
-            () => service.SetCurrentModAsync(modId, fileIndex, null!)
+            () => service.SetCurrentModAsync(modId, fileIndex, null!, Array.Empty<byte>())
         );
     }
 
@@ -157,8 +157,8 @@ public class ModDetailStateServiceTests
         };
 
         // Act
-        await service.SetCurrentModAsync(modId1, fileIndex, metadata1);
-        await service.SetCurrentModAsync(modId2, fileIndex, metadata2);
+        await service.SetCurrentModAsync(modId1, fileIndex, metadata1, Array.Empty<byte>());
+        await service.SetCurrentModAsync(modId2, fileIndex, metadata2, Array.Empty<byte>());
         var state = await service.GetCurrentModAsync();
 
         // Assert
@@ -185,7 +185,7 @@ public class ModDetailStateServiceTests
         var beforeTime = DateTime.UtcNow;
 
         // Act
-        await service.SetCurrentModAsync(modId, fileIndex, metadata);
+        await service.SetCurrentModAsync(modId, fileIndex, metadata, Array.Empty<byte>());
         var state = await service.GetCurrentModAsync();
         var afterTime = DateTime.UtcNow;
 
