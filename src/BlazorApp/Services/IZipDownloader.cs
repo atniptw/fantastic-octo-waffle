@@ -3,7 +3,7 @@ using BlazorApp.Models;
 namespace BlazorApp.Services;
 
 /// <summary>Downloads mod ZIP files from Cloudflare Worker.</summary>
-public interface IZipDownloader : IAsyncDisposable
+public interface IZipDownloader : IAsyncDisposable, IDisposable
 {
     /// <summary>
     /// Get metadata (size, filename) for a mod version without downloading.

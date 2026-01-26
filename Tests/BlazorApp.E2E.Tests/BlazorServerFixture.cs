@@ -13,7 +13,7 @@ public sealed class BlazorServerFixture : IAsyncLifetime
     private Process? _serverProcess;
     private IPlaywright? _playwright;
     public IBrowser? Browser { get; private set; }
-    public const string ServerUrl = "http://localhost:5000";
+    public static string ServerUrl { get; private set; } = "http://localhost:5000";
     private const int ServerStartTimeoutSeconds = 30;
     private readonly List<string> _outputLog = new();
 
@@ -132,12 +132,24 @@ public sealed class BlazorServerFixture : IAsyncLifetime
     {
         var projectPath = GetBlazorAppPath();
 
+        // Determine server URL: prefer env var, else select a free port on localhost
+        var urlsEnv = Environment.GetEnvironmentVariable("ASPNETCORE_URLS");
+        if (string.IsNullOrWhiteSpace(urlsEnv))
+        {
+            var freePort = GetFreeTcpPort();
+            ServerUrl = $"http://127.0.0.1:{freePort}";
+        }
+        else
+        {
+            ServerUrl = urlsEnv;
+        }
+
         _serverProcess = new Process
         {
             StartInfo = new ProcessStartInfo
             {
                 FileName = "dotnet",
-                Arguments = "run --no-build",
+                Arguments = $"run --no-build --urls {ServerUrl}",
                 WorkingDirectory = projectPath,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
@@ -273,5 +285,19 @@ public sealed class BlazorServerFixture : IAsyncLifetime
         }
 
         return projectPath;
+    }
+
+    private static int GetFreeTcpPort()
+    {
+        var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+        try
+        {
+            listener.Start();
+            return ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
+        }
+        finally
+        {
+            listener.Stop();
+        }
     }
 }
