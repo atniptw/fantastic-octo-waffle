@@ -8,7 +8,7 @@ namespace UnityAssetParser.Services;
 /// Parser for Unity Mesh objects (ClassID from RenderableDetector.RenderableClassIds.Mesh) from SerializedFile object data.
 /// This is a verbatim port from UnityPy/classes/Mesh.py.
 /// 
-/// TODO: Implement full Mesh parsing logic. This parser needs to:
+/// TODO: Implement full 20-field Mesh parsing logic. This parser needs to:
 /// 1. Use EndianBinaryReader to read Mesh fields in version-specific order
 /// 2. Handle 4-byte alignment after byte arrays and bool triplets
 /// 3. Parse VertexData structure (channels/streams)
@@ -70,8 +70,8 @@ public sealed class MeshParser
         // 18. Parse m_KeepVertices
         // 19. Parse m_KeepIndices
         // 20. Parse m_IndexFormat (version >= 2017.3)
-        // 21. Parse m_StreamData (StreamingInfo)
-        // 22. Apply 4-byte alignment between fields as needed
+        // Then: Parse m_StreamData (StreamingInfo)
+        // Note: Apply 4-byte alignment between fields as needed throughout parsing
         
         // Each field's presence and layout depends on the Unity version.
         // See UnityPy Mesh.py for the exact version checks and field order.

@@ -84,9 +84,12 @@ public sealed class MeshExtractionService
                     results.Add(meshDto);
                 }
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                // Skip meshes that fail to extract - continue with others
+                // Log and skip meshes that fail to extract - continue with others
+                // TODO: Replace with proper logging when ILogger is available
+                System.Diagnostics.Debug.WriteLine(
+                    $"Warning: Failed to extract mesh PathId={meshObj.PathId}, ClassId={meshObj.ClassId}: {ex.Message}");
             }
         }
 
@@ -124,9 +127,10 @@ public sealed class MeshExtractionService
         {
             helper.Process();
         }
-        catch (NotImplementedException ex) when (ex.Message.Contains(".resS"))
+        catch (NotImplementedException)
         {
-            // External streaming data not yet supported - return null
+            // External streaming data or other features not yet supported - return null
+            // This is expected during the scaffold phase while MeshParser is being implemented
             return null;
         }
 
@@ -135,22 +139,21 @@ public sealed class MeshExtractionService
         {
             Name = mesh.Name,
             Positions = helper.Positions ?? Array.Empty<float>(),
-            Indices = helper.Indices ?? Array.Empty<uint>(),
             Normals = helper.Normals,
             UVs = helper.UVs,
             VertexCount = helper.VertexCount,
             Use16BitIndices = helper.Use16BitIndices
         };
 
-        // Calculate triangle count
-        dto.TriangleCount = dto.Indices.Length / 3;
-
-        // Extract submesh groups
+        // Extract submesh groups and convert triangles to flat index array
+        // Note: GetTriangles() may convert triangle strips/quads to standard triangles,
+        // so we use its output for both Groups and Indices to ensure consistency
         if (mesh.SubMeshes != null && mesh.SubMeshes.Length > 0)
         {
             try
             {
                 var triangles = helper.GetTriangles();
+                var indicesList = new List<uint>();
                 int indexOffset = 0;
                 
                 for (int i = 0; i < triangles.Count; i++)
@@ -158,6 +161,7 @@ public sealed class MeshExtractionService
                     var submeshTriangles = triangles[i];
                     var indexCount = submeshTriangles.Count * 3;
                     
+                    // Add group metadata
                     dto.Groups.Add(new MeshGeometryDto.SubMeshGroup
                     {
                         Start = indexOffset,
@@ -165,14 +169,36 @@ public sealed class MeshExtractionService
                         MaterialIndex = i
                     });
                     
+                    // Flatten triangles to index array
+                    foreach (var tri in submeshTriangles)
+                    {
+                        indicesList.Add(tri.Item1);
+                        indicesList.Add(tri.Item2);
+                        indicesList.Add(tri.Item3);
+                    }
+                    
                     indexOffset += indexCount;
                 }
+                
+                dto.Indices = indicesList.ToArray();
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                // Skip submesh group extraction on error - continue without groups
+                // Log and fall back to raw IndexBuffer if submesh extraction fails
+                // TODO: Replace with proper logging when ILogger is available
+                System.Diagnostics.Debug.WriteLine(
+                    $"Warning: Failed to extract submesh groups for mesh '{mesh.Name}': {ex.Message}");
+                dto.Indices = helper.Indices ?? Array.Empty<uint>();
             }
         }
+        else
+        {
+            // No submeshes - use raw indices from helper
+            dto.Indices = helper.Indices ?? Array.Empty<uint>();
+        }
+
+        // Calculate triangle count
+        dto.TriangleCount = dto.Indices.Length / 3;
 
         return dto;
     }
@@ -181,27 +207,35 @@ public sealed class MeshExtractionService
     /// Extracts Unity version from SerializedFile header.
     /// Returns a version tuple (major, minor, patch, type) for use with MeshHelper.
     /// </summary>
+    /// <remarks>
+    /// WARNING: The fallback version estimation is approximate and may produce incorrect
+    /// results for version-specific parsing logic. When UnityVersionString is unavailable,
+    /// the SerializedFile format version is used to estimate the Unity engine version, but
+    /// this mapping is not precise and can lead to parsing errors for assets created with
+    /// Unity versions that don't align with typical format version progressions.
+    /// 
+    /// Consumers should be aware that mesh parsing accuracy depends on correct version
+    /// detection, and bundles without embedded version strings may fail to parse correctly.
+    /// </remarks>
     private static (int, int, int, int) GetUnityVersion(SerializedFileHeader header)
     {
         // Try to parse Unity version string if available
         if (!string.IsNullOrEmpty(header.UnityVersionString))
         {
             var parts = header.UnityVersionString.Split('.');
-            if (parts.Length >= 2)
+            if (parts.Length >= 2 &&
+                int.TryParse(parts[0], out int major) &&
+                int.TryParse(parts[1], out int minor))
             {
-                if (int.TryParse(parts[0], out int major) && 
-                    int.TryParse(parts[1], out int minor))
+                int patch = 0;
+                if (parts.Length >= 3)
                 {
-                    int patch = 0;
-                    if (parts.Length >= 3)
-                    {
-                        // Extract patch number (may have alpha/beta suffix)
-                        var patchStr = new string(parts[2].TakeWhile(char.IsDigit).ToArray());
-                        int.TryParse(patchStr, out patch);
-                    }
-                    
-                    return (major, minor, patch, 0);
+                    // Extract patch number (may have alpha/beta suffix)
+                    var patchStr = new string(parts[2].TakeWhile(char.IsDigit).ToArray());
+                    int.TryParse(patchStr, out patch);
                 }
+
+                return (major, minor, patch, 0);
             }
         }
 
