@@ -84,10 +84,9 @@ public sealed class MeshExtractionService
                     results.Add(meshDto);
                 }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                // Log and skip this mesh, continue with others
-                Console.WriteLine($"Warning: Failed to extract mesh PathId={meshObj.PathId}: {ex.Message}");
+                // Skip meshes that fail to extract - continue with others
             }
         }
 
@@ -127,8 +126,7 @@ public sealed class MeshExtractionService
         }
         catch (NotImplementedException ex) when (ex.Message.Contains(".resS"))
         {
-            // External streaming data not yet supported
-            Console.WriteLine($"Warning: Mesh uses external .resS streaming data (not yet supported)");
+            // External streaming data not yet supported - return null
             return null;
         }
 
@@ -170,10 +168,9 @@ public sealed class MeshExtractionService
                     indexOffset += indexCount;
                 }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                Console.WriteLine($"Warning: Failed to extract submesh groups: {ex.Message}");
-                // Continue without groups
+                // Skip submesh group extraction on error - continue without groups
             }
         }
 

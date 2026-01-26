@@ -5,7 +5,7 @@ using UnityAssetParser.Helpers;
 namespace UnityAssetParser.Services;
 
 /// <summary>
-/// Parser for Unity Mesh objects (ClassID 43) from SerializedFile object data.
+/// Parser for Unity Mesh objects (ClassID from RenderableDetector.RenderableClassIds.Mesh) from SerializedFile object data.
 /// This is a verbatim port from UnityPy/classes/Mesh.py.
 /// 
 /// TODO: Implement full Mesh parsing logic. This parser needs to:
