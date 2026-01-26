@@ -29,7 +29,9 @@ public class AssetRenderer : IAssetRenderer
         using (var ms = new MemoryStream(zipBytes))
         using (var archive = new ZipArchive(ms, ZipArchiveMode.Read))
         {
+            // Match by filename (handles files in subdirectories)
             var entry = archive.Entries.FirstOrDefault(e => 
+                e.Name.Equals(file.FileName, StringComparison.OrdinalIgnoreCase) ||
                 e.FullName.Equals(file.FileName, StringComparison.OrdinalIgnoreCase));
             
             if (entry == null)

@@ -289,8 +289,9 @@
         
         try
         {
-            // Note: We need to collect ZIP bytes to store for Viewer3D asset extraction.
-            // Download and collect all chunks first, then index.
+            // Note: We collect ZIP bytes to store for Viewer3D asset extraction.
+            // This loads the entire ZIP into memory, which may cause issues for large mods (>50MB).
+            // Future improvement: Consider IndexedDB storage or streaming extraction per-file.
             
             // Step 1: Download ZIP (streaming and collection)
             var downloadStream = ZipDownloader.StreamZipAsync(_package.LatestVersion, _cts.Token);

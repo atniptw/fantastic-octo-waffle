@@ -8,6 +8,7 @@ window.meshRenderer = (() => {
     let controls = null;
     let meshes = new Map(); // Track loaded meshes by ID
     let meshIdCounter = 0;
+    let resizeHandler = null; // Track resize handler for proper cleanup
 
     /**
      * Initialize Three.js scene with canvas element
@@ -62,12 +63,13 @@ window.meshRenderer = (() => {
         }
         animate();
 
-        // Handle window resize
-        window.addEventListener('resize', () => {
+        // Handle window resize - store handler for cleanup
+        resizeHandler = () => {
             camera.aspect = canvas.clientWidth / canvas.clientHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(canvas.clientWidth, canvas.clientHeight);
-        });
+        };
+        window.addEventListener('resize', resizeHandler);
     }
 
     /**
@@ -163,7 +165,14 @@ window.meshRenderer = (() => {
         }
 
         if (materialOpts.color !== undefined) {
-            mesh.material.color.setHex(parseInt(materialOpts.color.replace('#', '0x')));
+            // Handle various color formats (hex string with/without #, or numeric)
+            let colorValue = materialOpts.color;
+            if (typeof colorValue === 'string') {
+                colorValue = colorValue.startsWith('#') ? colorValue.substring(1) : colorValue;
+                mesh.material.color.setHex(parseInt(colorValue, 16));
+            } else if (typeof colorValue === 'number') {
+                mesh.material.color.setHex(colorValue);
+            }
         }
         if (materialOpts.wireframe !== undefined) {
             mesh.material.wireframe = materialOpts.wireframe;
@@ -208,6 +217,10 @@ window.meshRenderer = (() => {
             if (renderer) {
                 renderer.dispose();
                 renderer = null;
+            }
+            if (resizeHandler) {
+                window.removeEventListener('resize', resizeHandler);
+                resizeHandler = null;
             }
             scene = null;
             camera = null;
