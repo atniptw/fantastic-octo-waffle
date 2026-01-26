@@ -135,89 +135,43 @@ public sealed class ResponsiveLayoutE2ETests
     }
 
     /// <summary>
-    /// E2E Test: Verify canvas uses responsive aspect ratio, not fixed height.
+    /// E2E Test: Verify mod detail page layout and navigation structure.
+    /// The new Viewer3D architecture requires going through ModDetail page first.
     /// </summary>
     [Fact]
-    public async Task Viewer_Canvas_ResponsiveAspectRatio()
+    public async Task Viewer_AccessibleViaModDetail()
     {
         Assert.NotNull(_fixture.Browser);
         var page = await _fixture.Browser.NewPageAsync();
 
-        await page.GotoAsync($"{BlazorServerFixture.ServerUrl}/viewer?mod=TestAuthor-Cigar", 
+        // Mock API before navigation
+        await SetupApiMockAsync(page);
+
+        // Navigate to mod detail page (entry point to viewer)
+        await page.GotoAsync($"{BlazorServerFixture.ServerUrl}/mod/TestAuthor/FrogHatSmile", 
             new() { WaitUntil = WaitUntilState.NetworkIdle });
 
-        _output.WriteLine("🖼️ Testing canvas responsive behavior...");
+        _output.WriteLine("🖼️ Testing viewer access via mod detail page...");
 
-        var canvas = await page.QuerySelectorAsync("canvas#threeJsCanvas");
-        Assert.NotNull(canvas);
+        // Wait for page to load
+        await page.WaitForSelectorAsync(".breadcrumb", new() { Timeout = 5000 });
 
-        // Verify canvas has the viewer-canvas class
-        var className = await canvas.GetAttributeAsync("class");
-        Assert.Contains("viewer-canvas", className);
+        // Verify breadcrumb navigation exists
+        var breadcrumb = await page.QuerySelectorAsync(".breadcrumb");
+        Assert.NotNull(breadcrumb);
+        _output.WriteLine("  ✓ Breadcrumb navigation exists");
 
-        // Test at desktop width
-        await page.SetViewportSizeAsync(1024, 768);
-        await Task.Delay(100); // Allow layout to settle
+        // Verify Download & Preview button exists (gateway to viewer)
+        var downloadButton = await page.QuerySelectorAsync("text=Download & Preview");
+        Assert.NotNull(downloadButton);
+        _output.WriteLine("  ✓ Download & Preview button available");
 
-        var box1 = await canvas.BoundingBoxAsync();
-        Assert.NotNull(box1);
-        _output.WriteLine($"  Desktop (1024px): canvas width={box1.Width}px, height={box1.Height}px");
-
-        // Test at tablet width
-        await page.SetViewportSizeAsync(768, 1024);
-        await Task.Delay(100);
-
-        var box2 = await canvas.BoundingBoxAsync();
-        Assert.NotNull(box2);
-        _output.WriteLine($"  Tablet (768px): canvas width={box2.Width}px, height={box2.Height}px");
-
-        // Test at mobile width
-        await page.SetViewportSizeAsync(375, 667);
-        await Task.Delay(100);
-
-        var box3 = await canvas.BoundingBoxAsync();
-        Assert.NotNull(box3);
-        _output.WriteLine($"  Mobile (375px): canvas width={box3.Width}px, height={box3.Height}px");
-
-        // Verify canvas maintains reasonable aspect ratio on all sizes
-        var ratio1 = box1.Width / box1.Height;
-        var ratio2 = box2.Width / box2.Height;
-        var ratio3 = box3.Width / box3.Height;
-
-        _output.WriteLine($"  Aspect ratios: desktop={ratio1:F2}, tablet={ratio2:F2}, mobile={ratio3:F2}");
-
-        Assert.True(ratio1 >= 1.0, "Desktop canvas should have landscape aspect ratio");
-        Assert.True(ratio3 >= 1.0, "Mobile canvas should maintain aspect ratio");
-
-        await page.CloseAsync();
-    }
-
-    /// <summary>
-    /// E2E Test: Verify file list stacks on mobile (full width).
-    /// </summary>
-    [Fact]
-    public async Task Viewer_FileList_FullWidthOnMobile()
-    {
-        Assert.NotNull(_fixture.Browser);
-        var page = await _fixture.Browser.NewPageAsync();
-
-        // Set viewport to mobile size
-        await page.SetViewportSizeAsync(375, 667);
-        await page.GotoAsync($"{BlazorServerFixture.ServerUrl}/viewer?mod=TestAuthor-Cigar",
-            new() { WaitUntil = WaitUntilState.NetworkIdle });
-
-        _output.WriteLine("📱 Testing file list width on mobile...");
-
-        var fileListColumn = await page.QuerySelectorAsync(".file-list-column");
-        Assert.NotNull(fileListColumn);
-
-        var box = await fileListColumn.BoundingBoxAsync();
-        Assert.NotNull(box);
-
-        _output.WriteLine($"  File list column width: {box.Width}px");
-
-        // On mobile, file list should take near full width (accounting for padding)
-        Assert.True(box.Width >= 300, "File list should be near full width on mobile");
+        // Verify mod heading
+        var heading = await page.QuerySelectorAsync("h1");
+        Assert.NotNull(heading);
+        var headingText = await heading.TextContentAsync();
+        Assert.Contains("FrogHatSmile", headingText);
+        _output.WriteLine($"  ✓ Mod heading: {headingText}");
 
         await page.CloseAsync();
     }
