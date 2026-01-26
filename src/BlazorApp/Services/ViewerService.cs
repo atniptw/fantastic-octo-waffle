@@ -56,7 +56,7 @@ public class ViewerService : IViewerService
 
         try
         {
-            await _jsRuntime.InvokeVoidAsync("meshRenderer.init", ct, canvasId, options);
+            await _jsRuntime.InvokeVoidAsync("meshRenderer.init", canvasId, options);
             _isInitialized = true;
         }
         catch
@@ -137,7 +137,7 @@ public class ViewerService : IViewerService
         }
 
         // Call meshRenderer.updateMaterial(meshId, opts)
-        await _jsRuntime.InvokeVoidAsync("meshRenderer.updateMaterial", ct, meshId, opts);
+        await _jsRuntime.InvokeVoidAsync("meshRenderer.updateMaterial", meshId, opts);
     }
 
     /// <inheritdoc/>
@@ -146,7 +146,7 @@ public class ViewerService : IViewerService
         ct.ThrowIfCancellationRequested();
 
         // Call meshRenderer.clear() to remove all meshes
-        await _jsRuntime.InvokeVoidAsync("meshRenderer.clear", ct);
+        await _jsRuntime.InvokeVoidAsync("meshRenderer.clear");
     }
 
     /// <inheritdoc/>
@@ -155,7 +155,7 @@ public class ViewerService : IViewerService
         ct.ThrowIfCancellationRequested();
 
         // Call meshRenderer.dispose() to cleanup all resources
-        await _jsRuntime.InvokeVoidAsync("meshRenderer.dispose", ct);
+        await _jsRuntime.InvokeVoidAsync("meshRenderer.dispose");
         _isInitialized = false;
     }
 }

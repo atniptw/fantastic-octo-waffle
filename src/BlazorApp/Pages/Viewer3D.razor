@@ -1,55 +1,155 @@
-@page "/viewer"
+@page "/viewer/{Namespace}/{Name}/{FileName}"
 @using BlazorApp.Models
+@using BlazorApp.Services
+@inject IModDetailStateService StateService
+@inject IAssetRenderer AssetRenderer
+@inject IViewerService ViewerService
+@inject NavigationManager NavigationManager
+@implements IAsyncDisposable
 
-<PageTitle>3D Asset Viewer</PageTitle>
+<PageTitle>3D Viewer - @FileName</PageTitle>
 
 <div class="container-fluid mt-4">
-    <div class="row">
-        <div class="col-md-3 file-list-column">
-            <h4>Files</h4>
-            <ul class="list-group file-list">
-                @foreach (var file in _placeholderFiles)
-                {
-                    <li class="list-group-item d-flex justify-content-between align-items-start">
-                        <div class="ms-2 me-auto">
-                            <div class="fw-bold">@file.FileName</div>
-                            <small class="text-muted">@FormatBytes(file.SizeBytes) · @file.Type</small>
-                        </div>
-                        @if (file.Renderable)
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="/">← Mods</a></li>
+            <li class="breadcrumb-item"><a href="/mod/@Namespace/@Name">@Name</a></li>
+            <li class="breadcrumb-item active" aria-current="page">@FileName</li>
+        </ol>
+    </nav>
+
+    @if (_error != null)
+    {
+        <div class="alert alert-danger" role="alert">
+            <h4 class="alert-heading">Error</h4>
+            <p>@_error</p>
+            <hr>
+            <a href="/mod/@Namespace/@Name" class="btn btn-primary">← Back to Mod Details</a>
+        </div>
+    }
+    else if (_loading)
+    {
+        <div class="text-center my-5">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading 3D model...</span>
+            </div>
+            <p class="mt-3">@_loadingMessage</p>
+        </div>
+    }
+    else
+    {
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h5 class="card-title">@FileName</h5>
+                        @if (_geometry != null)
                         {
-                            <span class="badge bg-success rounded-pill progress-badge">Renderable</span>
+                            <p class="card-text">
+                                <small class="text-muted">
+                                    Vertices: @_geometry.VertexCount | Triangles: @_geometry.TriangleCount
+                                </small>
+                            </p>
                         }
-                    </li>
-                }
-            </ul>
+                    </div>
+                </div>
+                <canvas id="threeJsCanvas" style="width: 100%; height: 600px; border: 1px solid #ccc;" aria-label="3D model preview canvas"></canvas>
+            </div>
         </div>
-        
-        <div class="col-md-9">
-            <canvas id="threeJsCanvas" class="viewer-canvas" aria-label="3D model preview canvas"></canvas>
-        </div>
-    </div>
+    }
 </div>
 
 @code {
-    // TODO (#127): Replace with real data from IZipIndexer + IAssetScanner
-    private readonly List<FileIndexItem> _placeholderFiles = new()
-    {
-        new("cigar.hhh", 12345, FileType.UnityFS, true),
-        new("icon.png", 2048, FileType.Unknown, false),
-        new("manifest.json", 256, FileType.Unknown, false)
-    };
+    [Parameter]
+    public string Namespace { get; set; } = string.Empty;
+    
+    [Parameter]
+    public string Name { get; set; } = string.Empty;
+    
+    [Parameter]
+    public string FileName { get; set; } = string.Empty;
 
-    /// <summary>
-    /// Formats a byte size into a human-readable string with appropriate units.
-    /// </summary>
-    /// <param name="bytes">The size in bytes to format.</param>
-    /// <returns>
-    /// A formatted string with units: "B" for bytes (< 1024), "KB" for kilobytes (< 1 MB), or "MB" for megabytes.
-    /// </returns>
-    private string FormatBytes(long bytes)
+    private bool _loading = true;
+    private string? _error;
+    private string _loadingMessage = "Initializing...";
+    private ThreeJsGeometry? _geometry;
+    private string? _meshId;
+
+    protected override async Task OnInitializedAsync()
     {
-        if (bytes < 1024) return $"{bytes} B";
-        if (bytes < 1024 * 1024) return $"{bytes / 1024:F1} KB";
-        return $"{bytes / (1024 * 1024):F1} MB";
+        try
+        {
+            // Step 1: Retrieve mod state
+            _loadingMessage = "Loading mod data...";
+            var state = await StateService.GetCurrentModAsync();
+            
+            if (state == null)
+            {
+                _error = "Mod data not found. Please go back and download the mod first.";
+                _loading = false;
+                return;
+            }
+
+            // Step 2: Find the requested file in the index
+            var fileItem = state.FileIndex.FirstOrDefault(f => 
+                f.FileName.Equals(FileName, StringComparison.OrdinalIgnoreCase));
+            
+            if (fileItem == null)
+            {
+                _error = $"File '{FileName}' not found in mod archive.";
+                _loading = false;
+                return;
+            }
+
+            if (!fileItem.Renderable)
+            {
+                _error = $"File '{FileName}' does not contain renderable 3D geometry.";
+                _loading = false;
+                return;
+            }
+
+            // Step 3: Parse and extract geometry
+            _loadingMessage = "Parsing 3D model...";
+            StateHasChanged();
+            
+            _geometry = await AssetRenderer.RenderAsync(fileItem, state.ZipBytes, default);
+
+            // Step 4: Initialize Three.js viewer
+            _loadingMessage = "Initializing 3D viewer...";
+            StateHasChanged();
+            
+            await ViewerService.InitializeAsync("threeJsCanvas");
+
+            // Step 5: Load mesh into viewer
+            _loadingMessage = "Loading mesh...";
+            StateHasChanged();
+            
+            _meshId = await ViewerService.ShowAsync(_geometry);
+
+            _loading = false;
+        }
+        catch (NotImplementedException ex)
+        {
+            _error = $"Feature not yet implemented: {ex.Message}";
+            _loading = false;
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to load 3D model: {ex.Message}";
+            _loading = false;
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await ViewerService.DisposeAsync();
+        }
+        catch
+        {
+            // Ignore disposal errors
+        }
     }
 }

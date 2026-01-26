@@ -96,6 +96,7 @@ export function init(canvasId, options = {}) {
  */
 function startAnimationLoop() {
     function animate() {
+        if (!renderer || !scene || !camera) return; // Stop if disposed
         animationId = requestAnimationFrame(animate);
         controls.update();
         renderer.render(scene, camera);

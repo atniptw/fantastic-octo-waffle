@@ -289,25 +289,47 @@
         
         try
         {
-            // Note: Progress tracking is not implemented because ZipDownloader.StreamZipAsync()
-            // returns a lazy IAsyncEnumerable that's consumed directly by ZipIndexer.IndexAsync().
-            // Download and indexing happen simultaneously. When real implementations are available,
-            // consider wrapping the stream to track bytes or providing progress callbacks.
+            // Note: We collect ZIP bytes to store for Viewer3D asset extraction.
+            // This loads the entire ZIP into memory, which may cause issues for large mods (>50MB).
+            // Future improvement: Consider IndexedDB storage or streaming extraction per-file.
             
-            // Step 1: Download & Index ZIP (streaming)
+            // Step 1: Download ZIP (streaming and collection)
             var downloadStream = ZipDownloader.StreamZipAsync(_package.LatestVersion, _cts.Token);
             
             _state = DownloadState.Processing;
             StateHasChanged();
             
+            // Collect ZIP bytes for storage
+            var zipChunks = new List<byte[]>();
+            await foreach (var chunk in downloadStream)
+            {
+                zipChunks.Add(chunk);
+            }
+            
+            // Combine chunks into single byte array
+            var totalSize = zipChunks.Sum(c => c.Length);
+            var zipBytes = new byte[totalSize];
+            var offset = 0;
+            foreach (var chunk in zipChunks)
+            {
+                Array.Copy(chunk, 0, zipBytes, offset, chunk.Length);
+                offset += chunk.Length;
+            }
+            
+            // Step 2: Index ZIP from bytes
+            async IAsyncEnumerable<byte[]> BytesToStream()
+            {
+                yield return zipBytes;
+            }
+            
             _fileIndex = new List<FileIndexItem>();
-            await foreach (var item in ZipIndexer.IndexAsync(downloadStream, _cts.Token))
+            await foreach (var item in ZipIndexer.IndexAsync(BytesToStream(), _cts.Token))
             {
                 _fileIndex.Add(item);
             }
             
-            // Step 3: Store for Viewer3D
-            await StateService.SetCurrentModAsync(ModId, _fileIndex, _package);
+            // Step 3: Store for Viewer3D (including ZIP bytes)
+            await StateService.SetCurrentModAsync(ModId, _fileIndex, _package, zipBytes);
             
             // Step 4: Ready
             _state = DownloadState.Ready;

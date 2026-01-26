@@ -12,20 +12,21 @@ public class AssetRendererTests
     {
         // Act & Assert
         var exception = await Assert.ThrowsAsync<ArgumentNullException>(
-            () => _sut.RenderAsync(null!));
+            () => _sut.RenderAsync(null!, Array.Empty<byte>()));
         Assert.Equal("file", exception.ParamName);
     }
 
     [Fact]
-    public async Task RenderAsync_ValidFile_ThrowsNotImplementedException()
+    public async Task RenderAsync_NonRenderableFile_ThrowsInvalidOperationException()
     {
         // Arrange
-        var file = new FileIndexItem("test.hhh", 1024, FileType.UnityFS, true);
+        var file = new FileIndexItem("test.hhh", 1024, FileType.UnityFS, false);
+        var zipBytes = Array.Empty<byte>();
 
         // Act & Assert
-        var exception = await Assert.ThrowsAsync<NotImplementedException>(
-            () => _sut.RenderAsync(file));
-        Assert.Contains("Asset rendering not yet implemented", exception.Message);
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _sut.RenderAsync(file, zipBytes));
+        Assert.Contains("not marked as renderable", exception.Message);
     }
 
     [Fact]
@@ -33,11 +34,12 @@ public class AssetRendererTests
     {
         // Arrange
         var file = new FileIndexItem("test.hhh", 1024, FileType.UnityFS, true);
+        var zipBytes = Array.Empty<byte>();
         using var cts = new CancellationTokenSource();
         cts.Cancel();
 
         // Act & Assert
         await Assert.ThrowsAsync<OperationCanceledException>(
-            () => _sut.RenderAsync(file, cts.Token));
+            () => _sut.RenderAsync(file, zipBytes, cts.Token));
     }
 }

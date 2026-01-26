@@ -9,9 +9,10 @@ public interface IAssetRenderer
     /// Parse asset file and extract mesh geometry for Three.js rendering.
     /// </summary>
     /// <param name="file">File to render (must be marked as Renderable).</param>
+    /// <param name="zipBytes">Raw ZIP bytes containing the asset file.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>Geometry data ready for Three.js.</returns>
     /// <exception cref="InvalidDataException">Corrupt asset or parsing error.</exception>
     /// <exception cref="InvalidOperationException">File is not renderable.</exception>
-    Task<ThreeJsGeometry> RenderAsync(FileIndexItem file, CancellationToken ct = default);
+    Task<ThreeJsGeometry> RenderAsync(FileIndexItem file, byte[] zipBytes, CancellationToken ct = default);
 }
