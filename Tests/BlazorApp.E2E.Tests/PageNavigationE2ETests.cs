@@ -130,8 +130,9 @@ public sealed class PageNavigationE2ETests
     }
 
     /// <summary>
-    /// E2E Test: Navigate to mod detail and verify viewer link is available.
+    /// E2E Test: Verify mod detail page provides access to viewer.
     /// The new Viewer3D architecture uses route format /viewer/{namespace}/{name}/{filename}.
+    /// Tests that Download & Preview button exists as the entry point to the viewer flow.
     /// Note: Direct navigation to viewer requires mod state to be set via ModDetailStateService first.
     /// </summary>
     [Fact]

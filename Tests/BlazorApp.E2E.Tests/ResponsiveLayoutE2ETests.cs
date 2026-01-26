@@ -135,8 +135,10 @@ public sealed class ResponsiveLayoutE2ETests
     }
 
     /// <summary>
-    /// E2E Test: Verify mod detail page layout and navigation structure.
-    /// The new Viewer3D architecture requires going through ModDetail page first.
+    /// E2E Test: Verify viewer is accessible through ModDetail page.
+    /// The new Viewer3D architecture requires users to download a mod first,
+    /// which sets up the necessary state before navigating to the viewer.
+    /// This test verifies the Download & Preview button exists as the gateway to viewer.
     /// </summary>
     [Fact]
     public async Task Viewer_AccessibleViaModDetail()
