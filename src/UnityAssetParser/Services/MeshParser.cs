@@ -40,107 +40,100 @@ public static class MeshParser
             {
                 int major = version.Item1;
 
-                // === MANDATORY FIELDS (UnityPy order but adjusted for actual serialization) ===
-                
-                // Field 1: m_Name (string) - comes first because Mesh inherits from NamedObject
-                var pos = reader.BaseStream.Position;
+                // Field 1: m_Name
                 mesh.Name = ReadAlignedString(reader);
                 reader.Align();
-                System.Console.WriteLine($"[MeshParser] After m_Name: pos {pos} -> {reader.BaseStream.Position}, name='{mesh.Name}'");
 
-                // Field 2: m_SubMeshes (List[SubMesh])
-                pos = reader.BaseStream.Position;
+                // Field 2: m_SubMeshes
                 mesh.SubMeshes = ReadSubMeshArray(reader, major);
-                System.Console.WriteLine($"[MeshParser] After m_SubMeshes: pos {pos} -> {reader.BaseStream.Position}, count={mesh.SubMeshes.Length}");
-                
-                pos = reader.BaseStream.Position;
                 reader.Align();
-                System.Console.WriteLine($"[MeshParser] After align: pos {pos} -> {reader.BaseStream.Position}");
 
-                // Field 3: m_Shapes / m_BlendShapeData (BlendShapes)
-                // TODO: Fix this - currently failing to read, need to determine correct position
-                // ReadBlendShapesArray(reader);
-                // reader.Align();
+                // TODO: Complete field parsing - stopping after SubMeshes for now
+                return mesh;
+                
+                // Field 3: m_Shapes
+                //ReadBlendShapesArray(reader);
+                //reader.Align();
 
-                // Field 4: m_BindPose (List[Matrix4x4f]) [4.0+]
+                // Field 4: m_BindPose (version >= 4)
                 if (major >= 4)
                 {
                     ReadBindPoseArray(reader);
                     reader.Align();
                 }
 
-                // Field 5: m_BoneNameHashes (List[uint]) [4.0+]
+                // Field 5: m_BoneNameHashes (version >= 4)
                 if (major >= 4)
                 {
                     ReadBoneNameHashesArray(reader);
                     reader.Align();
                 }
 
-                // Field 6: m_RootBoneNameHash (uint) [4.0+]
+                // Field 6: m_RootBoneNameHash (version >= 4)
                 if (major >= 4)
                 {
                     reader.ReadUInt32();
                 }
 
-                // Field 7: m_BonesAABB (List[AABB]) [4.0+]
+                // Field 7: m_BonesAABB (version >= 4)
                 if (major >= 4)
                 {
                     ReadBoneAABBArray(reader);
                     reader.Align();
                 }
 
-                // Field 8: m_VariableBoneCountWeights (VariableBoneCountWeights) [4.0+]
+                // Field 8: m_VariableBoneCountWeights (version >= 4)
                 if (major >= 4)
                 {
                     ReadVariableBoneCountWeights(reader);
                     reader.Align();
                 }
 
-                // Field 9: m_MeshCompression (byte)
+                // Field 9: m_MeshCompression
                 mesh.MeshCompression = reader.ReadByte();
 
-                // Field 10: m_IsReadable (bool)
+                // Field 10: m_IsReadable
                 mesh.IsReadable = reader.ReadBoolean();
 
-                // Field 11: m_KeepVertices (bool)
+                // Field 11: m_KeepVertices
                 mesh.KeepVertices = reader.ReadBoolean();
 
-                // Field 12: m_KeepIndices (bool)
+                // Field 12: m_KeepIndices
                 mesh.KeepIndices = reader.ReadBoolean();
                 reader.Align();
 
-                // Field 13: m_IndexFormat (int) [2017.3+]
+                // Field 13: m_IndexFormat (version >= 2017.3)
                 if (major > 2017 || (major == 2017 && version.Item2 >= 3))
                 {
                     mesh.IndexFormat = reader.ReadInt32();
                 }
 
-                // Field 14: m_VertexData (VertexData) [3.5+]
+                // Field 14-23: VertexData structure
                 mesh.VertexData = ReadVertexData(reader, major);
                 reader.Align();
 
-                // Field 15: m_CompressedMesh (CompressedMesh) - conditionally
+                // Field 24: CompressedMesh (conditionally)
                 if (mesh.MeshCompression > 0)
                 {
                     mesh.CompressedMesh = ReadCompressedMesh(reader);
                     reader.Align();
                 }
 
-                // Field 16: m_LocalAABB (AABB)
-                var localAABB = ReadAABB(reader);
+                // Field 25: m_LocalAABB
+                mesh.IndexBuffer = ReadLocalAABB(reader);
                 reader.Align();
 
-                // Field 17: m_MeshUsageFlags (int) [5.0+]
+                // Field 26: m_MeshUsageFlags
                 if (major >= 5)
                 {
                     reader.ReadInt32();
                 }
 
-                // Field 18: m_IndexBuffer (List[int])
+                // Field 27: m_IndexBuffer
                 mesh.IndexBuffer = ReadIndexBuffer(reader);
                 reader.Align();
 
-                // Field 19: m_StreamData (StreamingInfo) - last field
+                // Field 28: m_StreamData
                 mesh.StreamData = ReadStreamingInfo(reader);
 
                 return mesh;
@@ -203,7 +196,6 @@ public static class MeshParser
     private static void ReadBlendShapesArray(EndianBinaryReader reader)
     {
         // m_Shapes array - skip for now (not needed for basic rendering)
-        var pos_before = reader.BaseStream.Position;
         uint count = reader.ReadUInt32();
         // Each shape has Name (string), VertexCount (uint), InfuenceGroups array
         // For now, skip the entire structure
