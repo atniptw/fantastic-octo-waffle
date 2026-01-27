@@ -1,0 +1,42 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  BlazorApp.E2E.Tests -> /workspaces/fantastic-octo-waffle/Tests/BlazorApp.E2E.Tests/bin/Debug/net10.0/BlazorApp.E2E.Tests.dll
+Test run for /workspaces/fantastic-octo-waffle/Tests/BlazorApp.E2E.Tests/bin/Debug/net10.0/BlazorApp.E2E.Tests.dll (.NETCoreApp,Version=v10.0)
+VSTest version 18.0.1 (x64)
+
+Starting test execution, please wait...
+A total of 1 test files matched the specified pattern.
+  UnityAssetParser -> /workspaces/fantastic-octo-waffle/src/UnityAssetParser/bin/Debug/net10.0/UnityAssetParser.dll
+No test matches the given testcase filter `ParseMeshFromCigarNeck` in /workspaces/fantastic-octo-waffle/Tests/BlazorApp.E2E.Tests/bin/Debug/net10.0/BlazorApp.E2E.Tests.dll
+
+  BlazorApp -> /workspaces/fantastic-octo-waffle/src/BlazorApp/bin/Debug/net10.0/BlazorApp.dll
+  BlazorApp (Blazor output) -> /workspaces/fantastic-octo-waffle/src/BlazorApp/bin/Debug/net10.0/wwwroot
+  BlazorApp.Tests -> /workspaces/fantastic-octo-waffle/Tests/BlazorApp.Tests/bin/Debug/net10.0/BlazorApp.Tests.dll
+Test run for /workspaces/fantastic-octo-waffle/Tests/BlazorApp.Tests/bin/Debug/net10.0/BlazorApp.Tests.dll (.NETCoreApp,Version=v10.0)
+VSTest version 18.0.1 (x64)
+
+Starting test execution, please wait...
+A total of 1 test files matched the specified pattern.
+No test matches the given testcase filter `ParseMeshFromCigarNeck` in /workspaces/fantastic-octo-waffle/Tests/BlazorApp.Tests/bin/Debug/net10.0/BlazorApp.Tests.dll
+
+  UnityAssetParser.Tests -> /workspaces/fantastic-octo-waffle/Tests/UnityAssetParser.Tests/bin/Debug/net10.0/UnityAssetParser.Tests.dll
+Test run for /workspaces/fantastic-octo-waffle/Tests/UnityAssetParser.Tests/bin/Debug/net10.0/UnityAssetParser.Tests.dll (.NETCoreApp,Version=v10.0)
+VSTest version 18.0.1 (x64)
+
+Starting test execution, please wait...
+A total of 1 test files matched the specified pattern.
+[xUnit.net 00:00:00.78]     UnityAssetParser.Tests.Services.MeshParserDebugTest.ParseMeshFromCigarNeck_ShouldExtractMeshData [FAIL]
+  Failed UnityAssetParser.Tests.Services.MeshParserDebugTest.ParseMeshFromCigarNeck_ShouldExtractMeshData [149 ms]
+  Error Message:
+   System.IO.EndOfStreamException : Unable to read beyond the end of the stream.
+  Stack Trace:
+     at System.IO.BinaryReader.InternalRead(Span`1 buffer)
+   at System.IO.BinaryReader.ReadUInt32()
+   at UnityAssetParser.Helpers.EndianBinaryReader.ReadUInt32() in /workspaces/fantastic-octo-waffle/src/UnityAssetParser/Helpers/EndianBinaryReader.cs:line 85
+   at UnityAssetParser.Services.MeshParser.ReadBlendShapesArray(EndianBinaryReader reader) in /workspaces/fantastic-octo-waffle/src/UnityAssetParser/Services/MeshParser.cs:line 205
+   at UnityAssetParser.Services.MeshParser.Parse(ReadOnlySpan`1 objectData, ValueTuple`4 version, Boolean isBigEndian, Nullable`1 resSData) in /workspaces/fantastic-octo-waffle/src/UnityAssetParser/Services/MeshParser.cs:line 54
+   at UnityAssetParser.Tests.Services.MeshParserDebugTest.ParseMeshFromCigarNeck_ShouldExtractMeshData() in /workspaces/fantastic-octo-waffle/Tests/UnityAssetParser.Tests/Services/MeshParserDebugTest.cs:line 102
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+
+Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 188 ms - UnityAssetParser.Tests.dll (net10.0)
