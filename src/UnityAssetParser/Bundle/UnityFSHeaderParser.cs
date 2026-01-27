@@ -1,4 +1,3 @@
-using System.Text;
 using UnityAssetParser.Exceptions;
 using UnityAssetParser.Helpers;
 
@@ -10,12 +9,21 @@ namespace UnityAssetParser.Bundle;
 /// </summary>
 public class UnityFSHeaderParser : IUnityFSHeaderParser
 {
-    private const uint CompressionTypeMask = 0x3F;      // Bits 0-5
-    private const uint BlocksInfoAtEndFlag = 0x80;      // Bit 7
-    private const uint NeedsPaddingFlag = 0x200;        // Bit 9
-    // Reserved bits: all bits except 0-5 (compression), 7 (blocks info at end), and 9 (padding)
-    // If future Unity versions define new flags, update this mask accordingly
-    private const uint ReservedBitsMask = ~(CompressionTypeMask | BlocksInfoAtEndFlag | NeedsPaddingFlag);
+    private const uint CompressionTypeMask = 0x3F;                // Bits 0-5
+    private const uint BlocksAndDirectoryInfoCombinedFlag = 0x40; // Bit 6
+    private const uint BlocksInfoAtEndFlag = 0x80;                // Bit 7
+    private const uint OldWebPluginCompatibility = 0x100;         // Bit 8
+    private const uint NeedsPaddingFlag = 0x200;                  // Bit 9
+    private const uint UsesAssetBundleEncryptionOld = 0x400;      // Bit 10 (old)
+    private const uint UsesAssetBundleEncryptionNew = 0x1000;     // Bit 12 (new)
+    // Reserved bits: allow known flags used by Unity / UnityPy
+    private const uint ReservedBitsMask = ~(CompressionTypeMask 
+                                            | BlocksAndDirectoryInfoCombinedFlag 
+                                            | BlocksInfoAtEndFlag 
+                                            | OldWebPluginCompatibility 
+                                            | NeedsPaddingFlag 
+                                            | UsesAssetBundleEncryptionOld 
+                                            | UsesAssetBundleEncryptionNew);
 
     /// <summary>
     /// Parses the UnityFS header from the beginning of a stream.
@@ -36,7 +44,8 @@ public class UnityFSHeaderParser : IUnityFSHeaderParser
 
         try
         {
-            using var reader = new BinaryReader(stream, Encoding.UTF8, leaveOpen: true);
+            // Per UnityPy BundleFile.py and UnityFS-BundleSpec: UnityFS header uses BIG-ENDIAN
+            using var reader = new EndianBinaryReader(stream, isBigEndian: true);
 
             // 1. Read and validate signature
             var signature = reader.ReadUtf8NullTerminated();
@@ -47,30 +56,21 @@ public class UnityFSHeaderParser : IUnityFSHeaderParser
                     signature);
             }
 
-            // 2. Read version (uint32, little-endian)
+            // 2. Read version (uint32, big-endian)
             var version = reader.ReadUInt32();
-            if (version != 6 && version != 7)
-            {
-                throw new UnsupportedVersionException(
-                    $"Version {version} not supported (only 6 and 7)",
-                    version);
-            }
 
             // 3. Read Unity version strings
             var unityVersion = reader.ReadUtf8NullTerminated();
             var unityRevision = reader.ReadUtf8NullTerminated();
 
-            // 4. Read size and BlocksInfo metadata
+            // 4. Read size and BlocksInfo metadata (big-endian)
             var size = reader.ReadInt64();
             var compressedBlocksInfoSize = reader.ReadUInt32();
             var uncompressedBlocksInfoSize = reader.ReadUInt32();
             var flags = reader.ReadUInt32();
 
-            // 5. Record position after flags
+            // 5. Record position after flags (before any post-header alignment)
             var headerEndPosition = stream.Position;
-
-            // 6. Validate flags
-            ValidateFlags(flags, version);
 
             return new UnityFSHeader
             {
@@ -119,7 +119,7 @@ public class UnityFSHeaderParser : IUnityFSHeaderParser
             throw new ArgumentOutOfRangeException(nameof(fileLength), "File length cannot be negative");
         }
 
-        // Apply pre-BlocksInfo alignment
+        // Apply pre-BlocksInfo alignment (UnityPy version-based alignment)
         var alignedPosition = BinaryReaderExtensions.CalculateAlignedPosition(
             header.HeaderEndPosition,
             header.AlignmentSize);
@@ -129,14 +129,10 @@ public class UnityFSHeaderParser : IUnityFSHeaderParser
             ? fileLength - header.CompressedBlocksInfoSize
             : alignedPosition;
 
-        var dataOffset = header.BlocksInfoAtEnd
-            ? alignedPosition
-            : alignedPosition + header.CompressedBlocksInfoSize;
-
         return new BlocksInfoLocation
         {
             BlocksInfoPosition = blocksInfoPosition,
-            DataOffset = dataOffset,
+            AlignedHeaderPosition = alignedPosition,
             AlignmentPadding = alignmentPadding
         };
     }
@@ -149,24 +145,6 @@ public class UnityFSHeaderParser : IUnityFSHeaderParser
     /// <exception cref="HeaderParseException">Thrown if flags are invalid.</exception>
     private static void ValidateFlags(uint flags, uint version)
     {
-        // Validate compression type
-        var compressionType = flags & CompressionTypeMask;
-        if (compressionType > 4)
-        {
-            throw new HeaderParseException($"Invalid compression type: {compressionType}");
-        }
-
-        // Check reserved bits (should be zero)
-        if ((flags & ReservedBitsMask) != 0)
-        {
-            throw new HeaderParseException($"Reserved flag bits are set: 0x{flags:X8}");
-        }
-
-        // Padding flag only valid for v7+
-        if (version < 7 && (flags & NeedsPaddingFlag) != 0)
-        {
-            throw new HeaderParseException(
-                $"Padding flag (bit 9) set for version {version} (only valid for v7+)");
-        }
+        // UnityPy does not enforce reserved/padding flag validation; no-op here to mirror behavior.
     }
 }

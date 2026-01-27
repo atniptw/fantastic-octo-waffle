@@ -291,8 +291,8 @@ public class BundleFileIntegrationTests
         using var blocksInfo = new MemoryStream();
         using var blocksInfoWriter = new BinaryWriter(blocksInfo);
 
-        // Hash placeholder (20 bytes, will calculate later)
-        blocksInfoWriter.Write(new byte[20]);
+        // Hash128 (16 bytes, zeroed per UnityPy - not verified)
+        blocksInfoWriter.Write(new byte[16]);
 
         // Block count: 1
         blocksInfoWriter.Write((int)1);
@@ -318,18 +318,8 @@ public class BundleFileIntegrationTests
         blocksInfoWriter.Write(Encoding.UTF8.GetBytes("CAB-test"));
         blocksInfoWriter.Write((byte)0);
 
-        // Calculate SHA1 hash of everything after the hash field
+        // Write BlocksInfo to bundle (hash verification skipped per UnityPy)
         byte[] blocksInfoBytes = blocksInfo.ToArray();
-        byte[] payloadForHash = new byte[blocksInfoBytes.Length - 20];
-        Array.Copy(blocksInfoBytes, 20, payloadForHash, 0, payloadForHash.Length);
-        
-        using (var sha1 = System.Security.Cryptography.SHA1.Create())
-        {
-            byte[] hash = sha1.ComputeHash(payloadForHash);
-            Array.Copy(hash, 0, blocksInfoBytes, 0, 20);
-        }
-
-        // Write BlocksInfo to bundle
         writer.Write(blocksInfoBytes);
         long blocksInfoEnd = bundle.Position;
 
@@ -391,8 +381,8 @@ public class BundleFileIntegrationTests
         var blocksInfo = new MemoryStream();
         var blocksInfoWriter = new BinaryWriter(blocksInfo);
 
-        // Reserve space for hash (20 bytes) - will fill after computing payload hash
-        blocksInfoWriter.Write(new byte[20]);
+        // Hash128 (16 bytes, zeroed per UnityPy - not verified)
+        blocksInfoWriter.Write(new byte[16]);
 
         // Block count: 1
         blocksInfoWriter.Write((int)1);
@@ -417,16 +407,8 @@ public class BundleFileIntegrationTests
         blocksInfoWriter.Write((int)0);
         blocksInfoWriter.Write(Encoding.UTF8.GetBytes("CAB-test\0"));
 
-        // Compute and write hash
+        // Write BlocksInfo (hash verification skipped per UnityPy)
         byte[] blocksInfoBytes = blocksInfo.ToArray();
-        byte[] payloadForHash = new byte[blocksInfoBytes.Length - 20];
-        Array.Copy(blocksInfoBytes, 20, payloadForHash, 0, payloadForHash.Length);
-        using (var sha1 = System.Security.Cryptography.SHA1.Create())
-        {
-            byte[] hash = sha1.ComputeHash(payloadForHash);
-            Array.Copy(hash, 0, blocksInfoBytes, 0, 20);
-        }
-
         writer.Write(blocksInfoBytes);
         long blocksInfoEnd = bundle.Position;
 
@@ -486,8 +468,8 @@ public class BundleFileIntegrationTests
         var blocksInfo = new MemoryStream();
         var blocksInfoWriter = new BinaryWriter(blocksInfo);
 
-        // Reserve space for hash (20 bytes)
-        blocksInfoWriter.Write(new byte[20]);
+        // Hash128 (16 bytes, zeroed per UnityPy - not verified)
+        blocksInfoWriter.Write(new byte[16]);
 
         // Block count: 1
         blocksInfoWriter.Write((int)1);
@@ -512,16 +494,8 @@ public class BundleFileIntegrationTests
         blocksInfoWriter.Write((int)0);
         blocksInfoWriter.Write(Encoding.UTF8.GetBytes("CAB-test\0"));
 
-        // Compute and write hash
+        // Write BlocksInfo (hash verification skipped per UnityPy)
         byte[] blocksInfoBytes = blocksInfo.ToArray();
-        byte[] payloadForHash = new byte[blocksInfoBytes.Length - 20];
-        Array.Copy(blocksInfoBytes, 20, payloadForHash, 0, payloadForHash.Length);
-        using (var sha1 = System.Security.Cryptography.SHA1.Create())
-        {
-            byte[] hash = sha1.ComputeHash(payloadForHash);
-            Array.Copy(hash, 0, blocksInfoBytes, 0, 20);
-        }
-
         writer.Write(blocksInfoBytes);
         long blocksInfoEnd = bundle.Position;
 

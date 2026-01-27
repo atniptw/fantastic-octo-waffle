@@ -125,9 +125,7 @@ public static class RenderableDetector
         // Step 3: Skip type tree
         SkipTypeTree(endianReader, header.Version, enableTypeTree);
 
-        // Step 4: Align and scan object table
-        endianReader.Align(4);
-
+        // Step 4: Scan object table (no align before count)
         int objectCount = endianReader.ReadInt32();
 
         // Scan object table

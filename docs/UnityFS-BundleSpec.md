@@ -12,7 +12,7 @@ This document defines the normative on-disk format of UnityFS bundle files used 
 ## 3. Terms and Conventions
 - **MUST/SHALL** indicate absolute requirements.
 - **SHOULD** indicates a recommended action that MAY be waived with justification.
-- All integers are little-endian unless explicitly stated.
+- UnityPy reads bundle headers and BlocksInfo tables using a big-endian reader by default; this spec follows that default unless explicitly stated otherwise (e.g., LZMA property fields called out as little-endian).
 - Offsets are relative to `data_offset` unless stated otherwise.
 
 ## 4. Container Layout
@@ -23,7 +23,7 @@ The UnityFS file SHALL comprise, in order:
 4. Node payloads located within the data blocks, addressed relative to `data_offset`
 
 ## 5. Header Fields
-Binary order in file (all fields little-endian unless noted):
+Binary order in file (all fields big-endian, matching UnityPy’s default reader, unless noted):
 1. `Signature`: null-terminated ASCII string. Valid value for this spec: `UnityFS`.
 2. `Version`: uint32 (commonly 6 or 7).
 3. `UnityVersion`: null-terminated ASCII string.
@@ -53,7 +53,7 @@ Binary order in file (all fields little-endian unless noted):
 ## 7. BlocksInfo Payload Layout
 BlocksInfo is a binary blob of length `CompressedBlocksInfoSize` (compressed) and `UncompressedBlocksInfoSize` (after decompression). Its internal layout SHALL be exactly:
 
-1. `uncompressedDataHash`: 20 bytes (SHA1). This is the hash of the **uncompressed BlocksInfo payload that follows these 20 bytes**. If only 16 bytes are present, the blob is nonconformant unless a documented compatibility mode is used.
+1. `uncompressedDataHash`: 16 bytes (`Hash128`). UnityPy reads and preserves these bytes but does not verify them. Implementations following this spec SHALL read/preserve the 16-byte hash and MAY perform optional verification if an external reference hash is provided; no hash check is required by default.
 2. `blockCount`: int32.
 3. `StorageBlock[blockCount]` table, each entry:
   - `uncompressedSize`: uint32
@@ -122,8 +122,8 @@ Let:
 ## 13. Path Encoding
 Node `path` strings SHALL be read as null-terminated UTF-8, preserving bytes exactly as emitted. Implementations MUST NOT trim or re-encode.
 
-## 14. Hash Verification
-Implementations SHALL compute SHA1 over the uncompressed BlocksInfo payload and SHALL compare it to `uncompressedDataHash`. A mismatch SHALL cause a validation failure. A test-only opt-out MAY be provided but MUST default to verification enabled.
+## 14. Hash Handling
+UnityPy does not verify the BlocksInfo hash; it reads and ignores the 16-byte `Hash128`. This spec aligns with UnityPy: implementations SHALL read and preserve the 16-byte hash but SHALL NOT fail on mismatch because no verification is performed by default. An implementation MAY offer an opt-in verification mode (e.g., compute SHA1 or compare against an externally supplied hash) provided it is disabled by default.
 
 ## 15. Implementation Algorithms (Normative)
 
@@ -154,13 +154,13 @@ function parse_header(stream):
     if header.signature != "UnityFS":
         throw InvalidSignature
     
-    header.version = read_uint32_le(stream)
+    header.version = read_uint32_be(stream)
     header.unity_version = read_string_to_null(stream)
     header.unity_revision = read_string_to_null(stream)
-    header.size = read_int64_le(stream)
-    header.compressed_blocks_info_size = read_uint32_le(stream)
-    header.uncompressed_blocks_info_size = read_uint32_le(stream)
-    header.flags = read_uint32_le(stream)
+    header.size = read_int64_be(stream)
+    header.compressed_blocks_info_size = read_uint32_be(stream)
+    header.uncompressed_blocks_info_size = read_uint32_be(stream)
+    header.flags = read_uint32_be(stream)
     
     header_end = stream.position
     return (header, header_end)
@@ -215,39 +215,42 @@ function read_blocks_info(stream, header, header_end):
 function parse_blocks_info(blocks_info_data):
     reader = BinaryReader(blocks_info_data)
     
-    // Hash (20 bytes)
-    uncompressed_data_hash = reader.read(20)
+    // Hash (16 bytes, preserved only)
+    uncompressed_data_hash = reader.read(16)
     
     // Storage blocks
-    block_count = reader.read_int32_le()
+    block_count = reader.read_int32_be()
     storage_blocks = []
     for i in 0..block_count-1:
-        block.uncompressed_size = reader.read_uint32_le()
-        block.compressed_size = reader.read_uint32_le()
-        block.flags = reader.read_uint16_le()
+        block.uncompressed_size = reader.read_uint32_be()
+        block.compressed_size = reader.read_uint32_be()
+        block.flags = reader.read_uint16_be()
         storage_blocks.append(block)
     
     // Align after block table
     reader.position = align(reader.position, 4)
     
     // Nodes
-    node_count = reader.read_int32_le()
+    node_count = reader.read_int32_be()
     nodes = []
     for i in 0..node_count-1:
-        node.offset = reader.read_int64_le()
-        node.size = reader.read_int64_le()
-        node.flags = reader.read_int32_le()
+        node.offset = reader.read_int64_be()
+        node.size = reader.read_int64_be()
+        node.flags = reader.read_int32_be()
         node.path = read_string_to_null(reader)
         nodes.append(node)
     
     return (uncompressed_data_hash, storage_blocks, nodes)
 ```
 
-### 15.6 Hash Verification
+### 15.6 Hash Handling (optional)
 ```
-function verify_blocks_info_hash(blocks_info_data, expected_hash):
-    // Hash is computed over bytes 20..end (excluding the hash itself)
-    payload = blocks_info_data[20:]
+function optionally_verify_blocks_info_hash(blocks_info_data, expected_hash):
+    // Not performed by default (UnityPy behavior). If enabled and expected_hash provided, compute SHA1 over bytes[16:].
+    if expected_hash is None:
+        return  // nothing to compare
+
+    payload = blocks_info_data[16:]
     computed_hash = sha1(payload)
     if computed_hash != expected_hash:
         throw HashMismatch
@@ -410,12 +413,12 @@ State: BLOCKS_INFO_COMPRESSED_READ
   │   - If size mismatch → ERROR (DecompressionSizeMismatch)
   │
 State: BLOCKS_INFO_DECOMPRESSED
-  │
-  ├─→ Verify hash (Section 15.6)
-  │   - Compute SHA1 of bytes [20:] (excluding hash itself)
-  │   - If mismatch → ERROR (HashMismatch) [or WARN if verification disabled]
-  │
-State: HASH_VERIFIED
+    │
+    ├─→ Optionally verify hash (Section 15.6)
+    │   - Default: skip (UnityPy behavior); if enabled, compute SHA1 of bytes [16:] and compare to provided reference
+    │   - On mismatch (when enabled) → ERROR (HashMismatch)
+    │
+State: HASH_HANDLED
   │
   ├─→ Parse BlocksInfo payload (Section 15.5)
   │   - Extract storage blocks table
@@ -556,9 +559,9 @@ namespace UnityAssetParser.Bundle
 - API: `K4os.Compression.LZ4.LZ4Codec.Decode(byte[] source, byte[] target)`
 - Alternative: `DamienG.Security.Cryptography` (older, less frequent updates)
 
-**SHA1:**
-- Use: `System.Security.Cryptography.SHA1` (.NET Framework/Core built-in)
-- API: `SHA1.Create().ComputeHash(byte[])`
+**Hash128 handling:**
+- Default behavior: read/preserve 16-byte hash; no verification required (UnityPy behavior).
+- Optional verification (if enabled): `System.Security.Cryptography.SHA1` (`SHA1.Create().ComputeHash(byte[])`) over `blocks_info_data[16:]` compared to an externally supplied reference.
 
 ### 16.3 Concrete Test Case (Hex Dump)
 
@@ -576,7 +579,7 @@ Header:
   Flags: 0x00 (no compression, embedded BlocksInfo)
 
 BlocksInfo (offset 0x?? after strings, 256 bytes):
-  uncompressedDataHash: [20 bytes SHA1]
+    uncompressedDataHash: [16 bytes Hash128]
   blockCount: 1 (0x01 0x00 0x00 0x00)
   StorageBlock[0]:
     uncompressedSize: 0x900 (0x00 0x09 0x00 0x00)
@@ -661,7 +664,7 @@ Implementations SHALL be validated against fixtures covering at minimum:
 - Valid, LZ4/LZ4HC-compressed BlocksInfo.
 - Multi-node bundles including external `.resS`.
 - Wrong magic/signature.
-- Hash mismatch case.
+- Hash mismatch case (only relevant if optional verification is enabled).
 - Truncated BlocksInfo (early EOF).
 - Unsupported compression flag (e.g., `0x04`).
 - Alignment sanity: parsed offsets match UnityPy JSON output for Header + Nodes.
@@ -672,13 +675,13 @@ Implementations SHALL be validated against fixtures covering at minimum:
 19.3 The JSON outputs SHALL match exactly (all integral and string fields). Any divergence SHALL be treated as non-conformant.
 
 ## 20. Porting Checklist (Normative)
-- [ ] Header read order and little-endian interpretation match UnityPy.
+- [ ] Header read order and big-endian interpretation match UnityPy.
 - [ ] 4-byte alignment applied exactly where UnityPy aligns.
 - [ ] Compression flag mapping (`Flags & 0x3F`, `Flags & 0x80`) implemented with rejection of unsupported values.
 - [ ] Raw LZMA decoder used with props/dict size; raw LZ4 block decoder used with expected size.
 - [ ] `data_offset` computed identically to UnityPy for both embedded and streamed BlocksInfo.
 - [ ] Node paths read as null-terminated UTF-8.
-- [ ] SHA1 check on uncompressed BlocksInfo enforced by default.
+- [ ] Hash128 read/preserve behavior matches UnityPy (no default verification; optional SHA1 check is opt-in).
 - [ ] Explicit exceptions raised for all error conditions in Section 17.
 - [ ] JSON parity with UnityPy confirmed for all fixtures in Section 18.
 

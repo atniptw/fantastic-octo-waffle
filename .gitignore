@@ -110,3 +110,5 @@ PublishProfiles/
 *.user
 *.userosscache
 *.sln.docstates
+
+.playwright-mcp

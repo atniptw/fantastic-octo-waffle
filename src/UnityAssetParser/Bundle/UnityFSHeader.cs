@@ -75,7 +75,10 @@ public sealed class UnityFSHeader
 
     /// <summary>
     /// Required alignment size in bytes for BlocksInfo positioning.
-    /// Returns 16 for version 7+ with padding flag set, otherwise 4.
+    /// UnityPy aligns to 16 bytes for bundle version >= 7 regardless of the padding flag.
+    /// For older versions, default to 4-byte alignment.
     /// </summary>
-    public int AlignmentSize => Version >= 7 && NeedsPaddingAtStart ? 16 : 4;
+    public int AlignmentSize => Version >= 7 ? 16 : 4;
+
+    public bool NeedsPaddingAtStartFlagSet => (Flags & 0x200) != 0;
 }

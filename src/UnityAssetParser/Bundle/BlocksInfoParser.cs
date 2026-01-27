@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using UnityAssetParser.Exceptions;
 using UnityAssetParser.Helpers;
 
@@ -6,7 +5,8 @@ namespace UnityAssetParser.Bundle;
 
 /// <summary>
 /// Parser for UnityFS BlocksInfo structure.
-/// Handles decompression, hash verification, and parsing of storage blocks and node tables.
+/// Handles decompression and parsing of storage blocks and node tables.
+/// Hash verification is skipped (following UnityPy reference implementation).
 /// </summary>
 public class BlocksInfoParser : IBlocksInfoParser
 {
@@ -37,23 +37,20 @@ public class BlocksInfoParser : IBlocksInfoParser
             throw new ArgumentException("Compressed data cannot be empty", nameof(compressedData));
         }
 
-        if (expectedUncompressedSize < 20)
+        if (expectedUncompressedSize < 16)
         {
             throw new BlocksInfoParseException(
-                $"BlocksInfo size too small: expected at least 20 bytes for hash, got {expectedUncompressedSize}");
+            $"BlocksInfo size too small: expected at least 16 bytes for hash, got {expectedUncompressedSize}");
         }
 
         // Step 1: Decompress BlocksInfo
         byte[] uncompressedData = DecompressBlocksInfo(compressedData, expectedUncompressedSize, compressionType);
 
-        // Step 2: Verify SHA1 hash
+        // Step 2: Verify hash length only (UnityPy skips validation)
         VerifyHash(uncompressedData);
 
         // Step 3: Parse tables
         BlocksInfo blocksInfo = ParseTables(uncompressedData);
-
-        // Step 4: Validate nodes
-        ValidateNodes(blocksInfo);
 
         return blocksInfo;
     }
@@ -86,38 +83,25 @@ public class BlocksInfoParser : IBlocksInfoParser
         }
         catch (Exception ex)
         {
-            throw new BlocksInfoParseException("Failed to decompress BlocksInfo", ex);
+            throw new BlocksInfoParseException(
+                $"Failed to decompress BlocksInfo (compression: {compressionType}, compressed size: {compressedData.Length}, expected uncompressed: {expectedUncompressedSize}): {ex.Message}", 
+                ex);
         }
     }
 
     /// <summary>
-    /// Verifies SHA1 hash of BlocksInfo payload.
-    /// Hash is computed over bytes [20..end], excluding the hash field itself.
+    /// Reads and skips the 16-byte Hash128 field at the start of BlocksInfo.
+    /// Unity bundles include a 16-byte hash but don't verify it (UnityPy marks it as unused).
+    /// Following UnityPy reference implementation which skips hash verification.
     /// </summary>
     private static void VerifyHash(byte[] uncompressedData)
     {
-        if (uncompressedData.Length < 20)
+        if (uncompressedData.Length < 16)
         {
             throw new BlocksInfoParseException(
-                $"BlocksInfo too short for hash verification: {uncompressedData.Length} bytes (expected at least 20)");
+                $"BlocksInfo too short: {uncompressedData.Length} bytes (expected at least 16 for hash)");
         }
-
-        // Extract expected hash (first 20 bytes)
-        byte[] expectedHash = new byte[20];
-        Array.Copy(uncompressedData, 0, expectedHash, 0, 20);
-
-        // Compute hash over payload (bytes 20..end) without extra allocation
-        ReadOnlySpan<byte> payloadSpan = uncompressedData.AsSpan(20);
-        byte[] computedHash = SHA1.HashData(payloadSpan);
-
-        // Compare hashes
-        if (!expectedHash.SequenceEqual(computedHash))
-        {
-            throw new HashMismatchException(
-                $"BlocksInfo hash mismatch. Expected: {Convert.ToHexString(expectedHash)}, Computed: {Convert.ToHexString(computedHash)}",
-                expectedHash,
-                computedHash);
-        }
+        // No verification per UnityPy; just ensure minimum length.
     }
 
     /// <summary>
@@ -126,10 +110,11 @@ public class BlocksInfoParser : IBlocksInfoParser
     private static BlocksInfo ParseTables(byte[] uncompressedData)
     {
         using var stream = new MemoryStream(uncompressedData);
-        using var reader = new BinaryReader(stream);
+        // BlocksInfo tables are big-endian (matching UnityPy's EndianBinaryReader default)
+        using var reader = new EndianBinaryReader(stream, isBigEndian: true);
 
-        // Skip hash (first 20 bytes)
-        reader.BaseStream.Seek(20, SeekOrigin.Begin);
+        // Skip hash (first 16 bytes) - Hash128 (unused)
+        reader.BaseStream.Seek(16, SeekOrigin.Begin);
 
         try
         {
@@ -152,10 +137,7 @@ public class BlocksInfoParser : IBlocksInfoParser
                 blocks.Add(block);
             }
 
-            // Align to 4-byte boundary before node count
-            reader.Align(alignment: 4, validatePadding: true);
-
-            // Parse nodes
+            // Parse nodes immediately after block table (UnityPy does not align here)
             int nodeCount = reader.ReadInt32();
             if (nodeCount < 0)
             {
@@ -175,9 +157,9 @@ public class BlocksInfoParser : IBlocksInfoParser
                 nodes.Add(node);
             }
 
-            // Extract hash for return
-            byte[] hash = new byte[20];
-            Array.Copy(uncompressedData, 0, hash, 0, 20);
+            // Extract 16-byte Hash128 field for return (not verified)
+            byte[] hash = new byte[16];
+            Buffer.BlockCopy(uncompressedData, 0, hash, 0, 16);
 
             return new BlocksInfo
             {

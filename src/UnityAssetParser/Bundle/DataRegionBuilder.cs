@@ -66,13 +66,6 @@ public sealed class DataRegionBuilder
         {
             var block = blocks[i];
 
-            // Validate block flags - reject non-zero reserved bits (bits 7-15)
-            if ((block.Flags & 0xFF80) != 0)
-            {
-                throw new BlockFlagsException(
-                    $"Block {i} has non-zero reserved flag bits: 0x{block.Flags:X4} (reserved bits: 0x{block.Flags & 0xFF80:X4})");
-            }
-
             // Validate and convert CompressedSize to int
             if (block.CompressedSize > int.MaxValue)
             {

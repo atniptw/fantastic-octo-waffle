@@ -49,41 +49,8 @@ public class BundleFileErrorTests
         Assert.Throws<UnsupportedVersionException>(() => BundleFile.Parse(stream));
     }
 
-    /// <summary>
-    /// Tests that Parse throws HashMismatchException when BlocksInfo hash is corrupted.
-    /// </summary>
-    [Fact]
-    public void Parse_CorruptedHash_ThrowsHashMismatchException()
-    {
-        // Arrange: Create bundle with intentionally wrong hash
-        var bundleBytes = CreateBundleWithCorruptedHash();
-        using var stream = new MemoryStream(bundleBytes);
-
-        // Act & Assert
-        var ex = Assert.Throws<HashMismatchException>(() => BundleFile.Parse(stream));
-        Assert.NotNull(ex.ExpectedHash);
-        Assert.NotNull(ex.ComputedHash);
-    }
-
-    /// <summary>
-    /// Tests that TryParse collects hash mismatch error.
-    /// </summary>
-    [Fact]
-    public void TryParse_CorruptedHash_ReturnsErrorWithHashInfo()
-    {
-        // Arrange
-        var bundleBytes = CreateBundleWithCorruptedHash();
-        using var stream = new MemoryStream(bundleBytes);
-
-        // Act
-        var result = BundleFile.TryParse(stream);
-
-        // Assert
-        Assert.False(result.Success);
-        Assert.Null(result.Bundle);
-        Assert.NotEmpty(result.Errors);
-        Assert.Contains("Hash mismatch", result.Errors[0]);
-    }
+    // Note: Hash verification tests removed - UnityPy skips hash verification
+    // The 16-byte Hash128 is read but never verified (marked # noqa: F841 in UnityPy)
 
     /// <summary>
     /// Tests that Parse throws exception for truncated stream.
@@ -224,32 +191,6 @@ public class BundleFileErrorTests
     }
 
     /// <summary>
-    /// Creates a bundle with an intentionally corrupted hash.
-    /// </summary>
-    private static byte[] CreateBundleWithCorruptedHash()
-    {
-        var bundleBytes = CreateMinimalValidBundle();
-        
-        // Find BlocksInfo hash and corrupt it
-        // For V6 embedded layout:
-        // - Header ends at position ~60 (signature + version + strings + sizes + flags)
-        // - After 4-byte alignment, BlocksInfo starts
-        // - First 20 bytes of BlocksInfo are the hash
-        // Calculate the actual hash position dynamically
-        int estimatedHeaderSize = 60; // Approximate, actual position found through trial
-        // Align to 4 bytes
-        while (estimatedHeaderSize % 4 != 0)
-        {
-            estimatedHeaderSize++;
-        }
-        
-        // Corrupt first byte of hash at estimated BlocksInfo start
-        bundleBytes[estimatedHeaderSize] ^= 0xFF; // XOR to corrupt
-        
-        return bundleBytes;
-    }
-
-    /// <summary>
     /// Creates a bundle with duplicate node paths.
     /// </summary>
     private static byte[] CreateBundleWithDuplicateNodes()
@@ -264,8 +205,8 @@ public class BundleFileErrorTests
         using var blocksInfo = new MemoryStream();
         using var biWriter = new BinaryWriter(blocksInfo);
 
-        // Hash placeholder
-        biWriter.Write(new byte[20]);
+        // Hash128 (16 bytes, zeroed per UnityPy - not verified)
+        biWriter.Write(new byte[16]);
 
         // 1 storage block
         biWriter.Write((int)1);
@@ -292,7 +233,8 @@ public class BundleFileErrorTests
         biWriter.Write(Encoding.UTF8.GetBytes("CAB-same"));
         biWriter.Write((byte)0);
 
-        byte[] biBytes = ComputeHashAndFinalize(blocksInfo);
+        // Write BlocksInfo (hash verification skipped per UnityPy)
+        byte[] biBytes = blocksInfo.ToArray();
         writer.Write(biBytes);
         long blocksInfoEnd = bundle.Position;
 
@@ -318,7 +260,8 @@ public class BundleFileErrorTests
         using var blocksInfo = new MemoryStream();
         using var biWriter = new BinaryWriter(blocksInfo);
 
-        biWriter.Write(new byte[20]);
+        // Hash128 (16 bytes, zeroed per UnityPy - not verified)
+        biWriter.Write(new byte[16]);
 
         // 1 storage block (16 bytes total)
         biWriter.Write((int)1);
@@ -336,7 +279,8 @@ public class BundleFileErrorTests
         biWriter.Write(Encoding.UTF8.GetBytes("CAB-oob"));
         biWriter.Write((byte)0);
 
-        byte[] biBytes = ComputeHashAndFinalize(blocksInfo);
+        // Write BlocksInfo (hash verification skipped per UnityPy)
+        byte[] biBytes = blocksInfo.ToArray();
         writer.Write(biBytes);
         long blocksInfoEnd = bundle.Position;
 
@@ -361,7 +305,8 @@ public class BundleFileErrorTests
         using var blocksInfo = new MemoryStream();
         using var biWriter = new BinaryWriter(blocksInfo);
 
-        biWriter.Write(new byte[20]);
+        // Hash128 (16 bytes, zeroed per UnityPy - not verified)
+        biWriter.Write(new byte[16]);
 
         biWriter.Write((int)1);
         biWriter.Write((uint)32);
@@ -387,7 +332,8 @@ public class BundleFileErrorTests
         biWriter.Write(Encoding.UTF8.GetBytes("CAB-second"));
         biWriter.Write((byte)0);
 
-        byte[] biBytes = ComputeHashAndFinalize(blocksInfo);
+        // Write BlocksInfo (hash verification skipped per UnityPy)
+        byte[] biBytes = blocksInfo.ToArray();
         writer.Write(biBytes);
         long blocksInfoEnd = bundle.Position;
 
@@ -412,7 +358,8 @@ public class BundleFileErrorTests
         using var blocksInfo = new MemoryStream();
         using var biWriter = new BinaryWriter(blocksInfo);
 
-        biWriter.Write(new byte[20]);
+        // Hash128 (16 bytes, zeroed per UnityPy - not verified)
+        biWriter.Write(new byte[16]);
 
         biWriter.Write((int)1);
         biWriter.Write((uint)16);
@@ -424,7 +371,8 @@ public class BundleFileErrorTests
         // 0 nodes
         biWriter.Write((int)0);
 
-        byte[] biBytes = ComputeHashAndFinalize(blocksInfo);
+        // Write BlocksInfo (hash verification skipped per UnityPy)
+        byte[] biBytes = blocksInfo.ToArray();
         writer.Write(biBytes);
         long blocksInfoEnd = bundle.Position;
 
@@ -446,7 +394,8 @@ public class BundleFileErrorTests
         using var blocksInfo = new MemoryStream();
         using var biWriter = new BinaryWriter(blocksInfo);
 
-        biWriter.Write(new byte[20]);
+        // Hash128 (16 bytes, zeroed per UnityPy - not verified)
+        biWriter.Write(new byte[16]);
         biWriter.Write((int)1);
         biWriter.Write((uint)16);
         biWriter.Write((uint)16);
@@ -459,7 +408,8 @@ public class BundleFileErrorTests
         biWriter.Write(Encoding.UTF8.GetBytes("CAB-test"));
         biWriter.Write((byte)0);
 
-        byte[] biBytes = ComputeHashAndFinalize(blocksInfo);
+        // Write BlocksInfo (hash verification skipped per UnityPy)
+        byte[] biBytes = blocksInfo.ToArray();
         writer.Write(biBytes);
         long blocksInfoEnd = bundle.Position;
 
@@ -493,21 +443,6 @@ public class BundleFileErrorTests
         {
             writer.Write((byte)0);
         }
-    }
-
-    private static byte[] ComputeHashAndFinalize(MemoryStream blocksInfo)
-    {
-        byte[] biBytes = blocksInfo.ToArray();
-        byte[] payload = new byte[biBytes.Length - 20];
-        Array.Copy(biBytes, 20, payload, 0, payload.Length);
-        
-        using (var sha1 = System.Security.Cryptography.SHA1.Create())
-        {
-            byte[] hash = sha1.ComputeHash(payload);
-            Array.Copy(hash, 0, biBytes, 0, 20);
-        }
-        
-        return biBytes;
     }
 
     private static void FixupHeader(MemoryStream bundle, BinaryWriter writer, long sizePos, long compSizePos, long uncompSizePos, long blocksInfoStart, long blocksInfoEnd)

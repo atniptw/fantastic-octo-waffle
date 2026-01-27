@@ -10,9 +10,6 @@ namespace UnityAssetParser.Helpers;
 /// </summary>
 public class Decompressor : IDecompressor
 {
-    private const int MaxCompressedSize = 512 * 1024 * 1024; // 512 MB
-    private const int MaxUncompressedSize = int.MaxValue; // 2 GB (int.MaxValue)
-
     /// <summary>
     /// Decompresses data using the specified compression method.
     /// </summary>
@@ -30,17 +27,6 @@ public class Decompressor : IDecompressor
         if (uncompressedSize < 0)
         {
             throw new ArgumentOutOfRangeException(nameof(uncompressedSize), "Uncompressed size cannot be negative");
-        }
-
-        // Validate size limits
-        if (compressedData.Length > MaxCompressedSize)
-        {
-            throw new CompressionException($"Compressed data size ({compressedData.Length} bytes) exceeds maximum allowed size ({MaxCompressedSize} bytes)");
-        }
-
-        if (uncompressedSize > MaxUncompressedSize)
-        {
-            throw new CompressionException($"Uncompressed size ({uncompressedSize} bytes) exceeds maximum allowed size ({MaxUncompressedSize} bytes)");
         }
 
         return compressionType switch
@@ -70,7 +56,8 @@ public class Decompressor : IDecompressor
     /// <summary>
     /// Decompresses LZMA-compressed data.
     /// Unity LZMA format: 1 byte properties + 4 bytes dictionary size (little-endian) + compressed payload.
-    /// The uncompressed size is provided separately as a parameter.
+    /// The uncompressed size is provided separately as a parameter, NOT encoded in the stream.
+    /// Unity uses raw LZMA format without the 8-byte uncompressed size header.
     /// </summary>
     private static byte[] DecompressLZMA(byte[] compressedData, int expectedSize)
     {
@@ -82,46 +69,17 @@ public class Decompressor : IDecompressor
         try
         {
             // Unity LZMA format: 5-byte header (1 byte props + 4 bytes dict size)
+            // SharpCompress expects this exact format, so we can use the first 5 bytes as-is
             byte[] properties = new byte[5];
             Array.Copy(compressedData, 0, properties, 0, 5);
-
-            // Validate LZMA properties byte
-            // UnityFS spec: props = (lc + lp * 9) * 5 + pb
-            // Therefore: pb = props % 5, lp = (props / 5) % 9, lc = props / 45
-            byte propsByte = properties[0];
-            int pb = propsByte % 5;
-            int lp = (propsByte / 5) % 9;
-            int lc = propsByte / 45;
-
-            // Validate LZMA properties are within spec ranges
-            // lc: [0..8], lp: [0..4], pb: [0..4]
-            // The critical validation is lc + lp <= 4 per LZMA spec
-            if (lc + lp > 4)
-            {
-                throw new LzmaDecompressionException(
-                    $"Invalid LZMA properties: lc ({lc}) + lp ({lp}) must be <= 4");
-            }
-
-            // pb is validated implicitly by the modulo operation (always 0-4)
-            // Kept for documentation and potential future validation
-
-            // Extract dictionary size (bytes 1-4, little-endian)
-            // Unity bundles are always little-endian, so no endianness conversion needed
-            uint dictionarySize = BitConverter.ToUInt32(properties, 1);
-
-            // Validate dictionary size (must not exceed 512 MB)
-            if (dictionarySize > 512 * 1024 * 1024)
-            {
-                throw new LzmaDecompressionException(
-                    $"LZMA dictionary size ({dictionarySize} bytes) exceeds maximum (536870912 bytes)");
-            }
 
             // Create input stream with compressed payload (skip 5-byte header)
             using var inputStream = new MemoryStream(compressedData, 5, compressedData.Length - 5);
             using var outputStream = new MemoryStream(expectedSize);
 
             // Decompress using SharpCompress
-            using var decoder = new LzmaStream(properties, inputStream, expectedSize);
+            // Pass -1 for decompressedSize since Unity doesn't encode it in the stream
+            using var decoder = new LzmaStream(properties, inputStream, -1);
             decoder.CopyTo(outputStream);
 
             byte[] result = outputStream.ToArray();

@@ -80,6 +80,9 @@
     {
         try
         {
+            // URL-decode the filename parameter (handles nested paths like "plugins/MoreHead/...")
+            var decodedFileName = Uri.UnescapeDataString(FileName);
+            
             // Step 1: Retrieve mod state
             _loadingMessage = "Loading mod data...";
             var state = await StateService.GetCurrentModAsync();
@@ -93,18 +96,18 @@
 
             // Step 2: Find the requested file in the index
             var fileItem = state.FileIndex.FirstOrDefault(f => 
-                f.FileName.Equals(FileName, StringComparison.OrdinalIgnoreCase));
+                f.FileName.Equals(decodedFileName, StringComparison.OrdinalIgnoreCase));
             
             if (fileItem == null)
             {
-                _error = $"File '{FileName}' not found in mod archive.";
+                _error = $"File '{decodedFileName}' not found in mod archive.";
                 _loading = false;
                 return;
             }
 
             if (!fileItem.Renderable)
             {
-                _error = $"File '{FileName}' does not contain renderable 3D geometry.";
+                _error = $"File '{decodedFileName}' does not contain renderable 3D geometry.";
                 _loading = false;
                 return;
             }

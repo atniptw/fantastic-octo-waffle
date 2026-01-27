@@ -20,10 +20,10 @@ public class ZipIndexer : IZipIndexer
     private const int HeaderBufferSize = 256;
 
     /// <summary>
-    /// Maximum file size to process for renderable detection (10 MB).
-    /// Larger files are skipped to avoid memory issues.
+    /// Maximum file size to process for renderable detection (2 MB).
+    /// Larger files are skipped to avoid memory issues in WebAssembly.
     /// </summary>
-    private const int MaxRenderableDetectionSize = 10 * 1024 * 1024;
+    private const int MaxRenderableDetectionSize = 2 * 1024 * 1024;
 
     public ZipIndexer(ILogger<ZipIndexer>? logger = null)
     {
@@ -76,6 +76,8 @@ public class ZipIndexer : IZipIndexer
         using var ms = new MemoryStream(buffer);
         using var archive = new ZipArchive(ms, ZipArchiveMode.Read);
 
+        _logger?.LogInformation("Starting ZIP indexing, found {EntryCount} entries", archive.Entries.Count);
+
         foreach (var entry in archive.Entries)
         {
             ct.ThrowIfCancellationRequested();
@@ -86,6 +88,7 @@ public class ZipIndexer : IZipIndexer
             // Skip directories (identified by trailing slash or empty name)
             if (entry.FullName.EndsWith("/", StringComparison.Ordinal) || string.IsNullOrEmpty(entry.Name))
             {
+                _logger?.LogDebug("Skipping directory entry: {FullName}", entry.FullName);
                 continue;
             }
 
@@ -98,6 +101,8 @@ public class ZipIndexer : IZipIndexer
 
             // Always detect file type; DetectFileType handles short headers internally.
             fileType = DetectFileType(entry.FullName, header);
+            _logger?.LogDebug("Detected file type for {FileName}: {FileType}, Size: {Size} bytes", 
+                entry.FullName, fileType, entry.Length);
 
             // For UnityFS and SerializedFile types, check if renderable (contains Mesh objects).
             // This requires reading the full file and parsing it.
@@ -105,6 +110,8 @@ public class ZipIndexer : IZipIndexer
                 entry.Length > 0 &&
                 entry.Length <= MaxRenderableDetectionSize)
             {
+                _logger?.LogInformation("Checking renderability for {FileName} (Type: {FileType}, Size: {Size} bytes)",
+                    entry.FullName, fileType, entry.Length);
                 try
                 {
                     // Read entire file for renderable detection from a fresh stream
@@ -117,6 +124,13 @@ public class ZipIndexer : IZipIndexer
                     if (totalRead == fileLength)
                     {
                         renderable = DetectRenderableFromAsset(fileBytes, fileType);
+                        _logger?.LogInformation("Renderability check for {FileName}: {Renderable}",
+                            entry.FullName, renderable);
+                    }
+                    else
+                    {
+                        _logger?.LogWarning("Could not read complete file {FileName}: expected {Expected} bytes, got {Actual}",
+                            entry.FullName, fileLength, totalRead);
                     }
                 }
                 catch (Exception ex)
@@ -126,6 +140,19 @@ public class ZipIndexer : IZipIndexer
                         "Failed to detect renderability for {FileName}: {Message}",
                         entry.FullName, ex.Message);
                     renderable = false; // Conservative default
+                }
+            }
+            else if (fileType == FileType.UnityFS || fileType == FileType.SerializedFile)
+            {
+                if (entry.Length > MaxRenderableDetectionSize)
+                {
+                    _logger?.LogWarning("Skipping renderability check for {FileName}: file too large ({Size} bytes > {Max} bytes)",
+                        entry.FullName, entry.Length, MaxRenderableDetectionSize);
+                }
+                else if (entry.Length == 0)
+                {
+                    _logger?.LogWarning("Skipping renderability check for {FileName}: empty file",
+                        entry.FullName);
                 }
             }
 
@@ -204,35 +231,28 @@ public class ZipIndexer : IZipIndexer
         {
             if (fileType == FileType.UnityFS)
             {
-                // Parse UnityFS bundle to extract SerializedFile (Node 0)
-                using var ms = new MemoryStream(assetBytes);
-                var parseResult = BundleFile.TryParse(ms);
-
-                if (!parseResult.Success || parseResult.Bundle == null)
-                {
-                    _logger?.LogDebug("Failed to parse UnityFS bundle: {Errors}",
-                        string.Join(", ", parseResult.Errors));
-                    return false;
-                }
-
-                var bundle = parseResult.Bundle;
-
-                // Node 0 is typically the SerializedFile containing object metadata
-                if (bundle.Nodes.Count > 0)
-                {
-                    var node0 = bundle.Nodes[0];
-                    var node0Data = bundle.ExtractNode(node0);
-                    return RenderableDetector.DetectRenderable(node0Data.Span);
-                }
-
-                return false;
+                // For UnityFS bundles, we can't safely parse the full bundle in WebAssembly
+                // due to memory constraints. The DataRegionBuilder allocates a buffer for
+                // the entire uncompressed data, which can easily exceed 2-4GB WASM limits.
+                // Instead, assume all UnityFS bundles are potentially renderable.
+                _logger?.LogInformation("Marking UnityFS bundle as potentially renderable (skipping full parse to avoid OOM)");
+                return true; // Conservative: assume renderable
             }
             else if (fileType == FileType.SerializedFile)
             {
                 // Direct SerializedFile - pass to detector
-                return RenderableDetector.DetectRenderable(assetBytes);
+                _logger?.LogDebug("Checking SerializedFile directly for Mesh objects");
+                var hasRenderable = RenderableDetector.DetectRenderable(assetBytes);
+                _logger?.LogInformation("RenderableDetector result for SerializedFile: {HasRenderable}", hasRenderable);
+                return hasRenderable;
             }
 
+            _logger?.LogDebug("File type {FileType} is not supported for renderability detection", fileType);
+            return false;
+        }
+        catch (OutOfMemoryException ex)
+        {
+            _logger?.LogWarning("Out of memory during renderable detection: {Message}", ex.Message);
             return false;
         }
         catch (Exception ex)

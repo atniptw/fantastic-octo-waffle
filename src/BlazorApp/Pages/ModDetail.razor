@@ -1,11 +1,13 @@
 @page "/mod/{Namespace}/{Name}"
 @using BlazorApp.Models
 @using BlazorApp.Services
+@using Microsoft.Extensions.Logging
 @inject IThunderstoreService ThunderstoreService
 @inject IZipDownloader ZipDownloader
 @inject IZipIndexer ZipIndexer
 @inject IModDetailStateService StateService
 @inject NavigationManager NavigationManager
+@inject ILogger<ModDetail> Logger
 @implements IAsyncDisposable
 
 <PageTitle>@(_package?.Name ?? Name) - R.E.P.O. Mod Browser</PageTitle>
@@ -164,9 +166,58 @@
             else if (!_fileIndex.Any(f => f.Renderable))
             {
                 <div class="card-body">
-                    <div class="alert alert-info mb-0">
-                        <strong>No 3D models</strong>
-                        <p class="mb-0">This mod doesn't contain renderable 3D models.</p>
+                    <div class="alert alert-info mb-3">
+                        <strong>No 3D models detected</strong>
+                        <p class="mb-0">This mod doesn't appear to contain renderable 3D models (Unity Mesh objects).</p>
+                    </div>
+                    
+                    <!-- Debug info -->
+                    <div class="accordion" id="debugAccordion">
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed" type="button" 
+                                        data-bs-toggle="collapse" data-bs-target="#debugInfo">
+                                    🔍 Debug: Show all files detected
+                                </button>
+                            </h2>
+                            <div id="debugInfo" class="accordion-collapse collapse" data-bs-parent="#debugAccordion">
+                                <div class="accordion-body">
+                                    <p class="small text-muted mb-2">
+                                        Found @_fileIndex.Count file(s). Showing types detected:
+                                    </p>
+                                    <table class="table table-sm">
+                                        <thead>
+                                            <tr>
+                                                <th>Filename</th>
+                                                <th>Type</th>
+                                                <th>Size</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var item in _fileIndex.Take(20))
+                                            {
+                                                <tr>
+                                                    <td class="text-break"><small>@item.FileName</small></td>
+                                                    <td><span class="badge bg-secondary">@item.Type</span></td>
+                                                    <td><small>@FormatFileSize(item.SizeBytes)</small></td>
+                                                </tr>
+                                            }
+                                            @if (_fileIndex.Count > 20)
+                                            {
+                                                <tr>
+                                                    <td colspan="3" class="text-muted text-center">
+                                                        <small>... and @(_fileIndex.Count - 20) more files</small>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                    <p class="small text-muted mt-2">
+                                        💡 <strong>Tip:</strong> Check the browser console (F12) for detailed parsing logs.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             }
@@ -328,6 +379,16 @@
                 _fileIndex.Add(item);
             }
             
+            // Log file index summary for debugging
+            Logger.LogInformation("File index completed: {TotalFiles} total files, {RenderableFiles} renderable",
+                _fileIndex.Count, _fileIndex.Count(f => f.Renderable));
+            
+            foreach (var item in _fileIndex)
+            {
+                Logger.LogDebug("File: {FileName}, Type: {FileType}, Renderable: {Renderable}, Size: {Size}",
+                    item.FileName, item.Type, item.Renderable, item.SizeBytes);
+            }
+
             // Step 3: Store for Viewer3D (including ZIP bytes)
             await StateService.SetCurrentModAsync(ModId, _fileIndex, _package, zipBytes);
             
@@ -365,7 +426,8 @@
 
     private void NavigateToViewer(string filename)
     {
-        NavigationManager.NavigateTo($"/viewer/{Namespace}/{Name}/{filename}");
+        var encodedFilename = Uri.EscapeDataString(filename);
+        NavigationManager.NavigateTo($"/viewer/{Namespace}/{Name}/{encodedFilename}");
     }
 
     private string FormatFileSize(long bytes)

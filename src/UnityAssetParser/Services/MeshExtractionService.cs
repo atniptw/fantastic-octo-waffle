@@ -32,6 +32,13 @@ public sealed class MeshExtractionService
         }
 
         // Step 2: Find and parse SerializedFile (Node 0)
+        Console.WriteLine($"DEBUG: Bundle has {bundle.Nodes.Count} nodes");
+        for (int i = 0; i < bundle.Nodes.Count; i++)
+        {
+            var n = bundle.Nodes[i];
+            Console.WriteLine($"DEBUG: Node[{i}] Path='{n.Path}', Size={n.Size}, Flags={n.Flags}");
+        }
+
         if (bundle.Nodes.Count == 0)
         {
             throw new InvalidOperationException("Bundle has no nodes");
@@ -64,6 +71,16 @@ public sealed class MeshExtractionService
         }
 
         // Step 4: Find all Mesh objects (ClassID 43)
+        // Debug: summarize object ClassIds present
+        var classIdCounts = serializedFile.Objects
+            .GroupBy(o => o.ClassId)
+            .ToDictionary(g => g.Key, g => g.Count());
+        Console.WriteLine($"DEBUG: SerializedFile contains {serializedFile.Objects.Count} objects");
+        foreach (var kv in classIdCounts.OrderBy(kv => kv.Key))
+        {
+            Console.WriteLine($"DEBUG: ClassID {kv.Key} count={kv.Value}");
+        }
+
         var meshObjects = serializedFile.Objects
             .Where(obj => obj.ClassId == RenderableDetector.RenderableClassIds.Mesh)
             .ToList();
@@ -112,11 +129,21 @@ public sealed class MeshExtractionService
         bool isBigEndian = serializedFile.Header.Endianness == 1;
 
         // Parse Mesh object
-        var mesh = MeshParser.Parse(objectData.Span, version, isBigEndian, resSData);
+        Mesh? mesh;
+        try
+        {
+            mesh = MeshParser.Parse(objectData.Span, version, isBigEndian, resSData);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"DEBUG: MeshParser.Parse threw exception: {ex.GetType().Name}: {ex.Message}");
+            throw;
+        }
         
         if (mesh == null)
         {
             // Mesh parsing not yet implemented or failed
+            System.Diagnostics.Debug.WriteLine($"DEBUG: MeshParser.Parse returned null for mesh PathId={meshObj.PathId}");
             return null;
         }
 

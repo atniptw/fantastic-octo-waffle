@@ -188,7 +188,7 @@ public class UnityFSHeaderParserTests
 
         writer.Write(Encoding.UTF8.GetBytes("UnityFS"));
         writer.Write((byte)0x00);
-        writer.Write((uint)6);
+        WriteBigEndianUInt32(writer, 5);
         writer.Write(Encoding.UTF8.GetBytes("2020.3.48f1"));
         writer.Write((byte)0x00);
         writer.Write(Encoding.UTF8.GetBytes("b805b124c6b7"));
@@ -207,9 +207,9 @@ public class UnityFSHeaderParserTests
     }
 
     [Fact]
-    public void Parse_ReservedBitsSet_ThrowsException()
+    public void Parse_EncryptionFlagsSet_ParsesSuccessfully()
     {
-        // Arrange
+        // Arrange: Test that encryption flags (0x100, 0x400, 0x1000) are accepted per UnityPy
         using var stream = new MemoryStream();
         using var writer = new BinaryWriter(stream);
 
@@ -223,14 +223,17 @@ public class UnityFSHeaderParserTests
         writer.Write((long)300);
         writer.Write((uint)123);
         writer.Write((uint)123);
-        writer.Write((uint)0x1000); // Reserved bit set
+        writer.Write((uint)0x1400); // Combined encryption flags (0x400 | 0x1000)
         stream.Position = 0;
 
         var parser = new UnityFSHeaderParser();
 
-        // Act & Assert
-        var ex = Assert.Throws<HeaderParseException>(() => parser.Parse(stream));
-        Assert.Contains("Reserved", ex.Message);
+        // Act
+        var header = parser.Parse(stream);
+
+        // Assert: should parse without error
+        Assert.NotNull(header);
+        Assert.Equal(6u, header.Version);
     }
 
     [Fact]
@@ -287,8 +290,8 @@ public class UnityFSHeaderParserTests
         // Aligned to 4 bytes: 83 → 84
         Assert.Equal(84L, location.BlocksInfoPosition);
         Assert.Equal(1, location.AlignmentPadding);
-        // Data starts after BlocksInfo: 84 + 100 = 184
-        Assert.Equal(184L, location.DataOffset);
+        // AlignedHeaderPosition is the aligned position after header
+        Assert.Equal(84L, location.AlignedHeaderPosition);
     }
 
     [Fact]
@@ -316,8 +319,8 @@ public class UnityFSHeaderParserTests
         // Assert
         // BlocksInfo at EOF: 2000 - 150 = 1850
         Assert.Equal(1850L, location.BlocksInfoPosition);
-        // Data starts after aligned header: align(95, 16) = 96
-        Assert.Equal(96L, location.DataOffset);
+        // AlignedHeaderPosition is aligned header: align(95, 16) = 96
+        Assert.Equal(96L, location.AlignedHeaderPosition);
         Assert.Equal(1, location.AlignmentPadding);
     }
 
@@ -346,7 +349,8 @@ public class UnityFSHeaderParserTests
         // Assert
         Assert.Equal(84L, location.BlocksInfoPosition);
         Assert.Equal(0, location.AlignmentPadding);
-        Assert.Equal(184L, location.DataOffset);
+        // AlignedHeaderPosition is just the header position when already aligned
+        Assert.Equal(84L, location.AlignedHeaderPosition);
     }
 
     [Fact]
@@ -424,5 +428,16 @@ public class UnityFSHeaderParserTests
             // Assert
             Assert.Equal((CompressionType)compressionType, header.CompressionType);
         }
+    }
+
+    /// <summary>
+    /// Helper method to write a uint32 in big-endian format.
+    /// </summary>
+    private static void WriteBigEndianUInt32(BinaryWriter writer, uint value)
+    {
+        writer.Write((byte)((value >> 24) & 0xFF));
+        writer.Write((byte)((value >> 16) & 0xFF));
+        writer.Write((byte)((value >> 8) & 0xFF));
+        writer.Write((byte)(value & 0xFF));
     }
 }

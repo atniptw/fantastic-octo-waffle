@@ -1,12 +1,18 @@
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using BlazorApp;
 using BlazorApp.Services;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
+
+// Configure logging levels for debugging
+builder.Logging.SetMinimumLevel(LogLevel.Debug);
+builder.Logging.AddFilter("BlazorApp.Services.ZipIndexer", LogLevel.Debug);
+builder.Logging.AddFilter("BlazorApp.Pages.ModDetail", LogLevel.Debug);
 
 // Configure HttpClient for ThunderstoreService
 var workerUrl = builder.Configuration["WorkerBaseUrl"] ?? "http://localhost:8787";

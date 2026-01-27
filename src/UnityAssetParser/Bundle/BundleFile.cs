@@ -85,7 +85,6 @@ public sealed class BundleFile
 
             // Step 2: Determine BlocksInfo location
             var blocksInfoLocation = headerParser.CalculateBlocksInfoLocation(header, stream.Length);
-            long dataOffset = blocksInfoLocation.DataOffset;
 
             // Step 3: Read and decompress BlocksInfo
             stream.Position = blocksInfoLocation.BlocksInfoPosition;
@@ -98,7 +97,28 @@ public sealed class BundleFile
             }
             currentState = ParsingState.BlocksInfoDecompressed;
 
-            // Step 4: Parse and verify BlocksInfo
+            // Step 4: Determine data region start (UnityPy flow)
+            long dataOffset;
+            if (header.BlocksInfoAtEnd)
+            {
+                // Streamed: data starts at aligned header position
+                dataOffset = blocksInfoLocation.AlignedHeaderPosition;
+            }
+            else
+            {
+                // Embedded: data starts after BlocksInfo (current position)
+                dataOffset = stream.Position;
+            }
+
+            // Step 5: Apply alignment if BlockInfoNeedPaddingAtStart is set
+            // This aligns the data region start to 16-byte boundary if flag is set
+            if (header.NeedsPaddingAtStartFlagSet)
+            {
+                long alignedDataOffset = BinaryReaderExtensions.CalculateAlignedPosition(dataOffset, 16);
+                dataOffset = alignedDataOffset;
+            }
+
+            // Step 6: Parse BlocksInfo
             var decompressor = new Decompressor();
             var blocksInfoParser = new BlocksInfoParser(decompressor);
             var blocksInfo = blocksInfoParser.Parse(
@@ -108,11 +128,7 @@ public sealed class BundleFile
                 dataOffset);
             currentState = ParsingState.HashVerified;
 
-            // Step 5: Validate nodes (bounds, uniqueness, overlaps)
-            ValidateNodes(blocksInfo);
-            currentState = ParsingState.NodesValidated;
-
-            // Step 6: Reconstruct data region
+            // Step 7: Reconstruct data region
             stream.Position = dataOffset;
             var dataRegionBuilder = new DataRegionBuilder(decompressor);
             var dataRegion = dataRegionBuilder.Build(stream, dataOffset, blocksInfo.Blocks);

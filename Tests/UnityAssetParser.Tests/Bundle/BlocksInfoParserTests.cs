@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using System.Text;
 using UnityAssetParser.Bundle;
 using UnityAssetParser.Exceptions;
@@ -8,7 +7,8 @@ namespace UnityAssetParser.Tests.Bundle;
 
 /// <summary>
 /// Unit tests for BlocksInfoParser.
-/// Tests parsing, hash verification, and validation of BlocksInfo structures.
+/// Tests parsing and validation of BlocksInfo structures.
+/// Hash verification is skipped per UnityPy behavior.
 /// </summary>
 public class BlocksInfoParserTests
 {
@@ -25,14 +25,15 @@ public class BlocksInfoParserTests
 
     /// <summary>
     /// Creates a valid uncompressed BlocksInfo blob with given blocks and nodes.
+    /// Uses 16-byte Hash128 (zeroed) per UnityPy behavior.
     /// </summary>
     private static byte[] CreateBlocksInfoBlob(List<(uint uncompSize, uint compSize, ushort flags)> blocks, List<(long offset, long size, int flags, string path)> nodes)
     {
         using var stream = new MemoryStream();
         using var writer = new BinaryWriter(stream);
 
-        // Reserve 20 bytes for hash (will be filled later)
-        writer.Write(new byte[20]);
+        // Write 16-byte Hash128 (zeroed, not verified per UnityPy)
+        writer.Write(new byte[16]);
 
         // Write block count
         writer.Write(blocks.Count);
@@ -66,27 +67,10 @@ public class BlocksInfoParserTests
             writer.Write((byte)0); // null terminator
         }
 
-        // Compute hash over payload (bytes 20..end)
-        byte[] fullData = stream.ToArray();
-        byte[] payload = new byte[fullData.Length - 20];
-        Array.Copy(fullData, 20, payload, 0, payload.Length);
-        byte[] hash = SHA1.HashData(payload);
-
-        // Write hash at the beginning
-        Array.Copy(hash, 0, fullData, 0, 20);
-
-        return fullData;
+        return stream.ToArray();
     }
 
-    /// <summary>
-    /// Corrupts the hash in a BlocksInfo blob.
-    /// </summary>
-    private static byte[] CorruptHash(byte[] validBlob)
-    {
-        byte[] corrupted = (byte[])validBlob.Clone();
-        corrupted[0] ^= 0xFF; // Flip bits in first hash byte
-        return corrupted;
-    }
+
 
     #endregion
 
@@ -113,7 +97,7 @@ public class BlocksInfoParserTests
 
         // Assert
         Assert.NotNull(result);
-        Assert.Equal(20, result.UncompressedDataHash.Length);
+        Assert.Equal(16, result.UncompressedDataHash.Length);
         Assert.Single(result.Blocks);
         Assert.Single(result.Nodes);
 
@@ -191,32 +175,12 @@ public class BlocksInfoParserTests
 
     #endregion
 
-    #region Hash Verification Tests
-
-    [Fact]
-    public void Parse_CorruptedHash_ThrowsHashMismatchException()
-    {
-        // Arrange
-        var blocks = new List<(uint, uint, ushort)> { (1024, 1024, 0) };
-        var nodes = new List<(long, long, int, string)> { (0, 512, 0, "test.data") };
-
-        byte[] validBlob = CreateBlocksInfoBlob(blocks, nodes);
-        byte[] corruptedBlob = CorruptHash(validBlob);
-
-        // Act & Assert
-        var ex = Assert.Throws<HashMismatchException>(() =>
-            _parser.Parse(corruptedBlob, corruptedBlob.Length, CompressionType.None, dataOffset: 0));
-
-        Assert.Contains("hash mismatch", ex.Message, StringComparison.OrdinalIgnoreCase);
-        Assert.NotNull(ex.ExpectedHash);
-        Assert.NotNull(ex.ComputedHash);
-        Assert.NotEqual(ex.ExpectedHash, ex.ComputedHash);
-    }
+    #region Hash Field Tests
 
     [Fact]
     public void Parse_TooSmallForHash_ThrowsBlocksInfoParseException()
     {
-        // Arrange: only 10 bytes (less than 20 for hash)
+        // Arrange: only 10 bytes (less than 16 for Hash128)
         byte[] tooSmall = new byte[10];
 
         // Act & Assert
@@ -360,19 +324,13 @@ public class BlocksInfoParserTests
         using var stream = new MemoryStream();
         using var writer = new BinaryWriter(stream);
 
-        // Write hash placeholder
-        writer.Write(new byte[20]);
+        // Write 16-byte Hash128
+        writer.Write(new byte[16]);
 
         // Write negative block count
         writer.Write(-5);
 
         byte[] blob = stream.ToArray();
-
-        // Compute and set hash
-        byte[] payload = new byte[blob.Length - 20];
-        Array.Copy(blob, 20, payload, 0, payload.Length);
-        byte[] hash = SHA1.HashData(payload);
-        Array.Copy(hash, 0, blob, 0, 20);
 
         // Act & Assert
         var ex = Assert.Throws<BlocksInfoParseException>(() =>
@@ -388,8 +346,8 @@ public class BlocksInfoParserTests
         using var stream = new MemoryStream();
         using var writer = new BinaryWriter(stream);
 
-        // Write hash placeholder
-        writer.Write(new byte[20]);
+        // Write 16-byte Hash128
+        writer.Write(new byte[16]);
 
         // Write block count (0 blocks)
         writer.Write(0);
@@ -400,12 +358,6 @@ public class BlocksInfoParserTests
         writer.Write(-3);
 
         byte[] blob = stream.ToArray();
-
-        // Compute and set hash
-        byte[] payload = new byte[blob.Length - 20];
-        Array.Copy(blob, 20, payload, 0, payload.Length);
-        byte[] hash = SHA1.HashData(payload);
-        Array.Copy(hash, 0, blob, 0, 20);
 
         // Act & Assert
         var ex = Assert.Throws<BlocksInfoParseException>(() =>
@@ -423,19 +375,13 @@ public class BlocksInfoParserTests
 
         byte[] fullBlob = CreateBlocksInfoBlob(blocks, nodes);
         
-        // Truncate after hash (20 bytes) and block count (4 bytes) but before all blocks are read
-        // Hash: 20 bytes
+        // Truncate after hash (16 bytes) and block count (4 bytes) but before all blocks are read
+        // Hash: 16 bytes
         // Block count: 4 bytes
         // Single block: 10 bytes (uint32 + uint32 + uint16)
         // We want to truncate in the middle of the block data
-        byte[] truncated = new byte[20 + 4 + 5]; // Only 5 bytes of the 10-byte block
+        byte[] truncated = new byte[16 + 4 + 5]; // Only 5 bytes of the 10-byte block
         Array.Copy(fullBlob, 0, truncated, 0, truncated.Length);
-
-        // Recompute hash for the truncated payload
-        byte[] payload = new byte[truncated.Length - 20];
-        Array.Copy(truncated, 20, payload, 0, payload.Length);
-        byte[] hash = SHA1.HashData(payload);
-        Array.Copy(hash, 0, truncated, 0, 20);
 
         // Act & Assert
         var ex = Assert.Throws<BlocksInfoParseException>(() =>
@@ -451,8 +397,8 @@ public class BlocksInfoParserTests
         using var stream = new MemoryStream();
         using var writer = new BinaryWriter(stream);
 
-        // Write hash placeholder
-        writer.Write(new byte[20]);
+        // Write 16-byte Hash128
+        writer.Write(new byte[16]);
 
         // Write 2 blocks to ensure padding is needed (total: 20 bytes)
         writer.Write((uint)1024); // block 0 uncompressed size
@@ -470,8 +416,8 @@ public class BlocksInfoParserTests
         stream.SetLength(0); // Reset
         stream.Position = 0;
 
-        // Write hash placeholder
-        writer.Write(new byte[20]);
+        // Write 16-byte Hash128
+        writer.Write(new byte[16]);
 
         // Write block count
         writer.Write(1);
@@ -480,25 +426,19 @@ public class BlocksInfoParserTests
         writer.Write((uint)1024);
         writer.Write((uint)1024);
         writer.Write((ushort)0);
-        // Current position: 20 + 4 + 10 = 34
-        // Need 2 bytes padding to reach 36 (next 4-byte boundary)
+        // Current position: 16 + 4 + 10 = 30
+        // Need 2 bytes padding to reach 32 (next 4-byte boundary)
         
         // Write NON-ZERO padding (should fail validation)
         writer.Write((byte)0xFF);
         writer.Write((byte)0xFF);
-        // Now at position 36
+        // Now at position 32
 
         // Write node count
         writer.Write(0); // No nodes to avoid needing to write valid node data
-        // Position: 40
+        // Position: 36
 
         byte[] blob = stream.ToArray();
-
-        // Compute and set hash
-        byte[] payload = new byte[blob.Length - 20];
-        Array.Copy(blob, 20, payload, 0, payload.Length);
-        byte[] hash = SHA1.HashData(payload);
-        Array.Copy(hash, 0, blob, 0, 20);
 
         // Act & Assert
         var ex = Assert.Throws<BlocksInfoParseException>(() =>

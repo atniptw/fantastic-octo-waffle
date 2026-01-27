@@ -14,12 +14,9 @@ public sealed class BlocksInfoLocation
     public required long BlocksInfoPosition { get; init; }
 
     /// <summary>
-    /// Base offset for node-relative addressing.
-    /// All node offsets in BlocksInfo are relative to this position.
-    /// For embedded layout: BlocksInfoPosition + CompressedBlocksInfoSize.
-    /// For streamed layout: position after aligned header.
+    /// Aligned position after header (used for streamed layout data offset).
     /// </summary>
-    public required long DataOffset { get; init; }
+    public required long AlignedHeaderPosition { get; init; }
 
     /// <summary>
     /// Number of padding bytes applied between header end and BlocksInfo/data region.
