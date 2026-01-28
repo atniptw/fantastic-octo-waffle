@@ -66,16 +66,17 @@ public sealed class CompressedMesh
     public required PackedBitVector Triangles { get; init; }
 
     /// <summary>
-    /// Gets or sets the compressed vertex colors (optional).
+    /// Gets or sets the compressed float colors (Unity 5.0+).
+    /// Stored as normalized floats (0-1 range).
+    /// Always present in the TypeTree (may be empty).
+    /// </summary>
+    public required PackedBitVector FloatColors { get; init; }
+
+    /// <summary>
+    /// Gets or sets the compressed vertex colors (optional, older Unity versions).
     /// Stored as packed RGBA integers.
     /// </summary>
     public PackedBitVector? Colors { get; init; }
-
-    /// <summary>
-    /// Gets or sets the compressed float colors (Unity 5.0+).
-    /// Stored as normalized floats (0-1 range).
-    /// </summary>
-    public PackedBitVector? FloatColors { get; init; }
 
     /// <summary>
     /// Gets or sets the compressed bind poses (Unity &lt; 5.0).

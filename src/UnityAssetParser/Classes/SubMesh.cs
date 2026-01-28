@@ -29,6 +29,12 @@ public sealed class SubMesh
     public MeshTopology Topology { get; set; }
 
     /// <summary>
+    /// Gets or sets the base vertex index offset for this submesh.
+    /// Available in Unity version >= 4.
+    /// </summary>
+    public uint BaseVertex { get; set; }
+
+    /// <summary>
     /// Gets or sets the first vertex index used by this submesh (for index range validation).
     /// Available in Unity version >= 4.
     /// </summary>

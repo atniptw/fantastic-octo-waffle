@@ -48,13 +48,10 @@ public static class MeshParser
                 mesh.SubMeshes = ReadSubMeshArray(reader, major);
                 reader.Align();
 
-                // TODO: Complete field parsing - stopping after SubMeshes for now
-                return mesh;
+                // Field 3: m_Shapes (BlendShapeData) - note: this is a struct, not an array!
+                ReadBlendShapeData(reader);
+                reader.Align();
                 
-                // Field 3: m_Shapes
-                //ReadBlendShapesArray(reader);
-                //reader.Align();
-
                 // Field 4: m_BindPose (version >= 4)
                 if (major >= 4)
                 {
@@ -108,32 +105,44 @@ public static class MeshParser
                     mesh.IndexFormat = reader.ReadInt32();
                 }
 
-                // Field 14-23: VertexData structure
+                // Field 14: m_IndexBuffer
+                mesh.IndexBuffer = ReadIndexBuffer(reader);
+                reader.Align();
+
+                // Field 15: m_VertexData structure
                 mesh.VertexData = ReadVertexData(reader, major);
                 reader.Align();
 
-                // Field 24: CompressedMesh (conditionally)
-                if (mesh.MeshCompression > 0)
-                {
-                    mesh.CompressedMesh = ReadCompressedMesh(reader);
-                    reader.Align();
-                }
-
-                // Field 25: m_LocalAABB
-                mesh.IndexBuffer = ReadLocalAABB(reader);
+                // Field 16: m_CompressedMesh
+                mesh.CompressedMesh = ReadCompressedMesh(reader);
                 reader.Align();
 
-                // Field 26: m_MeshUsageFlags
+                // Field 17: m_LocalAABB
+                ReadLocalAABB(reader);
+                reader.Align();
+
+                // Field 18: m_MeshUsageFlags (version >= 5)
                 if (major >= 5)
                 {
                     reader.ReadInt32();
                 }
 
-                // Field 27: m_IndexBuffer
-                mesh.IndexBuffer = ReadIndexBuffer(reader);
+                // Field 19: m_CookingOptions
+                reader.ReadInt32();
+
+                // Field 20: m_BakedConvexCollisionMesh
+                ReadByteArrayField(reader);
                 reader.Align();
 
-                // Field 28: m_StreamData
+                // Field 21: m_BakedTriangleCollisionMesh
+                ReadByteArrayField(reader);
+                reader.Align();
+
+                // Field 22-23: m_MeshMetrics[0] and m_MeshMetrics[1]
+                reader.ReadSingle();
+                reader.ReadSingle();
+
+                // Field 24: m_StreamData
                 mesh.StreamData = ReadStreamingInfo(reader);
 
                 return mesh;
@@ -166,21 +175,31 @@ public static class MeshParser
     private static SubMesh[] ReadSubMeshArray(EndianBinaryReader reader, int major)
     {
         uint count = reader.ReadUInt32();
+        
         var subMeshes = new SubMesh[count];
 
         for (int i = 0; i < count; i++)
         {
             subMeshes[i] = new SubMesh
             {
+                // TypeTree order (from Cigar_neck debug output):
+                // 1. firstByte (unsigned int)
                 FirstByte = reader.ReadUInt32(),
+                // 2. indexCount (unsigned int)
                 IndexCount = reader.ReadUInt32(),
+                // 3. topology (int)
                 Topology = (MeshTopology)reader.ReadInt32(),
-                FirstVertex = major >= 4 ? reader.ReadUInt32() : 0,
-                VertexCount = major >= 4 ? reader.ReadUInt32() : 0,
+                // 4. baseVertex (unsigned int) - always present in v2022
+                BaseVertex = reader.ReadUInt32(),
+                // 5. firstVertex (unsigned int) - always present in v2022
+                FirstVertex = reader.ReadUInt32(),
+                // 6. vertexCount (unsigned int) - always present in v2022
+                VertexCount = reader.ReadUInt32(),
+                // 7. localAABB (AABB) - struct with 2 Vector3f = 24 bytes
                 LocalAABB = major >= 3 ? ReadAABB(reader) : null
             };
         }
-
+        
         return subMeshes;
     }
 
@@ -193,27 +212,65 @@ public static class MeshParser
         };
     }
 
-    private static void ReadBlendShapesArray(EndianBinaryReader reader)
+    private static void ReadBlendShapeData(EndianBinaryReader reader)
     {
-        // m_Shapes array - skip for now (not needed for basic rendering)
-        uint count = reader.ReadUInt32();
-        // Each shape has Name (string), VertexCount (uint), InfuenceGroups array
-        // For now, skip the entire structure
-        for (int i = 0; i < count; i++)
+        // m_Shapes is a BlendShapeData struct with 4 arrays:
+        // 1. vertices (vector of BlendShapeVertex)
+        // 2. shapes (vector of MeshBlendShape)
+        // 3. channels (vector of MeshBlendShapeChannel)
+        // 4. fullWeights (vector of float)
+        
+        // vertices array
+        uint verticesCount = reader.ReadUInt32();
+        for (uint i = 0; i < verticesCount; i++)
         {
+            // BlendShapeVertex: vertex (Vector3f), normal (Vector3f), tangent (Vector3f), index (uint)
+            reader.ReadSingle(); reader.ReadSingle(); reader.ReadSingle(); // vertex
+            reader.ReadSingle(); reader.ReadSingle(); reader.ReadSingle(); // normal
+            reader.ReadSingle(); reader.ReadSingle(); reader.ReadSingle(); // tangent
+            reader.ReadUInt32(); // index
+        }
+        reader.Align();
+        System.Diagnostics.Debug.WriteLine($"[ReadBlendShapeData] After vertices, position={reader.BaseStream.Position}");
+        
+        // shapes array
+        uint shapesCount = reader.ReadUInt32();
+        System.Diagnostics.Debug.WriteLine($"[ReadBlendShapeData] shapesCount={shapesCount}");
+        for (uint i = 0; i < shapesCount; i++)
+        {
+            // MeshBlendShape: firstVertex (uint), vertexCount (uint), hasNormals (bool), hasTangents (bool)
+            reader.ReadUInt32(); // firstVertex
+            reader.ReadUInt32(); // vertexCount
+            reader.ReadBoolean(); // hasNormals
+            reader.ReadBoolean(); // hasTangents
+            // Note: size=10 bytes, but 2 bools = 2 bytes, so no explicit padding needed here
+        }
+        reader.Align();
+        System.Diagnostics.Debug.WriteLine($"[ReadBlendShapeData] After shapes, position={reader.BaseStream.Position}");
+        
+        // channels array
+        uint channelsCount = reader.ReadUInt32();
+        System.Diagnostics.Debug.WriteLine($"[ReadBlendShapeData] channelsCount={channelsCount}");
+        for (uint i = 0; i < channelsCount; i++)
+        {
+            // MeshBlendShapeChannel: name (string), nameHash (uint), frameIndex (int), frameCount (int)
             _ = ReadAlignedString(reader);
             reader.Align();
-            _ = reader.ReadUInt32();
-            uint influenceGroupCount = reader.ReadUInt32();
-            // Skip influence groups
-            for (int j = 0; j < influenceGroupCount; j++)
-            {
-                reader.ReadUInt32(); // vertex index
-                reader.ReadUInt32(); // triangle index
-                reader.ReadSingle(); // weight
-            }
-            reader.Align();
+            reader.ReadUInt32(); // nameHash
+            reader.ReadInt32(); // frameIndex
+            reader.ReadInt32(); // frameCount
         }
+        reader.Align();
+        System.Diagnostics.Debug.WriteLine($"[ReadBlendShapeData] After channels, position={reader.BaseStream.Position}");
+        
+        // fullWeights array
+        uint fullWeightsCount = reader.ReadUInt32();
+        System.Diagnostics.Debug.WriteLine($"[ReadBlendShapeData] fullWeightsCount={fullWeightsCount}");
+        for (uint i = 0; i < fullWeightsCount; i++)
+        {
+            reader.ReadSingle(); // weight
+        }
+        System.Diagnostics.Debug.WriteLine($"[ReadBlendShapeData] After fullWeights, position={reader.BaseStream.Position}");
     }
 
     private static void ReadBindPoseArray(EndianBinaryReader reader)
@@ -252,11 +309,11 @@ public static class MeshParser
 
     private static void ReadVariableBoneCountWeights(EndianBinaryReader reader)
     {
-        // m_VariableBoneCountWeights - Complex structure, skip for now
-        uint dataSize = reader.ReadUInt32();
-        if (dataSize > 0)
+        // m_VariableBoneCountWeights.m_Data - vector of unsigned int
+        uint count = reader.ReadUInt32();
+        for (uint i = 0; i < count; i++)
         {
-            reader.ReadBytes((int)dataSize);
+            reader.ReadUInt32();
         }
     }
 
@@ -264,59 +321,31 @@ public static class MeshParser
     {
         var vertexData = new VertexData();
 
-        if (major >= 4)
+        // According to TypeTree: m_VertexData is VertexData struct with:
+        // 1. m_VertexCount (uint)
+        // 2. m_Channels (vector of ChannelInfo)
+        // 3. m_DataSize (TypelessData - vector of bytes)
+        
+        // m_VertexCount
+        vertexData.VertexCount = reader.ReadUInt32();
+
+        // m_Channels array
+        uint channelCount = reader.ReadUInt32();
+        
+        var channels = new ChannelInfo[channelCount];
+        for (int i = 0; i < channelCount; i++)
         {
-            // Unity 4+: m_CurrentChannels (uint)
-            _ = reader.ReadUInt32();
-            vertexData.VertexCount = reader.ReadUInt32();
-
-            // m_Channels array
-            uint channelCount = reader.ReadUInt32();
-            var channels = new ChannelInfo[channelCount];
-            for (int i = 0; i < channelCount; i++)
+            channels[i] = new ChannelInfo
             {
-                channels[i] = new ChannelInfo
-                {
-                    Stream = reader.ReadByte(),
-                    Offset = reader.ReadByte(),
-                    Format = reader.ReadByte(),
-                    Dimension = reader.ReadByte()
-                };
-            }
-            vertexData.Channels = channels;
-            reader.Align();
-
-            // m_Streams array
-            uint streamCount = reader.ReadUInt32();
-            var streams = new StreamInfo[streamCount];
-            for (int i = 0; i < streamCount; i++)
-            {
-                streams[i] = new StreamInfo
-                {
-                    ChannelMask = reader.ReadUInt32(),
-                    Offset = reader.ReadUInt32(),
-                    Stride = reader.ReadUInt32(),
-                    DividerOp = reader.ReadUInt32(),
-                    Frequency = reader.ReadUInt32()
-                };
-            }
-            vertexData.Streams = streams;
-            reader.Align();
+                Stream = reader.ReadByte(),
+                Offset = reader.ReadByte(),
+                Format = reader.ReadByte(),
+                Dimension = reader.ReadByte()
+            };
         }
-        else
-        {
-            // Unity 3: Legacy stream format
-            vertexData.VertexCount = reader.ReadUInt32();
-            vertexData.Streams0 = ReadStreamInfo(reader);
-            vertexData.Streams1 = ReadStreamInfo(reader);
-            vertexData.Streams2 = ReadStreamInfo(reader);
-            vertexData.Streams3 = ReadStreamInfo(reader);
-
-            // Legacy channels
-            _ = reader.ReadUInt32();
-        }
-
-        // m_DataSize (vertex data buffer)
+        vertexData.Channels = channels;
+        
+        // m_DataSize (TypelessData - vector of bytes)
         uint dataSize = reader.ReadUInt32();
         if (dataSize > 0)
         {
@@ -344,20 +373,25 @@ public static class MeshParser
 
     private static CompressedMesh ReadCompressedMesh(EndianBinaryReader reader)
     {
-        // Read all PackedBitVectors for compressed mesh data
+        // Read all PackedBitVectors for compressed mesh data in TypeTree order
+        // Fields with Range/Start (floats): Vertices, UV, Normals, Tangents, FloatColors
+        // Fields without Range/Start (ints): Weights, NormalSigns, TangentSigns, BoneIndices, Triangles
         var compressedMesh = new CompressedMesh
         {
-            Vertices = new PackedBitVector(reader),
-            UV = new PackedBitVector(reader),
-            Normals = new PackedBitVector(reader),
-            NormalSigns = new PackedBitVector(reader),
-            Tangents = new PackedBitVector(reader),
-            TangentSigns = new PackedBitVector(reader),
-            Weights = new PackedBitVector(reader),
-            BoneIndices = new PackedBitVector(reader),
-            Triangles = new PackedBitVector(reader),
-            Colors = new PackedBitVector(reader)
+            Vertices = new PackedBitVector(reader, hasRangeStart: true),
+            UV = new PackedBitVector(reader, hasRangeStart: true),
+            Normals = new PackedBitVector(reader, hasRangeStart: true),
+            Tangents = new PackedBitVector(reader, hasRangeStart: true),
+            Weights = new PackedBitVector(reader, hasRangeStart: false),
+            NormalSigns = new PackedBitVector(reader, hasRangeStart: false),
+            TangentSigns = new PackedBitVector(reader, hasRangeStart: false),
+            FloatColors = new PackedBitVector(reader, hasRangeStart: true),
+            BoneIndices = new PackedBitVector(reader, hasRangeStart: false),
+            Triangles = new PackedBitVector(reader, hasRangeStart: false)
         };
+        
+        // m_UVInfo
+        uint uvInfo = reader.ReadUInt32();
 
         return compressedMesh;
     }
@@ -378,14 +412,23 @@ public static class MeshParser
         return reader.ReadBytes((int)count);
     }
 
+    private static void ReadByteArrayField(EndianBinaryReader reader)
+    {
+        // Read and discard byte array (used for baked collision meshes)
+        uint count = reader.ReadUInt32();
+        if (count > 0)
+        {
+            reader.ReadBytes((int)count);
+        }
+    }
+
     private static StreamingInfo? ReadStreamingInfo(EndianBinaryReader reader)
     {
-        // m_StreamData
+        // m_StreamData: offset (UInt64), size (uint), path (string)
+        ulong offset = reader.ReadUInt64();
+        uint size = reader.ReadUInt32();
         string path = ReadAlignedString(reader);
         reader.Align();
-
-        uint offset = reader.ReadUInt32();
-        uint size = reader.ReadUInt32();
 
         if (string.IsNullOrEmpty(path))
             return null;

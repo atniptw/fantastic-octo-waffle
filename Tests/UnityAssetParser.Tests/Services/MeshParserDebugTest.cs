@@ -43,6 +43,13 @@ public class MeshParserDebugTest
         var meshObject = sf.Objects.FirstOrDefault(o => o.ClassId == 43);
         Assert.NotNull(meshObject);
         
+        // Print all objects for debugging
+        Console.WriteLine($"All objects in SerializedFile:");
+        foreach (var obj in sf.Objects)
+        {
+            Console.WriteLine($"  ClassId={obj.ClassId}, PathId={obj.PathId}, ByteStart={obj.ByteStart}, ByteSize={obj.ByteSize}");
+        }
+        
         Console.WriteLine($"Found Mesh object, PathId={meshObject.PathId}, ByteStart={meshObject.ByteStart}, ByteSize={meshObject.ByteSize}");
 
         // Extract object data from the data region
@@ -50,6 +57,16 @@ public class MeshParserDebugTest
         var objectData = objectDataSpan.Slice((int)meshObject.ByteStart, (int)meshObject.ByteSize).ToArray();
         Console.WriteLine($"Extracted {objectData.Length} bytes of Mesh data");
         Console.WriteLine($"First 64 bytes (hex): {BitConverter.ToString(objectData.Take(64).ToArray()).Replace("-", "")}");
+        
+        // Dump bytes around position 148
+        if (objectData.Length > 160)
+        {
+            Console.WriteLine($"Bytes 140-160 (hex): {BitConverter.ToString(objectData.Skip(140).Take(20).ToArray()).Replace("-", "")}");
+            
+            // Try to interpret as uint32 little-endian at position 148
+            uint val148 = BitConverter.ToUInt32(objectData, 148);
+            Console.WriteLine($"As uint32 at position 148: {val148} (0x{val148:08x})");
+        }
         
         // Get header for endianness
         var header = sf.Header;

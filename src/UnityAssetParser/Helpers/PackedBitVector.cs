@@ -42,25 +42,33 @@ public sealed class PackedBitVector
     /// Follows the parsing logic from UnityPy's PackedBitVector class.
     /// </summary>
     /// <param name="reader">The binary reader to read from.</param>
-    public PackedBitVector(EndianBinaryReader reader)
+    /// <param name="hasRangeStart">If true, reads Range and Start fields (for float data). If false, skips them (for int data).</param>
+    public PackedBitVector(EndianBinaryReader reader, bool hasRangeStart = true)
     {
         ArgumentNullException.ThrowIfNull(reader);
 
-        // Read fields in order as defined in UnityPy
+        // Read fields in order as defined in UnityPy TypeTree
         NumItems = reader.ReadUInt32();
-        Range = reader.ReadSingle();
-        Start = reader.ReadSingle();
+        
+        // Conditionally read Range and Start based on data type
+        if (hasRangeStart)
+        {
+            Range = reader.ReadSingle();
+            Start = reader.ReadSingle();
+        }
+        else
+        {
+            Range = null;
+            Start = null;
+        }
 
-        // Read bit size as uint32 in Unity format
-        var bitSizeRaw = reader.ReadUInt32();
-        BitSize = bitSizeRaw > 0 ? (byte)bitSizeRaw : null;
-
-        // Read data array length and bytes
+        // Read data array
         var dataLength = reader.ReadInt32();
-        Data = reader.ReadBytes(dataLength);
+        Data = dataLength > 0 ? reader.ReadBytes(dataLength) : Array.Empty<byte>();
+        reader.Align(4);
 
-        // Critical: 4-byte alignment after reading byte array
-        // This matches UnityPy behavior and Unity's serialization format
+        // Read bit size (stored as UInt8 in TypeTree, but we read as uint for the count)
+        BitSize = reader.ReadByte();
         reader.Align(4);
     }
 
