@@ -118,19 +118,18 @@
             
             _geometry = await AssetRenderer.RenderAsync(fileItem, state.ZipBytes, default);
 
-            // Step 4: Initialize Three.js viewer
-            _loadingMessage = "Initializing 3D viewer...";
+            // Step 4: Mark loading complete and render canvas
+            _loading = false;
             StateHasChanged();
             
+            // Wait for Blazor to render the canvas element
+            await Task.Delay(100);
+
+            // Step 5: Initialize Three.js viewer
             await ViewerService.InitializeAsync("threeJsCanvas");
 
-            // Step 5: Load mesh into viewer
-            _loadingMessage = "Loading mesh...";
-            StateHasChanged();
-            
+            // Step 6: Load mesh into viewer
             _meshId = await ViewerService.ShowAsync(_geometry);
-
-            _loading = false;
         }
         catch (NotImplementedException ex)
         {

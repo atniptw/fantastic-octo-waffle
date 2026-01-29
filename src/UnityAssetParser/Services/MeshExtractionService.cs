@@ -128,15 +128,28 @@ public sealed class MeshExtractionService
         var version = GetUnityVersion(serializedFile.Header);
         bool isBigEndian = serializedFile.Header.Endianness == 1;
 
+        // Get TypeTree nodes for this object's type
+        var meshType = serializedFile.TypeTree.GetType(meshObj.TypeId);
+        var typeTreeNodes = meshType?.Nodes;
+
         // Parse Mesh object
         Mesh? mesh;
         try
         {
-            mesh = MeshParser.Parse(objectData.Span, version, isBigEndian, resSData);
+            if (typeTreeNodes != null && typeTreeNodes.Count > 0)
+            {
+                // Use TypeTree-driven parsing
+                mesh = MeshParser.ParseWithTypeTree(objectData.Span, typeTreeNodes, version, isBigEndian, resSData);
+            }
+            else
+            {
+                // Fallback to legacy parsing
+                mesh = MeshParser.Parse(objectData.Span, version, isBigEndian, resSData);
+            }
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"DEBUG: MeshParser.Parse threw exception: {ex.GetType().Name}: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"DEBUG: MeshParser failed: {ex.GetType().Name}: {ex.Message}");
             throw;
         }
         

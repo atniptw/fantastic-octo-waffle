@@ -103,7 +103,7 @@ public class AssetRenderer : IAssetRenderer
         // Use first mesh object
         var meshObj = meshObjects[0];
         var meshData = serializedFile.ReadObjectData(meshObj);
-        var version = ExtractVersionTuple((int)serializedFile.Header.Version);
+        var version = ParseUnityVersion(serializedFile.Header.UnityVersionString);
         var isBigEndian = serializedFile.Header.Endianness != 0;
         var mesh = MeshParser.Parse(meshData.Span, version, isBigEndian);
 
@@ -112,8 +112,25 @@ public class AssetRenderer : IAssetRenderer
             throw new InvalidDataException("Failed to parse Mesh object.");
         }
 
-        // Convert to Three.js format
-        return ConvertMeshToThreeJS(mesh);
+        // Try to load external resource data (Node 1 usually contains .resS data)
+        byte[]? externalResourceData = null;
+        if (bundle.Nodes.Count > 1)
+        {
+            try
+            {
+                var node1 = bundle.Nodes[1];
+                var node1Data = bundle.ExtractNode(node1);
+                externalResourceData = node1Data.ToArray();
+            }
+            catch
+            {
+                // If resource loading fails, continue without external data
+                // (vertices will still show as placeholder)
+            }
+        }
+
+        // Convert to Three.js format with actual vertex data
+        return ConvertMeshToThreeJS(mesh, externalResourceData);
     }
 
     private ThreeJsGeometry ParseSerializedFile(byte[] serializedFileBytes)
@@ -130,7 +147,7 @@ public class AssetRenderer : IAssetRenderer
         // Use first mesh object
         var meshObj = meshObjects[0];
         var meshData = serializedFile.ReadObjectData(meshObj);
-        var version = ExtractVersionTuple((int)serializedFile.Header.Version);
+        var version = ParseUnityVersion(serializedFile.Header.UnityVersionString);
         var isBigEndian = serializedFile.Header.Endianness != 0;
         var mesh = MeshParser.Parse(meshData.Span, version, isBigEndian);
 
@@ -139,50 +156,84 @@ public class AssetRenderer : IAssetRenderer
             throw new InvalidDataException("Failed to parse Mesh object.");
         }
 
-        // Convert to Three.js format
-        return ConvertMeshToThreeJS(mesh);
+        // For SerializedFile, we don't have external resources, so pass null
+        // Vertex data should be inline if available
+        return ConvertMeshToThreeJS(mesh, null);
     }
 
     /// <summary>
     /// Converts SerializedFile version number to version tuple (major, minor, patch, build).
     /// For version 22 (modern Unity), returns (2022, 0, 0, 0) as a reasonable default.
     /// </summary>
-    private static (int, int, int, int) ExtractVersionTuple(int version)
+    /// <summary>
+    /// Parses Unity version string (e.g., "2020.3.3f1c1") into tuple (major, minor, patch, type).
+    /// </summary>
+    private static (int, int, int, int) ParseUnityVersion(string versionString)
     {
-        return version switch
+        if (string.IsNullOrEmpty(versionString))
         {
-            22 => (2022, 0, 0, 0),  // Modern Unity 2022+
-            21 => (2021, 0, 0, 0),  // Unity 2021
-            20 => (2020, 0, 0, 0),  // Unity 2020
-            19 => (2019, 0, 0, 0),  // Unity 2019
-            _ => (version, 0, 0, 0) // Fallback: use version as major
-        };
+            return (2020, 0, 0, 0); // Default fallback
+        }
+
+        // Parse "2020.3.3f1c1" -> (2020, 3, 3, 0)
+        var parts = versionString.Split('.');
+        if (parts.Length < 3)
+        {
+            return (2020, 0, 0, 0);
+        }
+
+        int.TryParse(parts[0], out int major);
+        int.TryParse(parts[1], out int minor);
+        
+        // Parse patch (may have letter suffix like "3f1c1")
+        var patchStr = parts[2];
+        int patchEndIdx = 0;
+        while (patchEndIdx < patchStr.Length && char.IsDigit(patchStr[patchEndIdx]))
+        {
+            patchEndIdx++;
+        }
+        int.TryParse(patchStr.Substring(0, Math.Max(1, patchEndIdx)), out int patch);
+
+        return (major, minor, patch, 0);
     }
 
     /// <summary>
     /// Converts a parsed Mesh object to Three.js-compatible geometry format.
+    /// Extracts actual vertex positions and attributes from the mesh data.
     /// </summary>
-    private ThreeJsGeometry ConvertMeshToThreeJS(Mesh mesh)
+    private ThreeJsGeometry ConvertMeshToThreeJS(Mesh mesh, byte[]? externalResourceData = null)
     {
         // Extract indices from IndexBuffer
         uint[] indices = ExtractIndices(mesh);
+        Console.WriteLine($"DEBUG: ConvertMeshToThreeJS - indices.Length={indices.Length}");
 
-        // For now, we have indices but vertex positions require loading external .resS resource
-        // Create minimal geometry with what we have
-        var positions = new float[mesh.VertexData?.VertexCount * 3 ?? 0];
-        
-        // Create placeholder positions (will be replaced when we load .resS files)
-        // For now, create a simple bounding box visualization
+        // Extract vertex positions using VertexDataExtractor
+        float[] positions = VertexDataExtractor.ExtractVertexPositions(mesh, externalResourceData);
+        Console.WriteLine($"DEBUG: ConvertMeshToThreeJS - positions.Length={positions.Length}");
+
+        // If no positions found, create placeholder
         if (positions.Length == 0)
         {
-            positions = new float[]
+            positions = CreatePlaceholderPositions(mesh.VertexData?.VertexCount ?? 4);
+        }
+
+        // Extract normals and UVs
+        float[]? normals = null;
+        float[]? uvs = null;
+
+        if (mesh.CompressedMesh != null)
+        {
+            var extractedNormals = VertexDataExtractor.ExtractVertexNormals(mesh, externalResourceData);
+            if (extractedNormals.Length > 0)
             {
-                -0.5f, -0.5f, -0.5f,
-                0.5f, -0.5f, -0.5f,
-                0.5f, 0.5f, -0.5f,
-                -0.5f, 0.5f, -0.5f,
-            };
-            indices = new uint[] { 0, 1, 1, 2, 2, 3, 3, 0 };
+                normals = extractedNormals;
+            }
+
+            var extractedUVs = VertexDataExtractor.ExtractVertexUVs(mesh, externalResourceData);
+            if (extractedUVs.Length > 0)
+            {
+                uvs = extractedUVs;
+            }
         }
 
         // Extract submeshes as groups
@@ -201,13 +252,45 @@ public class AssetRenderer : IAssetRenderer
             }
         }
 
-        return new ThreeJsGeometry
+        var result = new ThreeJsGeometry
         {
             Positions = positions,
             Indices = indices,
+            Normals = normals,
+            Uvs = uvs,
             VertexCount = (int)(mesh.VertexData?.VertexCount ?? 4),
             TriangleCount = indices.Length / 3,
             Groups = groups.Count > 0 ? groups : null
+        };
+
+        Console.WriteLine($"DEBUG: ThreeJsGeometry created - VertexCount={result.VertexCount}, TriangleCount={result.TriangleCount}, GroupsCount={groups.Count}");
+        if (groups.Count > 0)
+        {
+            Console.WriteLine($"DEBUG: First group - Start={groups[0].Start}, Count={groups[0].Count}");
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Creates placeholder vertex positions (simple cube) when real data unavailable.
+    /// </summary>
+    private static float[] CreatePlaceholderPositions(uint vertexCount)
+    {
+        // Return a simple cube that fits in the expected vertex count
+        return new float[]
+        {
+            // Front face
+            -0.5f, -0.5f,  0.5f,  // 0
+             0.5f, -0.5f,  0.5f,  // 1
+             0.5f,  0.5f,  0.5f,  // 2
+            -0.5f,  0.5f,  0.5f,  // 3
+            
+            // Back face
+            -0.5f, -0.5f, -0.5f,  // 4
+            -0.5f,  0.5f, -0.5f,  // 5
+             0.5f,  0.5f, -0.5f,  // 6
+             0.5f, -0.5f, -0.5f,  // 7
         };
     }
 

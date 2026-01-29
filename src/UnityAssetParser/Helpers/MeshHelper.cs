@@ -1,3 +1,4 @@
+using UnityAssetParser.Bundle;
 using UnityAssetParser.Classes;
 
 namespace UnityAssetParser.Helpers;
@@ -20,6 +21,9 @@ public sealed class MeshHelper
     private readonly Mesh _mesh;
     private readonly (int, int, int, int) _version;
     private readonly bool _isLittleEndian;
+    private readonly StreamingInfoResolver? _streamingResolver;
+    private readonly IReadOnlyList<NodeInfo>? _nodes;
+    private readonly DataRegion? _dataRegion;
 
     // Extracted geometry data (output)
     private int _vertexCount;
@@ -69,11 +73,21 @@ public sealed class MeshHelper
     /// <param name="mesh">The mesh to extract geometry from.</param>
     /// <param name="version">Unity version tuple (major, minor, patch, type).</param>
     /// <param name="isLittleEndian">Whether the mesh data is little-endian (default: true).</param>
-    public MeshHelper(Mesh mesh, (int, int, int, int) version, bool isLittleEndian = true)
+    /// <param name="nodes">Optional list of nodes for resolving StreamingInfo references.</param>
+    /// <param name="dataRegion">Optional data region for loading external .resS resource data.</param>
+    public MeshHelper(
+        Mesh mesh,
+        (int, int, int, int) version,
+        bool isLittleEndian = true,
+        IReadOnlyList<NodeInfo>? nodes = null,
+        DataRegion? dataRegion = null)
     {
         _mesh = mesh ?? throw new ArgumentNullException(nameof(mesh));
         _version = version;
         _isLittleEndian = isLittleEndian;
+        _nodes = nodes;
+        _dataRegion = dataRegion;
+        _streamingResolver = nodes != null && dataRegion != null ? new StreamingInfoResolver() : null;
     }
 
     /// <summary>
@@ -137,12 +151,24 @@ public sealed class MeshHelper
         // Handle streaming data from external .resS file
         if (_mesh.StreamData != null && !string.IsNullOrEmpty(_mesh.StreamData.Path))
         {
-            // TODO: Implement external .resS data loading
-            // For now, this would require passing in the BundleFile context to resolve the path
-            // The data would be loaded via StreamingInfoResolver and assigned to vertexData.DataSize
-            throw new NotImplementedException(
-                "External streaming data (.resS) not yet supported. " +
-                "This requires BundleFile context to resolve StreamingInfo.Path.");
+            if (_streamingResolver != null && _nodes != null && _dataRegion != null && vertexData != null && vertexData.DataSize == null)
+            {
+                try
+                {
+                    var externalData = _streamingResolver.Resolve(_nodes, _dataRegion, _mesh.StreamData);
+                    vertexData.DataSize = externalData.ToArray();
+                    Console.WriteLine($"DEBUG: Loaded external .resS data: Path={_mesh.StreamData.Path}, Size={vertexData.DataSize.Length} bytes");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"DEBUG: Failed to load external .resS data: {ex.Message}");
+                    // Continue without external data - vertex extraction will fail gracefully
+                }
+            }
+            else if (_streamingResolver == null)
+            {
+                Console.WriteLine($"DEBUG: StreamingInfo present but no resolver available. External data not loaded.");
+            }
         }
 
         // Handle index buffer format

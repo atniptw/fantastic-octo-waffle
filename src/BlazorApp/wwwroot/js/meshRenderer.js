@@ -125,10 +125,26 @@ export function loadMesh(geometry, groups = null, materialOpts = {}) {
     validateGeometry(geometry);
 
     const bufferGeometry = createBufferGeometry(geometry, groups);
+    
+    console.log('DEBUG: BufferGeometry created', {
+        vertexCount: bufferGeometry.attributes.position.count,
+        indexCount: bufferGeometry.index.count,
+        hasNormals: !!bufferGeometry.attributes.normal,
+        groups: bufferGeometry.groups
+    });
+    
     const material = createMaterial(materialOpts);
     const mesh = new THREE.Mesh(bufferGeometry, material);
     
+    console.log('DEBUG: Mesh created', {
+        visible: mesh.visible,
+        materialType: material.type,
+        materialColor: material.color
+    });
+    
     scene.add(mesh);
+    console.log('DEBUG: Mesh added to scene, scene.children.length =', scene.children.length);
+    
     centerCameraOnMesh(mesh);
 
     const meshId = `mesh-${nextMeshId++}`;
@@ -178,12 +194,31 @@ function validateGeometry(geometry) {
  * @returns {THREE.BufferGeometry} Created geometry
  */
 function createBufferGeometry(geometry, groups) {
+    console.log('DEBUG: createBufferGeometry called', {
+        positionsLength: geometry.positions?.length,
+        indicesLength: geometry.indices?.length,
+        normalsLength: geometry.normals?.length,
+        groupsLength: groups?.length
+    });
+
     const bufferGeometry = new THREE.BufferGeometry();
     
+    // Convert arrays to typed arrays (Blazor sends plain arrays)
+    const positions = geometry.positions instanceof Float32Array 
+        ? geometry.positions 
+        : new Float32Array(geometry.positions);
+    
+    const indices = geometry.indices instanceof Uint32Array 
+        ? geometry.indices 
+        : new Uint32Array(geometry.indices);
+    
+    console.log('DEBUG: Setting position attribute', positions.length, 'values');
     bufferGeometry.setAttribute('position',
-        new THREE.BufferAttribute(geometry.positions, 3));
+        new THREE.BufferAttribute(positions, 3));
+    
+    console.log('DEBUG: Setting index', indices.length, 'values');
     bufferGeometry.setIndex(
-        new THREE.BufferAttribute(geometry.indices, 1));
+        new THREE.BufferAttribute(indices, 1));
 
     addNormalsToGeometry(bufferGeometry, geometry);
     addUVsToGeometry(bufferGeometry, geometry);
@@ -199,8 +234,11 @@ function createBufferGeometry(geometry, groups) {
  */
 function addNormalsToGeometry(bufferGeometry, geometry) {
     if (geometry.normals && geometry.normals.length === geometry.positions.length) {
+        const normals = geometry.normals instanceof Float32Array 
+            ? geometry.normals 
+            : new Float32Array(geometry.normals);
         bufferGeometry.setAttribute('normal',
-            new THREE.BufferAttribute(geometry.normals, 3));
+            new THREE.BufferAttribute(normals, 3));
     } else {
         bufferGeometry.computeVertexNormals();
     }
@@ -214,8 +252,11 @@ function addNormalsToGeometry(bufferGeometry, geometry) {
 function addUVsToGeometry(bufferGeometry, geometry) {
     const vertexCount = geometry.positions.length / 3;
     if (geometry.uvs && geometry.uvs.length === vertexCount * 2) {
+        const uvs = geometry.uvs instanceof Float32Array 
+            ? geometry.uvs 
+            : new Float32Array(geometry.uvs);
         bufferGeometry.setAttribute('uv',
-            new THREE.BufferAttribute(geometry.uvs, 2));
+            new THREE.BufferAttribute(uvs, 2));
     }
 }
 
@@ -256,6 +297,13 @@ function centerCameraOnMesh(mesh) {
     const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
 
+    console.log('DEBUG: Mesh bounding box', {
+        min: box.min,
+        max: box.max,
+        center: center,
+        size: size
+    });
+
     // Set controls target to mesh center
     controls.target.copy(center);
 
@@ -265,11 +313,20 @@ function centerCameraOnMesh(mesh) {
     let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
     cameraZ *= CAMERA_MARGIN_FACTOR; // Add some margin
 
-    camera.position.set(
-        center.x + cameraZ * 0.5,
-        center.y + cameraZ * 0.5,
-        center.z + cameraZ
-    );
+    const newCameraPos = {
+        x: center.x + cameraZ * 0.5,
+        y: center.y + cameraZ * 0.5,
+        z: center.z + cameraZ
+    };
+
+    console.log('DEBUG: Camera positioning', {
+        maxDim: maxDim,
+        cameraZ: cameraZ,
+        newPosition: newCameraPos,
+        lookingAt: center
+    });
+
+    camera.position.set(newCameraPos.x, newCameraPos.y, newCameraPos.z);
     camera.lookAt(center);
     controls.update();
 }

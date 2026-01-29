@@ -15,27 +15,101 @@ public sealed class PackedBitVector
     /// <summary>
     /// Gets the number of items stored in the packed vector.
     /// </summary>
-    public uint NumItems { get; }
+    public uint NumItems { get; private set; }
 
     /// <summary>
     /// Gets the number of bits used to store each value (optional, can be 0 or null).
     /// </summary>
-    public byte? BitSize { get; }
+    public byte? BitSize { get; private set; }
 
     /// <summary>
     /// Gets the range used for float reconstruction (max - min).
     /// </summary>
-    public float? Range { get; }
+    public float? Range { get; private set; }
 
     /// <summary>
     /// Gets the start value used for float reconstruction (min value).
     /// </summary>
-    public float? Start { get; }
+    public float? Start { get; private set; }
 
     /// <summary>
     /// Gets the raw bit-packed data as a byte array.
     /// </summary>
-    public byte[] Data { get; }
+    public byte[] Data { get; private set; }
+
+    /// <summary>
+    /// Initializes an empty PackedBitVector.
+    /// </summary>
+    public PackedBitVector()
+    {
+        NumItems = 0;
+        BitSize = 0;
+        Range = 0f;
+        Start = 0f;
+        Data = Array.Empty<byte>();
+    }
+
+    /// <summary>
+    /// Initializes a new instance from TypeTree dictionary data.
+    /// Factory method for TypeTree parsing.
+    /// </summary>
+    private PackedBitVector(uint numItems, byte? bitSize, float? range, float? start, byte[] data)
+    {
+        NumItems = numItems;
+        BitSize = bitSize;
+        Range = range;
+        Start = start;
+        Data = data;
+    }
+
+    /// <summary>
+    /// Creates a PackedBitVector from TypeTree dictionary data.
+    /// </summary>
+    public static PackedBitVector FromTypeTreeData(
+        Dictionary<string, object?> dict,
+        bool hasRangeStart = true)
+    {
+        uint numItems = 0;
+        if (dict.TryGetValue("m_NumItems", out var numObj) && numObj != null)
+        {
+            numItems = Convert.ToUInt32(numObj);
+        }
+
+        byte? bitSize = null;
+        if (dict.TryGetValue("m_BitSize", out var bitObj) && bitObj != null)
+        {
+            bitSize = Convert.ToByte(bitObj);
+        }
+
+        float? range = null, start = null;
+        if (hasRangeStart)
+        {
+            if (dict.TryGetValue("m_Range", out var rangeObj) && rangeObj != null)
+            {
+                range = Convert.ToSingle(rangeObj);
+            }
+            if (dict.TryGetValue("m_Start", out var startObj) && startObj != null)
+            {
+                start = Convert.ToSingle(startObj);
+            }
+        }
+
+        byte[] data = Array.Empty<byte>();
+        if (dict.TryGetValue("m_Data", out var dataObj) && dataObj is List<object?> dataList)
+        {
+            var bytes = new List<byte>();
+            foreach (var item in dataList)
+            {
+                if (item != null)
+                {
+                    bytes.Add(Convert.ToByte(item));
+                }
+            }
+            data = bytes.ToArray();
+        }
+
+        return new PackedBitVector(numItems, bitSize, range, start, data);
+    }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="PackedBitVector"/> class by reading from a binary reader.
