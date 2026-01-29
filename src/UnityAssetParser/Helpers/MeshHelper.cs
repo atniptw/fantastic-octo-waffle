@@ -16,6 +16,10 @@ namespace UnityAssetParser.Helpers;
 /// 
 /// Reference: https://github.com/K0lb3/UnityPy/blob/master/UnityPy/helpers/MeshHelper.py
 /// </summary>
+#pragma warning disable CA1819 // Properties should not return arrays (performance requirement for vertex data)
+#pragma warning disable CA1031 // Do not catch general Exception type (streaming resolver needs broad error handling)
+#pragma warning disable CA1502 // Avoid excessive complexity (format enumeration requires many cases)
+#pragma warning disable CA1508 // Avoid dead code (false positive on null checks)
 public sealed class MeshHelper
 {
     private readonly Mesh _mesh;
@@ -30,8 +34,13 @@ public sealed class MeshHelper
     private float[]? _positions;  // Flat XYZ array: [x0,y0,z0, x1,y1,z1, ...]
     private float[]? _normals;    // Flat XYZ array
     private float[]? _uvs;        // Flat UV array: [u0,v0, u1,v1, ...]
+    private float[]? _colors;     // Flat RGBA array: [r0,g0,b0,a0, r1,g1,b1,a1, ...]
+    private float[]? _tangents;   // Flat XYZW array: [x0,y0,z0,w0, x1,y1,z1,w1, ...]
+    private float[]? _uv2;        // Additional UV set (TexCoord1)
+    private float[]? _uv3;        // Third UV set (TexCoord2)
     private uint[]? _indices;     // Triangle indices
     private bool _use16BitIndices = true;
+    private bool _isBigEndian => !_isLittleEndian;
 
     /// <summary>
     /// Gets the vertex count.
@@ -55,6 +64,30 @@ public sealed class MeshHelper
     /// Format: [u0, v0, u1, v1, ...]
     /// </summary>
     public float[]? UVs => _uvs;
+
+    /// <summary>
+    /// Gets the colors as a flat float array (length = VertexCount * 4), or null if not present.
+    /// Format: [r0, g0, b0, a0, r1, g1, b1, a1, ...]
+    /// </summary>
+    public float[]? Colors => _colors;
+
+    /// <summary>
+    /// Gets the tangents as a flat float array (length = VertexCount * 4), or null if not present.
+    /// Format: [x0, y0, z0, w0, x1, y1, z1, w1, ...]
+    /// </summary>
+    public float[]? Tangents => _tangents;
+
+    /// <summary>
+    /// Gets the second UV set (TexCoord1) as a flat float array (length = VertexCount * 2), or null if not present.
+    /// Format: [u0, v0, u1, v1, ...]
+    /// </summary>
+    public float[]? UV2 => _uv2;
+
+    /// <summary>
+    /// Gets the third UV set (TexCoord2) as a flat float array (length = VertexCount * 2), or null if not present.
+    /// Format: [u0, v0, u1, v1, ...]
+    /// </summary>
+    public float[]? UV3 => _uv3;
 
     /// <summary>
     /// Gets the triangle indices as a uint array (length = IndexCount).
@@ -499,6 +532,7 @@ public sealed class MeshHelper
 
     /// <summary>
     /// Unpacks component bytes to float array based on format.
+    /// Verbatim port from UnityPy/helpers/MeshHelper.py unpack_vertexdata.
     /// </summary>
     private float[] UnpackComponentData(byte[] componentBytes, byte format, int dimension)
     {
@@ -518,7 +552,7 @@ public sealed class MeshHelper
                     break;
                 case VertexChannelFormat.Color:
                 case VertexChannelFormat.Byte:
-                    UnpackBytes(componentBytes, result, dimension);
+                    UnpackUNorm8(componentBytes, result, dimension);
                     break;
                 case VertexChannelFormat.UInt32:
                     UnpackUInt32(componentBytes, result, dimension);
@@ -539,12 +573,34 @@ public sealed class MeshHelper
                     break;
                 case VertexFormat2017.Color:
                 case VertexFormat2017.UNorm8:
+                    UnpackUNorm8(componentBytes, result, dimension);
+                    break;
+                case VertexFormat2017.SNorm8:
+                    UnpackSNorm8(componentBytes, result, dimension);
+                    break;
                 case VertexFormat2017.UInt8:
-                    UnpackBytes(componentBytes, result, dimension);
+                    UnpackUInt8(componentBytes, result, dimension);
+                    break;
+                case VertexFormat2017.SInt8:
+                    UnpackSInt8(componentBytes, result, dimension);
+                    break;
+                case VertexFormat2017.UNorm16:
+                    UnpackUNorm16(componentBytes, result, dimension);
+                    break;
+                case VertexFormat2017.SNorm16:
+                    UnpackSNorm16(componentBytes, result, dimension);
+                    break;
+                case VertexFormat2017.UInt16:
+                    UnpackUInt16(componentBytes, result, dimension);
+                    break;
+                case VertexFormat2017.SInt16:
+                    UnpackSInt16(componentBytes, result, dimension);
                     break;
                 case VertexFormat2017.UInt32:
-                case VertexFormat2017.SInt32:
                     UnpackUInt32(componentBytes, result, dimension);
+                    break;
+                case VertexFormat2017.SInt32:
+                    UnpackSInt32(componentBytes, result, dimension);
                     break;
                 default:
                     throw new NotSupportedException($"Unsupported format: {format}");
@@ -561,12 +617,34 @@ public sealed class MeshHelper
                     UnpackFloat16(componentBytes, result, dimension);
                     break;
                 case VertexFormat.UNorm8:
+                    UnpackUNorm8(componentBytes, result, dimension);
+                    break;
+                case VertexFormat.SNorm8:
+                    UnpackSNorm8(componentBytes, result, dimension);
+                    break;
                 case VertexFormat.UInt8:
-                    UnpackBytes(componentBytes, result, dimension);
+                    UnpackUInt8(componentBytes, result, dimension);
+                    break;
+                case VertexFormat.SInt8:
+                    UnpackSInt8(componentBytes, result, dimension);
+                    break;
+                case VertexFormat.UNorm16:
+                    UnpackUNorm16(componentBytes, result, dimension);
+                    break;
+                case VertexFormat.SNorm16:
+                    UnpackSNorm16(componentBytes, result, dimension);
+                    break;
+                case VertexFormat.UInt16:
+                    UnpackUInt16(componentBytes, result, dimension);
+                    break;
+                case VertexFormat.SInt16:
+                    UnpackSInt16(componentBytes, result, dimension);
                     break;
                 case VertexFormat.UInt32:
-                case VertexFormat.SInt32:
                     UnpackUInt32(componentBytes, result, dimension);
+                    break;
+                case VertexFormat.SInt32:
+                    UnpackSInt32(componentBytes, result, dimension);
                     break;
                 default:
                     throw new NotSupportedException($"Unsupported format: {format}");
@@ -638,11 +716,80 @@ public sealed class MeshHelper
         }
     }
 
-    private static void UnpackBytes(byte[] src, float[] dst, int dimension)
+    private void UnpackUNorm8(byte[] src, float[] dst, int dimension)
     {
-        for (var i = 0; i < src.Length; i++)
+        for (int i = 0; i < src.Length; i++)
         {
-            dst[i] = src[i] / 255.0f;
+            dst[i] = src[i] / 255f;
+        }
+    }
+
+    private void UnpackSNorm8(byte[] src, float[] dst, int dimension)
+    {
+        for (int i = 0; i < src.Length; i++)
+        {
+            int signedByte = (sbyte)src[i];
+            dst[i] = signedByte < 0 ? signedByte / 128f : signedByte / 127f;
+        }
+    }
+
+    private void UnpackUInt8(byte[] src, float[] dst, int dimension)
+    {
+        for (int i = 0; i < src.Length; i++)
+        {
+            dst[i] = src[i];
+        }
+    }
+
+    private void UnpackSInt8(byte[] src, float[] dst, int dimension)
+    {
+        for (int i = 0; i < src.Length; i++)
+        {
+            dst[i] = (sbyte)src[i];
+        }
+    }
+
+    private void UnpackUNorm16(byte[] src, float[] dst, int dimension)
+    {
+        for (int i = 0; i < dst.Length; i++)
+        {
+            ushort value = BitConverter.ToUInt16(src, i * 2);
+            if (_version.Item1 >= 2020 && _isBigEndian)
+                value = (ushort)((value << 8) | (value >> 8));
+            dst[i] = value / 65535f;
+        }
+    }
+
+    private void UnpackSNorm16(byte[] src, float[] dst, int dimension)
+    {
+        for (int i = 0; i < dst.Length; i++)
+        {
+            short value = BitConverter.ToInt16(src, i * 2);
+            if (_version.Item1 >= 2020 && _isBigEndian)
+                value = (short)((value << 8) | (value >> 8));
+            dst[i] = value < 0 ? value / 32768f : value / 32767f;
+        }
+    }
+
+    private void UnpackUInt16(byte[] src, float[] dst, int dimension)
+    {
+        for (int i = 0; i < dst.Length; i++)
+        {
+            ushort value = BitConverter.ToUInt16(src, i * 2);
+            if (_version.Item1 >= 2020 && _isBigEndian)
+                value = (ushort)((value << 8) | (value >> 8));
+            dst[i] = value;
+        }
+    }
+
+    private void UnpackSInt16(byte[] src, float[] dst, int dimension)
+    {
+        for (int i = 0; i < dst.Length; i++)
+        {
+            short value = BitConverter.ToInt16(src, i * 2);
+            if (_version.Item1 >= 2020 && _isBigEndian)
+                value = (short)((value << 8) | (value >> 8));
+            dst[i] = value;
         }
     }
 
@@ -655,42 +802,95 @@ public sealed class MeshHelper
         }
     }
 
+    private void UnpackSInt32(byte[] src, float[] dst, int dimension)
+    {
+        var intCount = src.Length / 4;
+        for (var i = 0; i < intCount; i++)
+        {
+            int value = BitConverter.ToInt32(src, i * 4);
+            if (_isBigEndian)
+                value = (int)(((uint)value << 24) | (((uint)value << 8) & 0x00ff0000) | (((uint)value >> 8) & 0x0000ff00) | ((uint)value >> 24));
+            dst[i] = value;
+        }
+    }
+
     /// <summary>
     /// Assigns unpacked channel data to the appropriate vertex attribute array.
     /// Verbatim port of MeshHandler.assign_channel_vertex_data() from UnityPy.
+    /// Supports all 7 vertex channels across Unity versions (<2018, 2017-2018, >=2019).
     /// </summary>
     private void AssignChannelData(int channel, float[] data, int dimension)
     {
         if (_version.Item1 >= 2018)
         {
+            // Unity 2018+: channels are 0=Vertex, 1=Normal, 2=Color, 3=TexCoord0, 4=TexCoord1, 5=Tangent, 6=TexCoord2
             switch (channel)
             {
-                case 0:  // Vertex
+                case 0:  // Vertex (positions)
                     _positions = data;
                     break;
                 case 1:  // Normal
                     _normals = data;
                     break;
-                case 4:  // TexCoord0
+                case 2:  // Color (RGBA, 4D)
+                    _colors = data;
+                    break;
+                case 3:  // TexCoord0 or TexCoord1 (depends on version)
+                    // In 2019+, this is typically unused; TexCoord0 is at channel 4
+                    if (_version.Item1 < 2019)
+                    {
+                        _uvs = data;  // TexCoord0
+                    }
+                    break;
+                case 4:  // TexCoord0 or TexCoord1 (2019+) 
+                    // In 2019+, this is TexCoord0
                     _uvs = data;
                     break;
-                // Other channels (tangent, color, etc.) not yet implemented
+                case 5:  // TexCoord1 (or Tangent in some versions)
+                    // Typically TexCoord1 for UV data, but can also be Tangent (4D: XYZW)
+                    if (dimension == 4)
+                    {
+                        _tangents = data;  // Tangent (XYZW)
+                    }
+                    else if (dimension == 2)
+                    {
+                        _uv2 = data;  // TexCoord1 (2D)
+                    }
+                    break;
+                case 6:  // Tangent (4D: XYZW)
+                    _tangents = data;
+                    break;
+                case 7:  // TexCoord2 (rarely used)
+                    _uv2 = data;
+                    break;
             }
         }
         else
         {
+            // Unity <2018: channels are 0=Vertex, 1=Normal, 2=Color, 3=TexCoord0, 4=TexCoord1, 5=Tangent, 6=TexCoord2
             switch (channel)
             {
-                case 0:  // Vertex
+                case 0:  // Vertex (positions)
                     _positions = data;
                     break;
                 case 1:  // Normal
                     _normals = data;
                     break;
+                case 2:  // Color (RGBA, 4D)
+                    _colors = data;
+                    break;
                 case 3:  // TexCoord0
                     _uvs = data;
                     break;
-                // Other channels not yet implemented
+                case 4:  // TexCoord1
+                    _uv2 = data;
+                    break;
+                case 5:  // Tangent (XYZW)
+                    _tangents = data;
+                    break;
+                case 6:  // TexCoord2
+                    _uv3 = data;
+                    break;
             }
         }
     }
