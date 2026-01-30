@@ -748,12 +748,18 @@ public sealed class SerializedFile
             throw new InvalidOperationException("Cannot build tree from empty node list");
         }
 
+        Console.WriteLine($"[BuildTypeTree] Starting with {flatNodes.Count} nodes");
         var root = flatNodes[0];
         
         // For each node, populate its Children list with immediate children
         // A child has level = parent.level + 1
         for (int i = 0; i < flatNodes.Count; i++)
         {
+            if (i % 500 == 0 && i > 0)
+            {
+                Console.WriteLine($"[BuildTypeTree] Processed {i}/{flatNodes.Count} nodes...");
+            }
+            
             var parentNode = flatNodes[i];
             int parentLevel = parentNode.Level;
             int childLevel = parentLevel + 1;
@@ -782,6 +788,7 @@ public sealed class SerializedFile
             }
         }
         
+        Console.WriteLine($"[BuildTypeTree] Completed building tree for {flatNodes.Count} nodes");
         return root;
     }
 }

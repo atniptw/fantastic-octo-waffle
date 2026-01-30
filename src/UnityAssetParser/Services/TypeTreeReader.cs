@@ -82,20 +82,31 @@ public sealed class TypeTreeReader
     /// </summary>
     private object? ReadNode(TypeTreeNode node)
     {
+        object? value;
+        
         // If no children, it's a primitive type
         if (node.IsPrimitive)
         {
-            return ReadPrimitive(node.Type);
+            value = ReadPrimitive(node.Type);
         }
-
         // If it's an array
-        if (node.IsArray)
+        else if (node.IsArray)
         {
-            return ReadArray(node);
+            value = ReadArray(node);
         }
-
         // Otherwise it's a complex object/struct
-        return ReadObject(node);
+        else
+        {
+            value = ReadObject(node);
+        }
+        
+        // Check if this node requires alignment (UnityPy's kAlignBytes = 0x4000)
+        if ((node.MetaFlag & 0x4000) != 0)
+        {
+            _reader.Align();
+        }
+        
+        return value;
     }
 
     /// <summary>
@@ -144,7 +155,14 @@ public sealed class TypeTreeReader
             }
         }
         
-        if (size <= 0)
+        // CRITICAL: Reject arrays with nonsensical sizes (likely corrupt data or alignment issues)
+        if (size < 0 || size > 100_000_000)
+        {
+            Console.WriteLine($"[ARRAY-ERROR] Rejecting array with invalid size={size}, returning empty");
+            return result;
+        }
+        
+        if (size == 0)
         {
             return result;
         }
@@ -173,20 +191,41 @@ public sealed class TypeTreeReader
         // Read array elements
         if (dataTemplate.IsPrimitive)
         {
-            // Handle empty Type field - skip bytes based on ByteSize
+            // Handle empty Type field - check if it's actual data or external resource pointer
             if (string.IsNullOrEmpty(dataTemplate.Type))
             {
+                // Arrays with empty Type and large sizes are likely external resource pointers (StreamingInfo)
+                // These should NOT be read from the current stream - they point to .resS files
+                // Also check if requested bytes exceed available stream data
+                long bytesNeeded = (long)size * Math.Max(1, dataTemplate.ByteSize);
+                long bytesAvailable = _reader.BaseStream.Length - _reader.BaseStream.Position;
+                
+                if (size > 100_000 || bytesNeeded > bytesAvailable)
+                {
+                    Console.WriteLine($"[ARRAY-DEBUG] Skipping empty-Type array (external/overflow): size={size}, bytesNeeded={bytesNeeded}, bytesAvail={bytesAvailable}");
+                    return result; // Return empty - actual data is in .resS file or would overflow
+                }
+                
                 if (dataTemplate.ByteSize > 0)
                 {
-                    // Fixed-size elements - skip exact bytes
-                    int bytesToSkip = size * dataTemplate.ByteSize;
-                    Console.WriteLine($"[ARRAY-DEBUG] Skipping primitive array (empty Type): {size} elements × {dataTemplate.ByteSize} bytes = {bytesToSkip} bytes");
-                    _reader.BaseStream.Position += bytesToSkip;
+                    // Small fixed-size elements - read as byte arrays
+                    Console.WriteLine($"[ARRAY-DEBUG] Reading byte array (empty Type): {size} elements × {dataTemplate.ByteSize} bytes");
+                    for (int i = 0; i < size; i++)
+                    {
+                        byte[] bytes = _reader.ReadBytes(dataTemplate.ByteSize);
+                        result.Add(bytes);
+                    }
                 }
                 else
                 {
-                    // Variable size - cannot skip safely
-                    Console.WriteLine($"[ARRAY-ERROR] Cannot skip primitive array with empty Type and ByteSize={dataTemplate.ByteSize}");
+                    // Variable size - read length prefix then bytes for each element
+                    Console.WriteLine($"[ARRAY-DEBUG] Reading variable-size byte array (empty Type): {size} elements with length prefixes");
+                    for (int i = 0; i < size; i++)
+                    {
+                        int length = _reader.ReadInt32();
+                        byte[] bytes = _reader.ReadBytes(length);
+                        result.Add(bytes);
+                    }
                 }
                 return result;
             }
