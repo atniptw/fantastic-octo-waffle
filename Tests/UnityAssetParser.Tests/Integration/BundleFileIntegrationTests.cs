@@ -254,7 +254,7 @@ public class BundleFileIntegrationTests
         writer.Write((byte)0);
 
         // Version: 6
-        writer.Write((uint)6);
+        WriteBigEndianUInt32(writer, 6);
 
         // Unity version: "2020.3.48f1\0"
         writer.Write(Encoding.UTF8.GetBytes("2020.3.48f1"));
@@ -266,18 +266,18 @@ public class BundleFileIntegrationTests
 
         // Size: placeholder (will calculate later)
         long sizePosition = bundle.Position;
-        writer.Write((long)0);
+        WriteBigEndianInt64(writer, 0);
 
         // Compressed BlocksInfo size: placeholder
         long compressedSizePosition = bundle.Position;
-        writer.Write((uint)0);
+        WriteBigEndianUInt32(writer, 0);
 
         // Uncompressed BlocksInfo size: placeholder
         long uncompressedSizePosition = bundle.Position;
-        writer.Write((uint)0);
+        WriteBigEndianUInt32(writer, 0);
 
         // Flags: 0 (no compression, embedded BlocksInfo)
-        writer.Write((uint)0);
+        WriteBigEndianUInt32(writer, 0);
 
         // Apply 4-byte alignment after header
         while (bundle.Position % 4 != 0)
@@ -336,13 +336,13 @@ public class BundleFileIntegrationTests
 
         // === FIX UP HEADER ===
         bundle.Position = sizePosition;
-        writer.Write(bundleEnd);
+        WriteBigEndianInt64(writer, bundleEnd);
 
         uint blocksInfoSize = (uint)(blocksInfoEnd - blocksInfoStart);
         bundle.Position = compressedSizePosition;
-        writer.Write(blocksInfoSize);
+        WriteBigEndianUInt32(writer, blocksInfoSize);
         bundle.Position = uncompressedSizePosition;
-        writer.Write(blocksInfoSize);
+        WriteBigEndianUInt32(writer, blocksInfoSize);
 
         return bundle.ToArray();
     }
@@ -357,16 +357,16 @@ public class BundleFileIntegrationTests
 
         // === HEADER ===
         writer.Write(Encoding.UTF8.GetBytes("UnityFS\0"));
-        writer.Write((uint)6); // Version
+        WriteBigEndianUInt32(writer, 6); // Version
         writer.Write(Encoding.UTF8.GetBytes("2022.3.48f1\0")); // UnityVersion
         writer.Write(Encoding.UTF8.GetBytes("abcdef1234567890\0")); // UnityRevision
         long sizePosition = bundle.Position;
-        writer.Write((long)0); // Size (to fix up later)
+        WriteBigEndianInt64(writer, 0); // Size (to fix up later)
         long compressedSizePosition = bundle.Position;
-        writer.Write((uint)0); // CompressedBlocksInfoSize (to fix up later)
+        WriteBigEndianUInt32(writer, 0); // CompressedBlocksInfoSize (to fix up later)
         long uncompressedSizePosition = bundle.Position;
-        writer.Write((uint)0); // UncompressedBlocksInfoSize (to fix up later)
-        writer.Write((uint)0x80); // Flags: BlocksInfo at end (no compression, 0x80 = streamed)
+        WriteBigEndianUInt32(writer, 0); // UncompressedBlocksInfoSize (to fix up later)
+        WriteBigEndianUInt32(writer, 0x80); // Flags: BlocksInfo at end (no compression, 0x80 = streamed)
 
         // === DATA REGION ===
         byte[] dataBlock = new byte[16];
@@ -416,13 +416,13 @@ public class BundleFileIntegrationTests
 
         // === FIX UP HEADER ===
         bundle.Position = sizePosition;
-        writer.Write(bundleEnd);
+        WriteBigEndianInt64(writer, bundleEnd);
 
         uint blocksInfoSize = (uint)(blocksInfoEnd - blocksInfoStart);
         bundle.Position = compressedSizePosition;
-        writer.Write(blocksInfoSize);
+        WriteBigEndianUInt32(writer, blocksInfoSize);
         bundle.Position = uncompressedSizePosition;
-        writer.Write(blocksInfoSize);
+        WriteBigEndianUInt32(writer, blocksInfoSize);
 
         return bundle.ToArray();
     }
@@ -437,17 +437,17 @@ public class BundleFileIntegrationTests
 
         // === HEADER ===
         writer.Write(Encoding.UTF8.GetBytes("UnityFS\0"));
-        writer.Write((uint)7); // Version (7 supports padding flag)
+        WriteBigEndianUInt32(writer, 7); // Version (7 supports padding flag)
         writer.Write(Encoding.UTF8.GetBytes("2022.3.48f1\0")); // UnityVersion
         writer.Write(Encoding.UTF8.GetBytes("abcdef1234567890\0")); // UnityRevision
         long sizePosition = bundle.Position;
-        writer.Write((long)0); // Size (to fix up later)
+        WriteBigEndianInt64(writer, 0); // Size (to fix up later)
         long compressedSizePosition = bundle.Position;
-        writer.Write((uint)0); // CompressedBlocksInfoSize (to fix up later)
+        WriteBigEndianUInt32(writer, 0); // CompressedBlocksInfoSize (to fix up later)
         long uncompressedSizePosition = bundle.Position;
-        writer.Write((uint)0); // UncompressedBlocksInfoSize (to fix up later)
+        WriteBigEndianUInt32(writer, 0); // UncompressedBlocksInfoSize (to fix up later)
         long flagsPosition = bundle.Position;
-        writer.Write((uint)(0x80 | 0x200)); // Flags: StreamedAtEnd (0x80) + NeedsPaddingAtStart (0x200)
+        WriteBigEndianUInt32(writer, 0x80 | 0x200); // Flags: StreamedAtEnd (0x80) + NeedsPaddingAtStart (0x200)
 
         // Apply 16-byte alignment before data (due to padding flag)
         while (bundle.Position % 16 != 0)
@@ -512,5 +512,25 @@ public class BundleFileIntegrationTests
         writer.Write(blocksInfoSize);
 
         return bundle.ToArray();
+    }
+
+    private static void WriteBigEndianUInt32(BinaryWriter writer, uint value)
+    {
+        writer.Write((byte)((value >> 24) & 0xFF));
+        writer.Write((byte)((value >> 16) & 0xFF));
+        writer.Write((byte)((value >> 8) & 0xFF));
+        writer.Write((byte)(value & 0xFF));
+    }
+
+    private static void WriteBigEndianInt64(BinaryWriter writer, long value)
+    {
+        writer.Write((byte)((value >> 56) & 0xFF));
+        writer.Write((byte)((value >> 48) & 0xFF));
+        writer.Write((byte)((value >> 40) & 0xFF));
+        writer.Write((byte)((value >> 32) & 0xFF));
+        writer.Write((byte)((value >> 24) & 0xFF));
+        writer.Write((byte)((value >> 16) & 0xFF));
+        writer.Write((byte)((value >> 8) & 0xFF));
+        writer.Write((byte)(value & 0xFF));
     }
 }
