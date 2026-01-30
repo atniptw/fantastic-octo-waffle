@@ -132,6 +132,18 @@ public sealed class TypeTreeReader
 
         // Read array size from binary stream
         int size = _reader.ReadInt32();
+        
+        // DEBUG: Log problematic arrays
+        if (size > 10000 || size < 0)
+        {
+            Console.WriteLine($"[ARRAY-WARN] Suspicious size={size}, arrayNode.Name='{arrayNode.Name}', children={arrayNode.Children.Count}");
+            for (int i = 0; i < arrayNode.Children.Count && i < 3; i++)
+            {
+                var child = arrayNode.Children[i];
+                Console.WriteLine($"  child[{i}]: Type='{child.Type}', Name='{child.Name}', ByteSize={child.ByteSize}, TypeFlags=0x{child.TypeFlags:X}, HasChildren={child.Children.Count}");
+            }
+        }
+        
         if (size <= 0)
         {
             return result;
@@ -154,12 +166,31 @@ public sealed class TypeTreeReader
         else
         {
             // No children - cannot deserialize
+            Console.WriteLine($"[ARRAY-WARN] Array with no children, name='{arrayNode.Name}'");
             return result;
         }
 
         // Read array elements
         if (dataTemplate.IsPrimitive)
         {
+            // Handle empty Type field - skip bytes based on ByteSize
+            if (string.IsNullOrEmpty(dataTemplate.Type))
+            {
+                if (dataTemplate.ByteSize > 0)
+                {
+                    // Fixed-size elements - skip exact bytes
+                    int bytesToSkip = size * dataTemplate.ByteSize;
+                    Console.WriteLine($"[ARRAY-DEBUG] Skipping primitive array (empty Type): {size} elements × {dataTemplate.ByteSize} bytes = {bytesToSkip} bytes");
+                    _reader.BaseStream.Position += bytesToSkip;
+                }
+                else
+                {
+                    // Variable size - cannot skip safely
+                    Console.WriteLine($"[ARRAY-ERROR] Cannot skip primitive array with empty Type and ByteSize={dataTemplate.ByteSize}");
+                }
+                return result;
+            }
+            
             // Primitive array - simple loop
             for (int i = 0; i < size; i++)
             {
