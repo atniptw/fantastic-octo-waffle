@@ -3,6 +3,7 @@ namespace UnityAssetParser.SerializedFile;
 /// <summary>
 /// Represents a single node in a type tree field structure.
 /// Describes a field's type, name, size, and position in the hierarchy.
+/// Uses a recursive tree structure to match UnityPy's architecture.
 /// </summary>
 public sealed class TypeTreeNode
 {
@@ -22,12 +23,12 @@ public sealed class TypeTreeNode
     public int ByteSize { get; set; }
 
     /// <summary>
-    /// Index in the type tree node array.
+    /// Index in the type tree node array (original flat list position).
     /// </summary>
     public int Index { get; set; }
 
     /// <summary>
-    /// Type flags (bit 0x4000 indicates array).
+    /// Type flags (bit 0x01 indicates array wrapper in modern Unity).
     /// </summary>
     public int TypeFlags { get; set; }
 
@@ -45,4 +46,26 @@ public sealed class TypeTreeNode
     /// Tree depth level (0 = root, 1 = child, etc.).
     /// </summary>
     public int Level { get; set; }
+
+    /// <summary>
+    /// Child nodes in the tree hierarchy.
+    /// Empty for primitive types, populated for complex types.
+    /// </summary>
+    public List<TypeTreeNode> Children { get; set; } = new();
+
+    /// <summary>
+    /// Checks if this node represents an array type.
+    /// Arrays have TypeFlags bit 0x01 or type name "vector"/"staticvector".
+    /// </summary>
+    public bool IsArray => (TypeFlags & 0x01) != 0 || Type == "vector" || Type == "staticvector";
+
+    /// <summary>
+    /// Checks if this node is a primitive type (no children).
+    /// </summary>
+    public bool IsPrimitive => Children.Count == 0;
+
+    /// <summary>
+    /// Gets the first child node, or null if none exist.
+    /// </summary>
+    public TypeTreeNode? FirstChild => Children.Count > 0 ? Children[0] : null;
 }

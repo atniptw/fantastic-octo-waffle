@@ -1,3 +1,4 @@
+using System.Text;
 using UnityAssetParser.Exceptions;
 using UnityAssetParser.Helpers;
 
@@ -412,7 +413,9 @@ public sealed class SerializedFile
         {
             try
             {
+                Console.WriteLine($"DEBUG: About to parse type {i} at pos={reader.Position}");
                 var type = ParseSerializedType(reader, version, enableTypeTree);
+                Console.WriteLine($"DEBUG: Finished parsing type {i} at pos={reader.Position}");
                 types.Add(type);
             }
             catch (EndOfStreamException ex)
@@ -428,10 +431,14 @@ public sealed class SerializedFile
 
     private static SerializedType ParseSerializedType(EndianBinaryReader reader, uint version, bool enableTypeTree)
     {
+        long startPos = reader.BaseStream.Position;
+        Console.WriteLine($"DEBUG: ParseSerializedType starting at pos={startPos}");
+        
         var type = new SerializedType
         {
             ClassId = reader.ReadInt32()
         };
+        Console.WriteLine($"DEBUG: ClassId={type.ClassId}");
 
         if (version >= 16)
         {
@@ -460,12 +467,17 @@ public sealed class SerializedFile
         {
             var nodes = ParseTypeTreeNodes(reader, version);
             type.Nodes = nodes;
+            
+            // Build hierarchical tree from flat list
+            type.TreeRoot = BuildTypeTree(nodes);
         }
 
         // Type dependencies (version >= 21)
         if (version >= 21)
         {
+            long depCountPos = reader.BaseStream.Position;
             int depCount = reader.ReadInt32();
+            Console.WriteLine($"DEBUG: TypeDependencies at pos={depCountPos}, count={depCount}");
             if (depCount > 0)
             {
                 var deps = new int[depCount];
@@ -475,6 +487,7 @@ public sealed class SerializedFile
                 }
                 type.TypeDependencies = deps;
             }
+            Console.WriteLine($"DEBUG: After TypeDependencies, pos={reader.BaseStream.Position}");
         }
 
         return type;
@@ -483,23 +496,96 @@ public sealed class SerializedFile
     private static List<TypeTreeNode> ParseTypeTreeNodes(EndianBinaryReader reader, uint version)
     {
         // Unity 5.5+ type trees use the blob format: a packed array of fixed-size structs
-        // followed by a string buffer. We don't need the tree content yet, but we MUST
-        // advance the stream correctly to keep object parsing aligned.
+        // followed by a string buffer.
+        long startPos = reader.Position;
         int nodeCount = reader.ReadInt32();
         int stringBufferSize = reader.ReadInt32();
+
+        Console.WriteLine($"DEBUG: ParseTypeTreeNodes at pos={startPos}, nodeCount={nodeCount}, stringBufSize={stringBufferSize}");
+
+        if (nodeCount == 0)
+        {
+            return new List<TypeTreeNode>();
+        }
 
         // Determine struct size per UnityPy's _get_blob_node_struct
         // Version >= 19 has 32-byte nodes, otherwise 24-byte
         int nodeStructSize = version >= 19 ? 32 : 24;
 
-        // Consume node structs and string buffer to keep position correct.
-        // If data is truncated, BinaryReader will throw which is fine.
-        var nodeStructBytes = reader.ReadBytes(nodeStructSize * nodeCount);
-        var stringBufferBytes = reader.ReadBytes(stringBufferSize);
-        Console.WriteLine($"DEBUG: TypeTree blob nodes={nodeCount}, strings={stringBufferSize}, pos={reader.Position}");
+        // Read all node structs
+        int expectedNodeDataSize = nodeStructSize * nodeCount;
+        Console.WriteLine($"DEBUG: About to read {expectedNodeDataSize} bytes of node data (nodeStructSize={nodeStructSize}, nodeCount={nodeCount})");
+        var nodeData = reader.ReadBytes(expectedNodeDataSize);
+        Console.WriteLine($"DEBUG: Actually read {nodeData.Length} bytes of node data");
+        
+        // Read string buffer
+        Console.WriteLine($"DEBUG: About to read {stringBufferSize} bytes of string buffer");
+        var stringBuffer = reader.ReadBytes(stringBufferSize);
+        Console.WriteLine($"DEBUG: Actually read {stringBuffer.Length} bytes of string buffer");
 
-        // TODO: implement full node parsing when type tree data is needed.
-        return new List<TypeTreeNode>(capacity: nodeCount);
+        Console.WriteLine($"DEBUG: After reading TypeTree blob, pos={reader.Position}");
+
+        // Parse node structs into TypeTreeNode objects
+        var nodes = new List<TypeTreeNode>(nodeCount);
+        
+        using var nodeStream = new MemoryStream(nodeData, writable: false);
+        using var nodeReader = new BinaryReader(nodeStream);
+
+        for (int i = 0; i < nodeCount; i++)
+        {
+            var node = new TypeTreeNode
+            {
+                Version = nodeReader.ReadInt16(),
+                Level = nodeReader.ReadByte(),
+                TypeFlags = nodeReader.ReadByte()
+            };
+
+            // Read string offsets (no size fields - strings are null-terminated in buffer)
+            uint typeStrOffset = nodeReader.ReadUInt32();
+            uint nameStrOffset = nodeReader.ReadUInt32();
+
+            node.ByteSize = nodeReader.ReadInt32();
+            int index = nodeReader.ReadInt32();  // Index field in struct
+            node.MetaFlag = nodeReader.ReadInt32();
+
+            // For version >= 19, there are 8 more bytes (refTypeHash)
+            if (version >= 19)
+            {
+                nodeReader.ReadUInt64(); // refTypeHash, we don't use it yet
+            }
+
+            // Extract null-terminated strings from string buffer
+            node.Type = ExtractNullTerminatedString(stringBuffer, typeStrOffset);
+            node.Name = ExtractNullTerminatedString(stringBuffer, nameStrOffset);
+            node.Index = i;  // Use loop counter as logical index
+
+            nodes.Add(node);
+        }
+
+        return nodes;
+    }
+
+    private static string ExtractNullTerminatedString(byte[] stringBuffer, uint offset)
+    {
+        if (offset >= stringBuffer.Length)
+        {
+            return string.Empty;
+        }
+
+        // Find null terminator
+        int nullIndex = Array.IndexOf(stringBuffer, (byte)0, (int)offset);
+        if (nullIndex < 0)
+        {
+            nullIndex = stringBuffer.Length;
+        }
+
+        int length = nullIndex - (int)offset;
+        if (length <= 0)
+        {
+            return string.Empty;
+        }
+
+        return Encoding.UTF8.GetString(stringBuffer, (int)offset, length);
     }
 
     private static List<ObjectInfo> ParseObjectTable(EndianBinaryReader reader, uint version)
@@ -650,4 +736,53 @@ public sealed class SerializedFile
             }
         }
     }
+
+    /// <summary>
+    /// Builds a hierarchical tree structure from a flat list of TypeTreeNodes.
+    /// Matches UnityPy's recursive tree architecture.
+    /// </summary>
+    private static TypeTreeNode BuildTypeTree(List<TypeTreeNode> flatNodes)
+    {
+        if (flatNodes.Count == 0)
+        {
+            throw new InvalidOperationException("Cannot build tree from empty node list");
+        }
+
+        var root = flatNodes[0];
+        
+        // For each node, populate its Children list with immediate children
+        // A child has level = parent.level + 1
+        for (int i = 0; i < flatNodes.Count; i++)
+        {
+            var parentNode = flatNodes[i];
+            int parentLevel = parentNode.Level;
+            int childLevel = parentLevel + 1;
+            
+            // Find all immediate children (next level down)
+            var childrenIndices = new List<int>();
+            for (int j = i + 1; j < flatNodes.Count; j++)
+            {
+                var potentialChild = flatNodes[j];
+                
+                // If we've reached a node at same level or lower, stop looking
+                if (potentialChild.Level <= parentLevel)
+                    break;
+                
+                // If this is an immediate child, add it
+                if (potentialChild.Level == childLevel)
+                {
+                    childrenIndices.Add(j);
+                }
+            }
+            
+            // Attach children to parent
+            foreach (var childIdx in childrenIndices)
+            {
+                parentNode.Children.Add(flatNodes[childIdx]);
+            }
+        }
+        
+        return root;
+    }
 }
+

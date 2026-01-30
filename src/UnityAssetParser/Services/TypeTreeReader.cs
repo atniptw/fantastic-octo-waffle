@@ -7,72 +7,100 @@ namespace UnityAssetParser.Services;
 /// <summary>
 /// Reads object data dynamically using TypeTree nodes.
 /// Port of UnityPy's TypeTreeHelper read_typetree functionality.
+/// Uses recursive tree traversal instead of flat list + global index.
 /// </summary>
 public sealed class TypeTreeReader
 {
     private readonly EndianBinaryReader _reader;
-    private readonly IReadOnlyList<TypeTreeNode> _nodes;
-    private int _nodeIndex;
+    private readonly TypeTreeNode? _root;
 
-    public TypeTreeReader(EndianBinaryReader reader, IReadOnlyList<TypeTreeNode> nodes)
+    public TypeTreeReader(EndianBinaryReader reader, TypeTreeNode? root)
     {
         _reader = reader ?? throw new ArgumentNullException(nameof(reader));
-        _nodes = nodes ?? throw new ArgumentNullException(nameof(nodes));
-        _nodeIndex = 0;
+        _root = root;
+    }
+
+    /// <summary>
+    /// Creates a TypeTreeReader from a flat list (for backwards compatibility).
+    /// Converts flat list to tree structure.
+    /// </summary>
+    public static TypeTreeReader CreateFromFlatList(EndianBinaryReader reader, IReadOnlyList<TypeTreeNode> nodes)
+    {
+        TypeTreeNode? root = null;
+        
+        if (nodes.Count > 0)
+        {
+            root = nodes[0];
+            
+            // Rebuild children for each node (in case it wasn't done during parsing)
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                var parentNode = nodes[i];
+                int parentLevel = parentNode.Level;
+                int childLevel = parentLevel + 1;
+                
+                for (int j = i + 1; j < nodes.Count; j++)
+                {
+                    var potentialChild = nodes[j];
+                    
+                    if (potentialChild.Level <= parentLevel)
+                        break;
+                    
+                    if (potentialChild.Level == childLevel)
+                    {
+                        parentNode.Children.Add(potentialChild);
+                    }
+                }
+            }
+        }
+        
+        return new TypeTreeReader(reader, root);
     }
 
     /// <summary>
     /// Reads object data into a dictionary following TypeTree structure.
+    /// Uses recursive traversal matching UnityPy architecture.
     /// </summary>
     public Dictionary<string, object?> ReadObject()
     {
+        if (_root == null)
+            return new Dictionary<string, object?>();
+
+        // Read all children of root (skip the root itself)
         var result = new Dictionary<string, object?>();
-        
-        if (_nodes.Count == 0)
-            return result;
-
-        // Skip root node (the class itself)
-        _nodeIndex = 0;
-        var rootNode = _nodes[_nodeIndex];
-        _nodeIndex++;
-
-        // Read children of root
-        int rootLevel = rootNode.Level;
-        while (_nodeIndex < _nodes.Count && _nodes[_nodeIndex].Level > rootLevel)
+        foreach (var child in _root.Children)
         {
-            var fieldNode = _nodes[_nodeIndex];
-            var value = ReadValue(fieldNode);
-            result[fieldNode.Name] = value;
+            var value = ReadNode(child);
+            result[child.Name] = value;
         }
 
         return result;
     }
 
-    private object? ReadValue(TypeTreeNode node)
+    /// <summary>
+    /// Recursively reads a single node and its value from the binary stream.
+    /// </summary>
+    private object? ReadNode(TypeTreeNode node)
     {
-        var currentLevel = node.Level;
-        _nodeIndex++;
-
-        // Check if this is a complex type with children
-        bool hasChildren = _nodeIndex < _nodes.Count && _nodes[_nodeIndex].Level > currentLevel;
-
-        if (!hasChildren)
+        // If no children, it's a primitive type
+        if (node.IsPrimitive)
         {
-            // Primitive type - read directly
             return ReadPrimitive(node.Type);
         }
 
-        // Complex type - handle based on type
-        if (node.Type == "vector" || node.Type == "staticvector" || (node.TypeFlags & 0x4000) != 0)
+        // If it's an array
+        if (node.IsArray)
         {
-            return ReadArray(currentLevel);
+            return ReadArray(node);
         }
-        else
-        {
-            return ReadComplexObject(currentLevel);
-        }
+
+        // Otherwise it's a complex object/struct
+        return ReadObject(node);
     }
 
+    /// <summary>
+    /// Reads a primitive value from the stream.
+    /// </summary>
     private object? ReadPrimitive(string typeName)
     {
         return typeName switch
@@ -93,62 +121,86 @@ public sealed class TypeTreeReader
         };
     }
 
-    private List<object?> ReadArray(int parentLevel)
+    /// <summary>
+    /// Reads an array type, handling both primitive and complex element types.
+    /// Modern Unity array structure (TypeFlags=0x01):
+    ///   arrayNode → children[0]: size node → children[1]: data template
+    /// </summary>
+    private List<object?> ReadArray(TypeTreeNode arrayNode)
     {
-        var list = new List<object?>();
+        var result = new List<object?>();
 
-        // Array structure: size node, then data node
-        if (_nodeIndex >= _nodes.Count)
-            return list;
-
-        var sizeNode = _nodes[_nodeIndex];
-        if (sizeNode.Name != "size")
-            throw new InvalidOperationException($"Expected 'size' node in array, got '{sizeNode.Name}'");
-
+        // Read array size from binary stream
         int size = _reader.ReadInt32();
-        _nodeIndex++;
-
-        if (size == 0 || _nodeIndex >= _nodes.Count)
+        if (size <= 0)
         {
-            // Skip to end of array structure
-            while (_nodeIndex < _nodes.Count && _nodes[_nodeIndex].Level > parentLevel)
-                _nodeIndex++;
-            return list;
+            return result;
         }
 
-        var dataNode = _nodes[_nodeIndex];
+        // Modern Unity format has 2 children: [size, data]
+        // Legacy format may have different structures
+        TypeTreeNode? dataTemplate = null;
+
+        if (arrayNode.Children.Count >= 2)
+        {
+            // Standard case: children[1] is the data template
+            dataTemplate = arrayNode.Children[1];
+        }
+        else if (arrayNode.Children.Count == 1)
+        {
+            // Fallback: if only one child, use it as template
+            dataTemplate = arrayNode.Children[0];
+        }
+        else
+        {
+            // No children - cannot deserialize
+            return result;
+        }
 
         // Read array elements
-        for (int i = 0; i < size; i++)
+        if (dataTemplate.IsPrimitive)
         {
-            int savedIndex = _nodeIndex;
-            var value = ReadValue(dataNode);
-            list.Add(value);
-            _nodeIndex = savedIndex; // Reset for next element
+            // Primitive array - simple loop
+            for (int i = 0; i < size; i++)
+            {
+                result.Add(ReadPrimitive(dataTemplate.Type));
+            }
+        }
+        else
+        {
+            // Complex array - read each element using template structure
+            for (int i = 0; i < size; i++)
+            {
+                var element = new Dictionary<string, object?>();
+                foreach (var field in dataTemplate.Children)
+                {
+                    element[field.Name] = ReadNode(field);
+                }
+                result.Add(element);
+            }
         }
 
-        // Skip past array structure nodes
-        while (_nodeIndex < _nodes.Count && _nodes[_nodeIndex].Level > parentLevel)
-            _nodeIndex++;
-
-        return list;
+        return result;
     }
 
-    private Dictionary<string, object?> ReadComplexObject(int parentLevel)
+    /// <summary>
+    /// Reads a complex object/struct type with multiple fields.
+    /// </summary>
+    private Dictionary<string, object?> ReadObject(TypeTreeNode structNode)
     {
-        var obj = new Dictionary<string, object?>();
+        var result = new Dictionary<string, object?>();
 
-        // Read all child fields
-        while (_nodeIndex < _nodes.Count && _nodes[_nodeIndex].Level > parentLevel)
+        foreach (var field in structNode.Children)
         {
-            var fieldNode = _nodes[_nodeIndex];
-            var value = ReadValue(fieldNode);
-            obj[fieldNode.Name] = value;
+            result[field.Name] = ReadNode(field);
         }
 
-        return obj;
+        return result;
     }
 
+    /// <summary>
+    /// Reads an aligned string (4-byte alignment).
+    /// </summary>
     private string ReadAlignedString()
     {
         int length = _reader.ReadInt32();

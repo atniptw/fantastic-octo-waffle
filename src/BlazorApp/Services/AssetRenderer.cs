@@ -4,6 +4,7 @@ using UnityAssetParser.Bundle;
 using UnityAssetParser.SerializedFile;
 using UnityAssetParser.Services;
 using UnityAssetParser.Classes;
+using UnityAssetParser.Helpers;
 
 namespace BlazorApp.Services;
 
@@ -130,7 +131,7 @@ public class AssetRenderer : IAssetRenderer
         }
 
         // Convert to Three.js format with actual vertex data
-        return ConvertMeshToThreeJS(mesh, externalResourceData);
+        return ConvertMeshToThreeJS(mesh, version, !isBigEndian, externalResourceData);
     }
 
     private ThreeJsGeometry ParseSerializedFile(byte[] serializedFileBytes)
@@ -158,7 +159,7 @@ public class AssetRenderer : IAssetRenderer
 
         // For SerializedFile, we don't have external resources, so pass null
         // Vertex data should be inline if available
-        return ConvertMeshToThreeJS(mesh, null);
+        return ConvertMeshToThreeJS(mesh, version, !isBigEndian, null);
     }
 
     /// <summary>
@@ -201,14 +202,28 @@ public class AssetRenderer : IAssetRenderer
     /// Converts a parsed Mesh object to Three.js-compatible geometry format.
     /// Extracts actual vertex positions and attributes from the mesh data.
     /// </summary>
-    private ThreeJsGeometry ConvertMeshToThreeJS(Mesh mesh, byte[]? externalResourceData = null)
+    private ThreeJsGeometry ConvertMeshToThreeJS(Mesh mesh, (int, int, int, int) version, bool isLittleEndian, byte[]? externalResourceData = null)
     {
         // Extract indices from IndexBuffer
         uint[] indices = ExtractIndices(mesh);
         Console.WriteLine($"DEBUG: ConvertMeshToThreeJS - indices.Length={indices.Length}");
 
-        // Extract vertex positions using VertexDataExtractor
-        float[] positions = VertexDataExtractor.ExtractVertexPositions(mesh, externalResourceData);
+        // Resolve external vertex buffer if present but not inline
+        if (externalResourceData != null && mesh.VertexData != null &&
+            (mesh.VertexData.DataSize == null || mesh.VertexData.DataSize.Length == 0))
+        {
+            var resolved = ResolveVertexDataBuffer(mesh, externalResourceData);
+            if (resolved != null && resolved.Length > 0)
+            {
+                mesh.VertexData.DataSize = resolved;
+            }
+        }
+
+        // Extract vertex attributes using MeshHelper (UnityPy-accurate)
+        var meshHelper = new MeshHelper(mesh, version, isLittleEndian);
+        meshHelper.Process();
+
+        float[] positions = meshHelper.Positions ?? Array.Empty<float>();
         Console.WriteLine($"DEBUG: ConvertMeshToThreeJS - positions.Length={positions.Length}");
 
         // If no positions found, create placeholder
@@ -217,24 +232,9 @@ public class AssetRenderer : IAssetRenderer
             positions = CreatePlaceholderPositions(mesh.VertexData?.VertexCount ?? 4);
         }
 
-        // Extract normals and UVs
-        float[]? normals = null;
-        float[]? uvs = null;
-
-        if (mesh.CompressedMesh != null)
-        {
-            var extractedNormals = VertexDataExtractor.ExtractVertexNormals(mesh, externalResourceData);
-            if (extractedNormals.Length > 0)
-            {
-                normals = extractedNormals;
-            }
-
-            var extractedUVs = VertexDataExtractor.ExtractVertexUVs(mesh, externalResourceData);
-            if (extractedUVs.Length > 0)
-            {
-                uvs = extractedUVs;
-            }
-        }
+        // Extract normals and UVs if available
+        float[]? normals = meshHelper.Normals;
+        float[]? uvs = meshHelper.UVs;
 
         // Extract submeshes as groups
         var groups = new List<SubMeshGroup>();
@@ -292,6 +292,33 @@ public class AssetRenderer : IAssetRenderer
              0.5f,  0.5f, -0.5f,  // 6
              0.5f, -0.5f, -0.5f,  // 7
         };
+    }
+
+    /// <summary>
+    /// Resolves the correct vertex data buffer from external resource data.
+    /// Uses StreamData offset/size when available; otherwise returns the full buffer.
+    /// </summary>
+    private static byte[]? ResolveVertexDataBuffer(Mesh mesh, byte[] externalResourceData)
+    {
+        if (externalResourceData.Length == 0)
+        {
+            return null;
+        }
+
+        if (mesh.StreamData != null && mesh.StreamData.Size > 0)
+        {
+            var offset = (int)mesh.StreamData.Offset;
+            var size = (int)mesh.StreamData.Size;
+            if (offset >= 0 && size > 0 && offset + size <= externalResourceData.Length)
+            {
+                var slice = new byte[size];
+                Array.Copy(externalResourceData, offset, slice, 0, size);
+                return slice;
+            }
+        }
+
+        // Fallback: use the full resource buffer (common for StreamData path empty)
+        return externalResourceData;
     }
 
     /// <summary>

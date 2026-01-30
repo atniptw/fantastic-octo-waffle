@@ -6,6 +6,37 @@ Utility scripts for the R.E.P.O. Mod Browser project.
 
 Generates reference JSON outputs from UnityFS bundle files using UnityPy for validation against the C# implementation.
 
+## dump_unitypy_object_tree.py
+
+Dumps full UnityPy object trees (TypeTree output) to JSON for comparison with the C# parser.
+
+### Usage
+
+```bash
+pip install UnityPy
+python scripts/dump_unitypy_object_tree.py path/to/bundle.hhh -o bundle_unitypy_tree.json
+```
+
+## dump_csharp_object_tree.csx
+
+Dumps full object trees from the C# `SerializedFile` parser using `TypeTreeReader`.
+
+### Usage
+
+```bash
+dotnet script scripts/dump_csharp_object_tree.csx path/to/bundle.hhh -o bundle_csharp_tree.json
+```
+
+## compare_object_trees.py
+
+Compares UnityPy vs C# object tree JSON outputs and prints the first N diffs.
+
+### Usage
+
+```bash
+python scripts/compare_object_trees.py bundle_unitypy_tree.json bundle_csharp_tree.json
+```
+
 ### Requirements
 
 ```bash

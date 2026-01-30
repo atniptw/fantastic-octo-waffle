@@ -1,0 +1,160 @@
+{
+  "source": "Tests/UnityAssetParser.Tests/Fixtures/RealBundles/Cigar_neck.hhh",
+  "unityVersion": "2022.3.40f1c1",
+  "objectCount": 17,
+  "objects": [
+    {
+      "pathId": -5336330473934095272,
+      "classId": 1,
+      "typeId": 0,
+      "byteSize": 59,
+      "tree": {
+        "__error__": "Infinite loop detected in ReadObject"
+      }
+    },
+    {
+      "pathId": -5058973919022195266,
+      "classId": 21,
+      "typeId": 1,
+      "byteSize": 908,
+      "tree": {
+        "__error__": "Infinite loop detected in ReadObject"
+      }
+    },
+    {
+      "pathId": -4850512016903265157,
+      "classId": 48,
+      "typeId": 2,
+      "byteSize": 57648,
+      "tree": {
+        "__error__": "Infinite loop detected in ReadObject"
+      }
+    },
+    {
+      "pathId": -3876313651872223835,
+      "classId": 43,
+      "typeId": 3,
+      "byteSize": 1528,
+      "tree": {
+        "__error__": "Infinite loop detected in ReadObject"
+      }
+    },
+    {
+      "pathId": -485849750995343602,
+      "classId": 21,
+      "typeId": 1,
+      "byteSize": 916,
+      "tree": {
+        "__error__": "Infinite loop detected in ReadObject"
+      }
+    },
+    {
+      "pathId": 1,
+      "classId": 142,
+      "typeId": 4,
+      "byteSize": 340,
+      "tree": {
+        "__error__": "Infinite loop detected in ReadObject"
+      }
+    },
+    {
+      "pathId": 673506148854230287,
+      "classId": 1,
+      "typeId": 0,
+      "byteSize": 59,
+      "tree": {
+        "__error__": "Infinite loop detected in ReadObject"
+      }
+    },
+    {
+      "pathId": 2030470580032934200,
+      "classId": 1,
+      "typeId": 0,
+      "byteSize": 35,
+      "tree": {
+        "__error__": "Infinite loop detected in ReadObject"
+      }
+    },
+    {
+      "pathId": 2208493091909205671,
+      "classId": 4,
+      "typeId": 5,
+      "byteSize": 80,
+      "tree": {
+        "__error__": "Infinite loop detected in ReadObject"
+      }
+    },
+    {
+      "pathId": 3472461429971101586,
+      "classId": 4,
+      "typeId": 5,
+      "byteSize": 68,
+      "tree": {
+        "__error__": "Infinite loop detected in ReadObject"
+      }
+    },
+    {
+      "pathId": 3809002687882517104,
+      "classId": 21,
+      "typeId": 1,
+      "byteSize": 980,
+      "tree": {
+        "__error__": "Infinite loop detected in ReadObject"
+      }
+    },
+    {
+      "pathId": 4326092090928775552,
+      "classId": 199,
+      "typeId": 6,
+      "byteSize": 308,
+      "tree": {
+        "__error__": "Infinite loop detected in ReadObject"
+      }
+    },
+    {
+      "pathId": 4602561411803575503,
+      "classId": 198,
+      "typeId": 7,
+      "byteSize": 7300,
+      "tree": {
+        "__error__": "Infinite loop detected in ReadObject"
+      }
+    },
+    {
+      "pathId": 5826309719414673988,
+      "classId": 21,
+      "typeId": 1,
+      "byteSize": 908,
+      "tree": {
+        "__error__": "Infinite loop detected in ReadObject"
+      }
+    },
+    {
+      "pathId": 6646797874605830890,
+      "classId": 33,
+      "typeId": 8,
+      "byteSize": 24,
+      "tree": {
+        "__error__": "Infinite loop detected in ReadObject"
+      }
+    },
+    {
+      "pathId": 6899310923290839771,
+      "classId": 23,
+      "typeId": 9,
+      "byteSize": 180,
+      "tree": {
+        "__error__": "Infinite loop detected in ReadObject"
+      }
+    },
+    {
+      "pathId": 8013472977279897671,
+      "classId": 4,
+      "typeId": 5,
+      "byteSize": 80,
+      "tree": {
+        "__error__": "Infinite loop detected in ReadObject"
+      }
+    }
+  ]
+}

@@ -36,7 +36,15 @@ public sealed class SerializedType
     public int[]? TypeDependencies { get; set; }
 
     /// <summary>
-    /// Field tree nodes if type tree is enabled.
+    /// Field tree nodes in flat list form (kept for compatibility).
+    /// For new code, use <see cref="TreeRoot"/> instead.
     /// </summary>
     public IReadOnlyList<TypeTreeNode>? Nodes { get; set; }
+
+    /// <summary>
+    /// Root node of the hierarchical tree structure.
+    /// Matches UnityPy's recursive tree architecture.
+    /// This is the primary structure for traversal - prefer over <see cref="Nodes"/>.
+    /// </summary>
+    public TypeTreeNode? TreeRoot { get; set; }
 }

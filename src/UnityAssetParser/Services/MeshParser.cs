@@ -34,7 +34,7 @@ public static class MeshParser
             using (var stream = new MemoryStream(objectData.ToArray(), false))
             using (var reader = new EndianBinaryReader(stream, isBigEndian))
             {
-                var ttReader = new TypeTreeReader(reader, typeTreeNodes);
+                var ttReader = TypeTreeReader.CreateFromFlatList(reader, typeTreeNodes);
                 var data = ttReader.ReadObject();
 
                 // Map TypeTree data to Mesh object

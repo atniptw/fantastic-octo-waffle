@@ -76,8 +76,8 @@ export function init(canvasId, options = {}) {
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
     controls.screenSpacePanning = false;
-    controls.minDistance = 0.5;
-    controls.maxDistance = 500;
+    controls.minDistance = 0.001;
+    controls.maxDistance = 2000;
 
     // Add lighting
     const ambientLight = new THREE.AmbientLight(0xffffff, AMBIENT_LIGHT_INTENSITY);
@@ -293,9 +293,21 @@ function createMaterial(opts) {
  * @param {THREE.Mesh} mesh - Mesh to center on
  */
 function centerCameraOnMesh(mesh) {
-    const box = new THREE.Box3().setFromObject(mesh);
-    const center = box.getCenter(new THREE.Vector3());
-    const size = box.getSize(new THREE.Vector3());
+    let box = new THREE.Box3().setFromObject(mesh);
+    let center = box.getCenter(new THREE.Vector3());
+    let size = box.getSize(new THREE.Vector3());
+
+    // Handle extremely small meshes by scaling them for visibility
+    const minVisibleSize = 0.01;
+    let maxDim = Math.max(size.x, size.y, size.z);
+    if (maxDim > 0 && maxDim < minVisibleSize) {
+        const scaleFactor = minVisibleSize / maxDim;
+        mesh.scale.setScalar(scaleFactor);
+        box = new THREE.Box3().setFromObject(mesh);
+        center = box.getCenter(new THREE.Vector3());
+        size = box.getSize(new THREE.Vector3());
+        maxDim = Math.max(size.x, size.y, size.z);
+    }
 
     console.log('DEBUG: Mesh bounding box', {
         min: box.min,
@@ -308,10 +320,20 @@ function centerCameraOnMesh(mesh) {
     controls.target.copy(center);
 
     // Position camera to view entire mesh
-    const maxDim = Math.max(size.x, size.y, size.z);
+    if (maxDim === 0) {
+        maxDim = 1.0;
+    }
     const fov = camera.fov * (Math.PI / 180);
     let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
     cameraZ *= CAMERA_MARGIN_FACTOR; // Add some margin
+
+    // Adjust near/far to avoid clipping tiny meshes
+    camera.near = Math.max(cameraZ / 1000, 0.00001);
+    camera.far = Math.max(cameraZ * 1000, 10);
+    camera.updateProjectionMatrix();
+
+    controls.minDistance = Math.max(maxDim * 0.1, 0.0005);
+    controls.maxDistance = Math.max(maxDim * 1000, 10);
 
     const newCameraPos = {
         x: center.x + cameraZ * 0.5,

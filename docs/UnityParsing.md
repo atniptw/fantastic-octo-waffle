@@ -99,6 +99,196 @@ Each `FileIdentifier`:
 
 Resolution: When object references external file (e.g., `StreamingInfo.path`), match `PathName` to BundleFile nodes by exact string comparison.
 
+### TypeTree Object Deserialization
+
+#### Current Implementation Status (January 2026)
+The `TypeTreeReader` service dynamically deserializes object data using TypeTree node metadata. **Current implementation has critical performance issues** that prevent practical use on complex objects.
+
+**Working**: Simple objects (GameObject with 15 nodes) deserialize correctly.  
+**Failing**: Complex objects (Material ~107 nodes, Shader ~3800 nodes) timeout due to O(N²) or worse traversal complexity.
+
+#### Architecture Problem
+
+The current implementation uses a **flat node list with global `_nodeIndex`** approach:
+```csharp
+private readonly IReadOnlyList<TypeTreeNode> _nodes;
+private int _nodeIndex;  // Global position in flat list
+```
+
+This creates fundamental performance issues when reading arrays of complex types:
+1. For each array element, `_nodeIndex` resets to template start position
+2. Must traverse entire subtree for each element to find where it ends
+3. With nested arrays/structs, traversal becomes exponential: O(N * M * K)
+   - N = array size
+   - M = fields per element  
+   - K = average subtree depth
+
+**Example**: Shader type (3848 nodes) with arrays of structs → minutes to deserialize vs. milliseconds in UnityPy.
+
+#### Root Cause Analysis
+
+**Modern Unity TypeTree format (2022.3+)**:
+- Arrays use wrapper node with `TypeFlags = 0x01`, empty `Type`/`Name` fields
+- Structure: `Parent → Wrapper(0x01) → Size → Data → ...descendants`
+- Must skip wrapper + size + all data descendants to reach next sibling
+
+**Flat index traversal issue**:
+```csharp
+// For primitive arrays: fast (read N values)
+for (int i = 0; i < size; i++)
+    list.Add(ReadPrimitive(dataNode.Type));
+
+// For complex arrays: catastrophically slow
+for (int i = 0; i < size; i++)
+{
+    _nodeIndex = templateStart;  // Reset to template
+    // Walk entire subtree for EACH element
+    while (_nodeIndex < _nodes.Count && _nodes[_nodeIndex].Level > dataLevel)
+    {
+        ReadValue(_nodes[_nodeIndex]);  // Recursive, advances index
+    }
+}
+```
+
+Each array element requires full subtree traversal. With nested structures (array of structs containing arrays), cost multiplies.
+
+#### Comparison with UnityPy (Python)
+
+UnityPy uses **recursive tree traversal** which naturally tracks position:
+```python
+def read_typetree(nodes, stream):
+    def read_node(node_idx):
+        node = nodes[node_idx]
+        if is_array(node):
+            size = read_int(stream)
+            return [read_node(child_idx) for _ in range(size)]
+        elif is_primitive(node):
+            return read_primitive(stream, node.type)
+        else:
+            return {child.name: read_node(child_idx) 
+                    for child_idx in get_children(node_idx)}
+    return read_node(0)
+```
+
+Recursion with explicit child indices eliminates need for index resetting.
+
+#### Proposed Solutions
+
+**Option 1: Pre-compute Subtree Ranges (Recommended)**
+Cache the end index for each node's subtree during TypeTree parsing:
+```csharp
+public class TypeTreeNode
+{
+    // Existing fields...
+    public int SubtreeEndIndex { get; set; }  // Index of next sibling
+}
+
+// During TypeTree parse, compute once:
+for (int i = 0; i < nodes.Count; i++)
+{
+    int endIdx = i + 1;
+    int level = nodes[i].Level;
+    while (endIdx < nodes.Count && nodes[endIdx].Level > level)
+        endIdx++;
+    nodes[i].SubtreeEndIndex = endIdx;
+}
+```
+
+Then in ReadValue:
+```csharp
+private object? ReadValue(TypeTreeNode node)
+{
+    int savedIndex = _nodeIndex;
+    // Read logic...
+    _nodeIndex = node.SubtreeEndIndex;  // Jump to next sibling
+    return value;
+}
+```
+
+**Benefits**: O(1) skip instead of O(N) traversal, preserves flat list structure.  
+**Tradeoff**: Extra memory (4 bytes per node), one-time O(N) preprocessing.
+
+**Option 2: Recursive Tree Structure**
+Convert flat list to actual tree during parsing:
+```csharp
+public class TypeTreeNode
+{
+    public List<TypeTreeNode> Children { get; set; }
+    // No global index needed
+}
+
+private object? ReadValue(TypeTreeNode node, EndianBinaryReader reader)
+{
+    if (node.Children.Count == 0)
+        return ReadPrimitive(node.Type, reader);
+    
+    if (IsArray(node))
+    {
+        int size = reader.ReadInt32();
+        var dataNode = node.Children[1];  // Skip wrapper, size nodes
+        return Enumerable.Range(0, size)
+            .Select(_ => ReadValue(dataNode, reader))
+            .ToList();
+    }
+    
+    return node.Children.ToDictionary(
+        child => child.Name,
+        child => ReadValue(child, reader));
+}
+```
+
+**Benefits**: Natural traversal, matches UnityPy logic, no index management.  
+**Tradeoff**: Memory overhead (pointers), tree construction cost, larger refactor.
+
+**Option 3: Hybrid - Recursive Calls with Flat Storage**
+Keep flat list but use recursion with explicit index ranges:
+```csharp
+private (object? value, int nextIndex) ReadValueRec(int nodeIdx)
+{
+    var node = _nodes[nodeIdx];
+    int endIdx = FindSubtreeEnd(nodeIdx);  // Or use cached value
+    
+    if (nodeIdx + 1 >= endIdx)
+        return (ReadPrimitive(node.Type), endIdx);
+    
+    // Process children in range [nodeIdx+1, endIdx)
+    // ...
+    return (value, endIdx);
+}
+```
+
+**Benefits**: Simpler than full tree, explicit control over ranges.  
+**Tradeoff**: Still requires subtree end computation.
+
+#### Implementation Recommendation
+
+**Phase 1** (Immediate): Implement Option 1 (pre-computed subtree ranges)
+- Modify `TypeTreeNode` to add `SubtreeEndIndex` property
+- Add preprocessing step in `ParseTypeTreeNodes()` to compute ranges
+- Update `TypeTreeReader` to use `node.SubtreeEndIndex` instead of loop traversal
+- Expected outcome: 1000x+ speedup for complex objects
+
+**Phase 2** (Future optimization): Consider Option 2 if memory permits
+- Only if profiling shows preprocessing cost is significant
+- Provides cleaner abstraction for future TypeTree features
+
+#### Testing Strategy
+
+Validate fix with progressive complexity:
+1. **Simple**: GameObject (15 nodes) - should remain working
+2. **Medium**: Material (107 nodes, string/PPtr arrays) - currently times out
+3. **Complex**: Shader (3848 nodes, nested structs) - currently times out
+4. **Mesh**: Mesh object (239 nodes, large float/int arrays) - critical for rendering
+
+Success criteria: All objects deserialize in <100ms (currently: GameObject=fast, others=timeout after 2+ minutes).
+
+#### Current Workaround
+
+For immediate progress, skip TypeTreeReader validation and use hardcoded Mesh parser:
+- Mesh structure is well-documented and stable across Unity versions
+- Manually parse Mesh fields with fixed offsets (see docs/MESH_FIELD_ORDER_REFERENCE.md)
+- Only use TypeTreeReader for validation/debugging after optimization
+
 ### Data Offset & Object Data
 - Object data region starts at `Header.DataOffset`
 - Each object's absolute offset: `DataOffset + ObjectInfo.ByteStart`
