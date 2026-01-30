@@ -295,12 +295,12 @@ public class BundleFileIntegrationTests
         blocksInfoWriter.Write(new byte[16]);
 
         // Block count: 1
-        blocksInfoWriter.Write((int)1);
+        WriteBigEndianInt32(blocksInfoWriter, 1);
 
         // Storage block: 16 bytes uncompressed, 16 bytes compressed, flags 0
-        blocksInfoWriter.Write((uint)16); // uncompressed size
-        blocksInfoWriter.Write((uint)16); // compressed size
-        blocksInfoWriter.Write((ushort)0); // flags
+        WriteBigEndianUInt32(blocksInfoWriter, 16); // uncompressed size
+        WriteBigEndianUInt32(blocksInfoWriter, 16); // compressed size
+        WriteBigEndianUInt16(blocksInfoWriter, 0); // flags
 
         // 4-byte alignment after blocks
         while (blocksInfo.Position % 4 != 0)
@@ -309,12 +309,12 @@ public class BundleFileIntegrationTests
         }
 
         // Node count: 1
-        blocksInfoWriter.Write((int)1);
+        WriteBigEndianInt32(blocksInfoWriter, 1);
 
         // Node: offset 0, size 16, flags 0, path "CAB-test\0"
-        blocksInfoWriter.Write((long)0); // offset
-        blocksInfoWriter.Write((long)16); // size
-        blocksInfoWriter.Write((int)0); // flags
+        WriteBigEndianInt64(blocksInfoWriter, 0); // offset
+        WriteBigEndianInt64(blocksInfoWriter, 16); // size
+        WriteBigEndianUInt32(blocksInfoWriter, 0); // flags
         blocksInfoWriter.Write(Encoding.UTF8.GetBytes("CAB-test"));
         blocksInfoWriter.Write((byte)0);
 
@@ -385,12 +385,12 @@ public class BundleFileIntegrationTests
         blocksInfoWriter.Write(new byte[16]);
 
         // Block count: 1
-        blocksInfoWriter.Write((int)1);
+        WriteBigEndianInt32(blocksInfoWriter, 1);
 
         // Storage block: 16 bytes uncompressed, 16 bytes compressed, flags 0
-        blocksInfoWriter.Write((uint)16);
-        blocksInfoWriter.Write((uint)16);
-        blocksInfoWriter.Write((ushort)0);
+        WriteBigEndianUInt32(blocksInfoWriter, 16);
+        WriteBigEndianUInt32(blocksInfoWriter, 16);
+        WriteBigEndianUInt16(blocksInfoWriter, 0);
 
         // 4-byte alignment after blocks
         while (blocksInfo.Position % 4 != 0)
@@ -399,12 +399,12 @@ public class BundleFileIntegrationTests
         }
 
         // Node count: 1
-        blocksInfoWriter.Write((int)1);
+        WriteBigEndianInt32(blocksInfoWriter, 1);
 
         // Node: offset 0, size 16, flags 0, path "CAB-test\0"
-        blocksInfoWriter.Write((long)0);
-        blocksInfoWriter.Write((long)16);
-        blocksInfoWriter.Write((int)0);
+        WriteBigEndianInt64(blocksInfoWriter, 0);
+        WriteBigEndianInt64(blocksInfoWriter, 16);
+        WriteBigEndianUInt32(blocksInfoWriter, 0);
         blocksInfoWriter.Write(Encoding.UTF8.GetBytes("CAB-test\0"));
 
         // Write BlocksInfo (hash verification skipped per UnityPy)
@@ -472,12 +472,12 @@ public class BundleFileIntegrationTests
         blocksInfoWriter.Write(new byte[16]);
 
         // Block count: 1
-        blocksInfoWriter.Write((int)1);
+        WriteBigEndianInt32(blocksInfoWriter, 1);
 
         // Storage block
-        blocksInfoWriter.Write((uint)16);
-        blocksInfoWriter.Write((uint)16);
-        blocksInfoWriter.Write((ushort)0);
+        WriteBigEndianUInt32(blocksInfoWriter, 16);
+        WriteBigEndianUInt32(blocksInfoWriter, 16);
+        WriteBigEndianUInt16(blocksInfoWriter, 0);
 
         // 4-byte alignment after blocks
         while (blocksInfo.Position % 4 != 0)
@@ -486,12 +486,12 @@ public class BundleFileIntegrationTests
         }
 
         // Node count: 1
-        blocksInfoWriter.Write((int)1);
+        WriteBigEndianInt32(blocksInfoWriter, 1);
 
         // Node
-        blocksInfoWriter.Write((long)0);
-        blocksInfoWriter.Write((long)16);
-        blocksInfoWriter.Write((int)0);
+        WriteBigEndianInt64(blocksInfoWriter, 0);
+        WriteBigEndianInt64(blocksInfoWriter, 16);
+        WriteBigEndianUInt32(blocksInfoWriter, 0);
         blocksInfoWriter.Write(Encoding.UTF8.GetBytes("CAB-test\0"));
 
         // Write BlocksInfo (hash verification skipped per UnityPy)
@@ -503,13 +503,13 @@ public class BundleFileIntegrationTests
 
         // === FIX UP HEADER ===
         bundle.Position = sizePosition;
-        writer.Write(bundleEnd);
+        WriteBigEndianInt64(writer, bundleEnd);
 
         uint blocksInfoSize = (uint)(blocksInfoEnd - blocksInfoStart);
         bundle.Position = compressedSizePosition;
-        writer.Write(blocksInfoSize);
+        WriteBigEndianUInt32(writer, blocksInfoSize);
         bundle.Position = uncompressedSizePosition;
-        writer.Write(blocksInfoSize);
+        WriteBigEndianUInt32(writer, blocksInfoSize);
 
         return bundle.ToArray();
     }
@@ -518,6 +518,20 @@ public class BundleFileIntegrationTests
     {
         writer.Write((byte)((value >> 24) & 0xFF));
         writer.Write((byte)((value >> 16) & 0xFF));
+        writer.Write((byte)((value >> 8) & 0xFF));
+        writer.Write((byte)(value & 0xFF));
+    }
+
+    private static void WriteBigEndianInt32(BinaryWriter writer, int value)
+    {
+        writer.Write((byte)((value >> 24) & 0xFF));
+        writer.Write((byte)((value >> 16) & 0xFF));
+        writer.Write((byte)((value >> 8) & 0xFF));
+        writer.Write((byte)(value & 0xFF));
+    }
+
+    private static void WriteBigEndianUInt16(BinaryWriter writer, ushort value)
+    {
         writer.Write((byte)((value >> 8) & 0xFF));
         writer.Write((byte)(value & 0xFF));
     }
