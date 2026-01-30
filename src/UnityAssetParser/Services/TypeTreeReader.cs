@@ -82,6 +82,9 @@ public sealed class TypeTreeReader
     /// </summary>
     private object? ReadNode(TypeTreeNode node)
     {
+        // Check if this node requires alignment AFTER reading its value
+        bool shouldAlign = (node.MetaFlag & 0x4000) != 0;
+        
         object? value;
         
         // If no children, it's a primitive type
@@ -100,8 +103,8 @@ public sealed class TypeTreeReader
             value = ReadObject(node);
         }
         
-        // Check if this node requires alignment (UnityPy's kAlignBytes = 0x4000)
-        if ((node.MetaFlag & 0x4000) != 0)
+        // Align stream AFTER reading this node's value if MetaFlag indicates alignment
+        if (shouldAlign)
         {
             _reader.Align();
         }
@@ -135,56 +138,37 @@ public sealed class TypeTreeReader
     /// <summary>
     /// Reads an array type, handling both primitive and complex element types.
     /// Modern Unity array structure (TypeFlags=0x01):
-    ///   arrayNode → children[0]: size node → children[1]: data template
+    ///   arrayNode → children[0]: size node (Array wrapper) → children[1]: data template
     /// </summary>
     private List<object?> ReadArray(TypeTreeNode arrayNode)
     {
         var result = new List<object?>();
-
+        
+        // Array structure (TypeFlags bit 0x01):
+        // arrayNode (TF=0x01, e.g., "m_Vertices")
+        //   ├─ children[0]: Size field (reads 4-byte int)
+        //   └─ children[1]: Data template (describes one element)
+        
+        if (arrayNode.Children.Count != 2)
+        {
+            Console.WriteLine($"[ARRAY-ERROR] Array node has {arrayNode.Children.Count} children, expected exactly 2: {arrayNode.Name}");
+            return result;
+        }
+        
+        TypeTreeNode sizeNode = arrayNode.Children[0];
+        TypeTreeNode dataTemplate = arrayNode.Children[1];
+        
         // Read array size from binary stream
         int size = _reader.ReadInt32();
         
-        // DEBUG: Log problematic arrays
-        if (size > 10000 || size < 0)
-        {
-            Console.WriteLine($"[ARRAY-WARN] Suspicious size={size}, arrayNode.Name='{arrayNode.Name}', children={arrayNode.Children.Count}");
-            for (int i = 0; i < arrayNode.Children.Count && i < 3; i++)
-            {
-                var child = arrayNode.Children[i];
-                Console.WriteLine($"  child[{i}]: Type='{child.Type}', Name='{child.Name}', ByteSize={child.ByteSize}, TypeFlags=0x{child.TypeFlags:X}, HasChildren={child.Children.Count}");
-            }
-        }
-        
-        // CRITICAL: Reject arrays with nonsensical sizes (likely corrupt data or alignment issues)
+        // Reject arrays with nonsensical sizes
         if (size < 0 || size > 100_000_000)
         {
-            Console.WriteLine($"[ARRAY-ERROR] Rejecting array with invalid size={size}, returning empty");
             return result;
         }
         
         if (size == 0)
         {
-            return result;
-        }
-
-        // Modern Unity format has 2 children: [size, data]
-        // Legacy format may have different structures
-        TypeTreeNode? dataTemplate = null;
-
-        if (arrayNode.Children.Count >= 2)
-        {
-            // Standard case: children[1] is the data template
-            dataTemplate = arrayNode.Children[1];
-        }
-        else if (arrayNode.Children.Count == 1)
-        {
-            // Fallback: if only one child, use it as template
-            dataTemplate = arrayNode.Children[0];
-        }
-        else
-        {
-            // No children - cannot deserialize
-            Console.WriteLine($"[ARRAY-WARN] Array with no children, name='{arrayNode.Name}'");
             return result;
         }
 
@@ -202,14 +186,12 @@ public sealed class TypeTreeReader
                 
                 if (size > 100_000 || bytesNeeded > bytesAvailable)
                 {
-                    Console.WriteLine($"[ARRAY-DEBUG] Skipping empty-Type array (external/overflow): size={size}, bytesNeeded={bytesNeeded}, bytesAvail={bytesAvailable}");
-                    return result; // Return empty - actual data is in .resS file or would overflow
+                    return result; // External resource or stream overflow
                 }
                 
                 if (dataTemplate.ByteSize > 0)
                 {
                     // Small fixed-size elements - read as byte arrays
-                    Console.WriteLine($"[ARRAY-DEBUG] Reading byte array (empty Type): {size} elements × {dataTemplate.ByteSize} bytes");
                     for (int i = 0; i < size; i++)
                     {
                         byte[] bytes = _reader.ReadBytes(dataTemplate.ByteSize);
@@ -219,7 +201,6 @@ public sealed class TypeTreeReader
                 else
                 {
                     // Variable size - read length prefix then bytes for each element
-                    Console.WriteLine($"[ARRAY-DEBUG] Reading variable-size byte array (empty Type): {size} elements with length prefixes");
                     for (int i = 0; i < size; i++)
                     {
                         int length = _reader.ReadInt32();
