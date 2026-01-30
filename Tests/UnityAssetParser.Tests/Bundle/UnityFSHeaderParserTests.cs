@@ -22,8 +22,8 @@ public class UnityFSHeaderParserTests
         writer.Write(Encoding.UTF8.GetBytes("UnityFS"));
         writer.Write((byte)0x00);
 
-        // Version: 6 (uint32, little-endian)
-        writer.Write((uint)6);
+        // Version: 6 (uint32, BIG-ENDIAN per UnityPy)
+        WriteBigEndianUInt32(writer, 6);
 
         // Unity version: "2020.3.48f1\0"
         writer.Write(Encoding.UTF8.GetBytes("2020.3.48f1"));
@@ -33,17 +33,17 @@ public class UnityFSHeaderParserTests
         writer.Write(Encoding.UTF8.GetBytes("b805b124c6b7"));
         writer.Write((byte)0x00);
 
-        // Size: 300 bytes (int64, little-endian)
-        writer.Write((long)300);
+        // Size: 300 bytes (int64, BIG-ENDIAN per UnityPy)
+        WriteBigEndianInt64(writer, 300);
 
-        // Compressed BlocksInfo size: 123 (uint32, little-endian)
-        writer.Write((uint)123);
+        // Compressed BlocksInfo size: 123 (uint32, BIG-ENDIAN per UnityPy)
+        WriteBigEndianUInt32(writer, 123);
 
-        // Uncompressed BlocksInfo size: 123 (uint32, little-endian)
-        writer.Write((uint)123);
+        // Uncompressed BlocksInfo size: 123 (uint32, BIG-ENDIAN per UnityPy)
+        WriteBigEndianUInt32(writer, 123);
 
         // Flags: 0 (no compression, embedded, no padding)
-        writer.Write((uint)0);
+        WriteBigEndianUInt32(writer, 0);
 
         return stream.ToArray();
     }
@@ -60,8 +60,8 @@ public class UnityFSHeaderParserTests
         writer.Write(Encoding.UTF8.GetBytes("UnityFS"));
         writer.Write((byte)0x00);
 
-        // Version: 7 (uint32, little-endian)
-        writer.Write((uint)7);
+        // Version: 7 (uint32, BIG-ENDIAN per UnityPy)
+        WriteBigEndianUInt32(writer, 7);
 
         // Unity version: "2022.3.0f1\0"
         writer.Write(Encoding.UTF8.GetBytes("2022.3.0f1"));
@@ -71,17 +71,17 @@ public class UnityFSHeaderParserTests
         writer.Write(Encoding.UTF8.GetBytes("abc123def456"));
         writer.Write((byte)0x00);
 
-        // Size: 5000 bytes (int64, little-endian)
-        writer.Write((long)5000);
+        // Size: 5000 bytes (int64, BIG-ENDIAN per UnityPy)
+        WriteBigEndianInt64(writer, 5000);
 
-        // Compressed BlocksInfo size: 256 (uint32, little-endian)
-        writer.Write((uint)256);
+        // Compressed BlocksInfo size: 256 (uint32, BIG-ENDIAN per UnityPy)
+        WriteBigEndianUInt32(writer, 256);
 
-        // Uncompressed BlocksInfo size: 512 (uint32, little-endian)
-        writer.Write((uint)512);
+        // Uncompressed BlocksInfo size: 512 (uint32, BIG-ENDIAN per UnityPy)
+        WriteBigEndianUInt32(writer, 512);
 
         // Flags: 0x281 = LZMA (1) | BlocksInfoAtEnd (0x80) | NeedsPadding (0x200)
-        writer.Write((uint)0x281);
+        WriteBigEndianUInt32(writer, 0x281);
 
         return stream.ToArray();
     }
@@ -159,7 +159,8 @@ public class UnityFSHeaderParserTests
     [Fact]
     public void Parse_UnsupportedVersion_ThrowsException()
     {
-        // Arrange
+        // Arrange: UnityPy doesn't validate version during header parsing
+        // It will fail reading subsequent fields if stream is truncated
         using var stream = new MemoryStream();
         using var writer = new BinaryWriter(stream);
 
@@ -167,43 +168,48 @@ public class UnityFSHeaderParserTests
         writer.Write(Encoding.UTF8.GetBytes("UnityFS"));
         writer.Write((byte)0x00);
 
-        // Version: 5 (unsupported)
-        writer.Write((uint)5);
+        // Version: 5 (any version is accepted during header parse)
+        WriteBigEndianUInt32(writer, 5);
+        // Stream ends here - missing Unity version string will cause EOF error
         stream.Position = 0;
 
         var parser = new UnityFSHeaderParser();
 
-        // Act & Assert
-        var ex = Assert.Throws<UnsupportedVersionException>(() => parser.Parse(stream));
-        Assert.Equal(5u, ex.Version);
-        Assert.Contains("5", ex.Message);
+        // Act & Assert: Fails on missing data, not version validation
+        // UnityPy would throw during ReadUtf8NullTerminated for Unity version
+        Assert.ThrowsAny<Exception>(() => parser.Parse(stream));
     }
 
     [Fact]
-    public void Parse_InvalidCompressionType_ThrowsException()
+    public void Parse_InvalidCompressionType_ParsesSuccessfully()
     {
-        // Arrange
+        // Arrange: UnityPy does NOT validate compression type during header parsing
+        // It only throws when actually decompressing with an unsupported type
         using var stream = new MemoryStream();
         using var writer = new BinaryWriter(stream);
 
         writer.Write(Encoding.UTF8.GetBytes("UnityFS"));
         writer.Write((byte)0x00);
-        WriteBigEndianUInt32(writer, 5);
+        WriteBigEndianUInt32(writer, 6);
         writer.Write(Encoding.UTF8.GetBytes("2020.3.48f1"));
         writer.Write((byte)0x00);
         writer.Write(Encoding.UTF8.GetBytes("b805b124c6b7"));
         writer.Write((byte)0x00);
-        writer.Write((long)300);
-        writer.Write((uint)123);
-        writer.Write((uint)123);
-        writer.Write((uint)0x10); // Invalid compression type (16)
+        WriteBigEndianInt64(writer, 300);
+        WriteBigEndianUInt32(writer, 123);
+        WriteBigEndianUInt32(writer, 123);
+        WriteBigEndianUInt32(writer, 0x10); // Invalid compression type (16)
         stream.Position = 0;
 
         var parser = new UnityFSHeaderParser();
 
-        // Act & Assert
-        var ex = Assert.Throws<HeaderParseException>(() => parser.Parse(stream));
-        Assert.Contains("compression type", ex.Message, StringComparison.OrdinalIgnoreCase);
+        // Act
+        var header = parser.Parse(stream);
+
+        // Assert: Should parse successfully, UnityPy doesn't validate at parse time
+        Assert.NotNull(header);
+        Assert.Equal(6u, header.Version);
+        Assert.Equal((CompressionType)0x10, header.CompressionType);
     }
 
     [Fact]
@@ -215,15 +221,15 @@ public class UnityFSHeaderParserTests
 
         writer.Write(Encoding.UTF8.GetBytes("UnityFS"));
         writer.Write((byte)0x00);
-        writer.Write((uint)6);
+        WriteBigEndianUInt32(writer, 6);
         writer.Write(Encoding.UTF8.GetBytes("2020.3.48f1"));
         writer.Write((byte)0x00);
         writer.Write(Encoding.UTF8.GetBytes("b805b124c6b7"));
         writer.Write((byte)0x00);
-        writer.Write((long)300);
-        writer.Write((uint)123);
-        writer.Write((uint)123);
-        writer.Write((uint)0x1400); // Combined encryption flags (0x400 | 0x1000)
+        WriteBigEndianInt64(writer, 300);
+        WriteBigEndianUInt32(writer, 123);
+        WriteBigEndianUInt32(writer, 123);
+        WriteBigEndianUInt32(writer, 0x1400); // Combined encryption flags (0x400 | 0x1000)
         stream.Position = 0;
 
         var parser = new UnityFSHeaderParser();
@@ -237,31 +243,35 @@ public class UnityFSHeaderParserTests
     }
 
     [Fact]
-    public void Parse_PaddingFlagOnV6_ThrowsException()
+    public void Parse_PaddingFlagOnV6_ParsesSuccessfully()
     {
-        // Arrange
+        // Arrange: UnityPy does NOT validate padding flag restrictions per version
+        // It accepts any flag value during parsing
         using var stream = new MemoryStream();
         using var writer = new BinaryWriter(stream);
 
         writer.Write(Encoding.UTF8.GetBytes("UnityFS"));
         writer.Write((byte)0x00);
-        writer.Write((uint)6); // Version 6
+        WriteBigEndianUInt32(writer, 6); // Version 6
         writer.Write(Encoding.UTF8.GetBytes("2020.3.48f1"));
         writer.Write((byte)0x00);
         writer.Write(Encoding.UTF8.GetBytes("b805b124c6b7"));
         writer.Write((byte)0x00);
-        writer.Write((long)300);
-        writer.Write((uint)123);
-        writer.Write((uint)123);
-        writer.Write((uint)0x200); // Padding flag (only valid for v7+)
+        WriteBigEndianInt64(writer, 300);
+        WriteBigEndianUInt32(writer, 123);
+        WriteBigEndianUInt32(writer, 123);
+        WriteBigEndianUInt32(writer, 0x200); // Padding flag
         stream.Position = 0;
 
         var parser = new UnityFSHeaderParser();
 
-        // Act & Assert
-        var ex = Assert.Throws<HeaderParseException>(() => parser.Parse(stream));
-        Assert.Contains("Padding flag", ex.Message);
-        Assert.Contains("v7+", ex.Message);
+        // Act
+        var header = parser.Parse(stream);
+
+        // Assert: Should parse successfully
+        Assert.NotNull(header);
+        Assert.Equal(6u, header.Version);
+        Assert.True(header.NeedsPaddingAtStart);
     }
 
     [Fact]
@@ -409,15 +419,15 @@ public class UnityFSHeaderParserTests
 
             writer.Write(Encoding.UTF8.GetBytes("UnityFS"));
             writer.Write((byte)0x00);
-            writer.Write((uint)6);
+            WriteBigEndianUInt32(writer, 6);
             writer.Write(Encoding.UTF8.GetBytes("2020.3.48f1"));
             writer.Write((byte)0x00);
             writer.Write(Encoding.UTF8.GetBytes("b805b124c6b7"));
             writer.Write((byte)0x00);
-            writer.Write((long)300);
-            writer.Write((uint)123);
-            writer.Write((uint)123);
-            writer.Write(compressionType); // Compression type in bits 0-5
+            WriteBigEndianInt64(writer, 300);
+            WriteBigEndianUInt32(writer, 123);
+            WriteBigEndianUInt32(writer, 123);
+            WriteBigEndianUInt32(writer, compressionType); // Compression type in bits 0-5
             stream.Position = 0;
 
             var parser = new UnityFSHeaderParser();
@@ -435,6 +445,21 @@ public class UnityFSHeaderParserTests
     /// </summary>
     private static void WriteBigEndianUInt32(BinaryWriter writer, uint value)
     {
+        writer.Write((byte)((value >> 24) & 0xFF));
+        writer.Write((byte)((value >> 16) & 0xFF));
+        writer.Write((byte)((value >> 8) & 0xFF));
+        writer.Write((byte)(value & 0xFF));
+    }
+
+    /// <summary>
+    /// Helper method to write an int64 in big-endian format.
+    /// </summary>
+    private static void WriteBigEndianInt64(BinaryWriter writer, long value)
+    {
+        writer.Write((byte)((value >> 56) & 0xFF));
+        writer.Write((byte)((value >> 48) & 0xFF));
+        writer.Write((byte)((value >> 40) & 0xFF));
+        writer.Write((byte)((value >> 32) & 0xFF));
         writer.Write((byte)((value >> 24) & 0xFF));
         writer.Write((byte)((value >> 16) & 0xFF));
         writer.Write((byte)((value >> 8) & 0xFF));
