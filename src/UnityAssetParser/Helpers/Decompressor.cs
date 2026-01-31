@@ -78,9 +78,20 @@ public class Decompressor : IDecompressor
             using var outputStream = new MemoryStream(expectedSize);
 
             // Decompress using SharpCompress
-            // Pass -1 for decompressedSize since Unity doesn't encode it in the stream
-            using var decoder = new LzmaStream(properties, inputStream, -1);
-            decoder.CopyTo(outputStream);
+            // Try with both inputSize and outputSize parameters
+            try
+            {
+                using var decoder = new LzmaStream(properties, inputStream, compressedData.Length - 5, expectedSize);
+                decoder.CopyTo(outputStream);
+            }
+            catch (NullReferenceException nre)
+            {
+                // If NullReferenceException occurs, try simpler constructor (no output size)
+                inputStream.Position = 0;
+                outputStream.Position = 0;
+                using var decoder = new LzmaStream(properties, inputStream);
+                decoder.CopyTo(outputStream);
+            }
 
             byte[] result = outputStream.ToArray();
 
