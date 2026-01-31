@@ -204,45 +204,45 @@ public static class MeshParser
     private static SubMesh[] MapSubMeshes(List<object?> list)
     {
         var subMeshes = new List<SubMesh>();
-        
+
         foreach (var item in list)
         {
             if (item is not Dictionary<string, object?> dict)
                 continue;
-                
+
             var subMesh = new SubMesh();
-            
+
             if (dict.TryGetValue("firstByte", out var fbObj) && fbObj != null)
                 subMesh.FirstByte = Convert.ToUInt32(fbObj);
-                
+
             if (dict.TryGetValue("indexCount", out var icObj) && icObj != null)
                 subMesh.IndexCount = Convert.ToUInt32(icObj);
-                
+
             if (dict.TryGetValue("topology", out var topoObj) && topoObj != null)
                 subMesh.Topology = (MeshTopology)Convert.ToInt32(topoObj);
-                
+
             if (dict.TryGetValue("baseVertex", out var bvObj) && bvObj != null)
                 subMesh.BaseVertex = Convert.ToUInt32(bvObj);
-                
+
             if (dict.TryGetValue("firstVertex", out var fvObj) && fvObj != null)
                 subMesh.FirstVertex = Convert.ToUInt32(fvObj);
-                
+
             if (dict.TryGetValue("vertexCount", out var vcObj) && vcObj != null)
                 subMesh.VertexCount = Convert.ToUInt32(vcObj);
-                
+
             subMeshes.Add(subMesh);
         }
-        
+
         return subMeshes.ToArray();
     }
 
     private static VertexData MapVertexData(Dictionary<string, object?> dict)
     {
         var vertexData = new VertexData();
-        
+
         if (dict.TryGetValue("m_VertexCount", out var vcObj) && vcObj != null)
             vertexData.VertexCount = Convert.ToUInt32(vcObj);
-            
+
         if (dict.TryGetValue("m_Channels", out var channelsObj) && channelsObj is List<object?> channelsList)
         {
             var channels = new List<ChannelInfo>();
@@ -264,12 +264,12 @@ public static class MeshParser
             }
             vertexData.Channels = channels.ToArray();
         }
-        
+
         if (dict.TryGetValue("m_DataSize", out var dataObj) && dataObj is List<object?> dataList)
         {
             vertexData.DataSize = dataList.Cast<byte?>().Where(b => b.HasValue).Select(b => b!.Value).ToArray();
         }
-        
+
         return vertexData;
     }
 
@@ -287,12 +287,12 @@ public static class MeshParser
         var boneIndices = MapPackedBitVector(dict, "m_BoneIndices", hasRangeStart: false);
         var triangles = MapPackedBitVector(dict, "m_Triangles", hasRangeStart: false);
         var floatColors = MapPackedBitVector(dict, "m_FloatColors", hasRangeStart: true);
-        
+
         // Optional fields (always present in TypeTree but may be empty)
         var colors = dict.TryGetValue("m_Colors", out var colorsObj) && colorsObj is Dictionary<string, object?> colorsDict
             ? PackedBitVector.FromTypeTreeData(colorsDict, hasRangeStart: false)
             : new PackedBitVector();
-            
+
         var bindPoses = dict.TryGetValue("m_BindPoses", out var bindPosesObj) && bindPosesObj is Dictionary<string, object?> bindPosesDict
             ? PackedBitVector.FromTypeTreeData(bindPosesDict, hasRangeStart: true)
             : new PackedBitVector();
@@ -414,7 +414,7 @@ public static class MeshParser
                 ReadBlendShapeData(reader);
                 reader.Align();
                 Console.WriteLine($"DEBUG: m_Shapes done, pos={stream.Position}");
-                
+
                 // Field 4: m_BindPose (version >= 4)
                 if (major >= 4)
                 {
@@ -594,7 +594,7 @@ public static class MeshParser
     private static SubMesh[] ReadSubMeshArray(EndianBinaryReader reader, int major)
     {
         uint count = reader.ReadUInt32();
-        
+
         var subMeshes = new SubMesh[count];
 
         for (int i = 0; i < count; i++)
@@ -618,7 +618,7 @@ public static class MeshParser
                 LocalAABB = major >= 3 ? ReadAABB(reader) : null
             };
         }
-        
+
         return subMeshes;
     }
 
@@ -638,20 +638,26 @@ public static class MeshParser
         // 2. shapes (vector of MeshBlendShape)
         // 3. channels (vector of MeshBlendShapeChannel)
         // 4. fullWeights (vector of float)
-        
+
         // vertices array
         uint verticesCount = reader.ReadUInt32();
         for (uint i = 0; i < verticesCount; i++)
         {
             // BlendShapeVertex: vertex (Vector3f), normal (Vector3f), tangent (Vector3f), index (uint)
-            reader.ReadSingle(); reader.ReadSingle(); reader.ReadSingle(); // vertex
-            reader.ReadSingle(); reader.ReadSingle(); reader.ReadSingle(); // normal
-            reader.ReadSingle(); reader.ReadSingle(); reader.ReadSingle(); // tangent
+            reader.ReadSingle();
+            reader.ReadSingle();
+            reader.ReadSingle(); // vertex
+            reader.ReadSingle();
+            reader.ReadSingle();
+            reader.ReadSingle(); // normal
+            reader.ReadSingle();
+            reader.ReadSingle();
+            reader.ReadSingle(); // tangent
             reader.ReadUInt32(); // index
         }
         reader.Align();
         System.Diagnostics.Debug.WriteLine($"[ReadBlendShapeData] After vertices, position={reader.BaseStream.Position}");
-        
+
         // shapes array
         uint shapesCount = reader.ReadUInt32();
         System.Diagnostics.Debug.WriteLine($"[ReadBlendShapeData] shapesCount={shapesCount}");
@@ -666,7 +672,7 @@ public static class MeshParser
         }
         reader.Align();
         System.Diagnostics.Debug.WriteLine($"[ReadBlendShapeData] After shapes, position={reader.BaseStream.Position}");
-        
+
         // channels array
         uint channelsCount = reader.ReadUInt32();
         System.Diagnostics.Debug.WriteLine($"[ReadBlendShapeData] channelsCount={channelsCount}");
@@ -681,7 +687,7 @@ public static class MeshParser
         }
         reader.Align();
         System.Diagnostics.Debug.WriteLine($"[ReadBlendShapeData] After channels, position={reader.BaseStream.Position}");
-        
+
         // fullWeights array
         uint fullWeightsCount = reader.ReadUInt32();
         System.Diagnostics.Debug.WriteLine($"[ReadBlendShapeData] fullWeightsCount={fullWeightsCount}");
@@ -747,9 +753,9 @@ public static class MeshParser
         // 1. m_VertexCount (uint)
         // 2. m_Channels (vector of ChannelInfo)
         // 3. m_DataSize (TypelessData - vector of bytes)
-        
+
         Console.WriteLine($"DEBUG: ReadVertexData start, pos={reader.BaseStream.Position}");
-        
+
         // m_VertexCount
         vertexData.VertexCount = reader.ReadUInt32();
         Console.WriteLine($"DEBUG: VertexCount={vertexData.VertexCount}, pos={reader.BaseStream.Position}");
@@ -757,7 +763,7 @@ public static class MeshParser
         // m_Channels array
         uint channelCount = reader.ReadUInt32();
         Console.WriteLine($"DEBUG: ChannelCount={channelCount}, pos={reader.BaseStream.Position}");
-        
+
         var channels = new ChannelInfo[channelCount];
         for (int i = 0; i < channelCount; i++)
         {
@@ -772,13 +778,14 @@ public static class MeshParser
         }
         vertexData.Channels = channels;
         Console.WriteLine($"DEBUG: Read {channelCount} channels, pos={reader.BaseStream.Position}");
-        
+
         // m_DataSize (TypelessData - vector of bytes)
         uint dataSize = reader.ReadUInt32();
         Console.WriteLine($"DEBUG: m_DataSize={dataSize}, pos={reader.BaseStream.Position}");
         if (dataSize > 0)
         {
             vertexData.DataSize = reader.ReadBytes((int)dataSize);
+            reader.Align(4);  // CRITICAL: Align after byte array read
         }
         else
         {
@@ -818,7 +825,7 @@ public static class MeshParser
             BoneIndices = new PackedBitVector(reader, hasRangeStart: false),
             Triangles = new PackedBitVector(reader, hasRangeStart: false)
         };
-        
+
         // m_UVInfo
         uint uvInfo = reader.ReadUInt32();
 
@@ -838,7 +845,9 @@ public static class MeshParser
         if (count == 0)
             return Array.Empty<byte>();
 
-        return reader.ReadBytes((int)count);
+        byte[] indexBuffer = reader.ReadBytes((int)count);
+        reader.Align(4);  // CRITICAL: Align after byte array read
+        return indexBuffer;
     }
 
     private static void ReadByteArrayField(EndianBinaryReader reader)
@@ -848,6 +857,7 @@ public static class MeshParser
         if (count > 0)
         {
             reader.ReadBytes((int)count);
+            reader.Align(4);  // CRITICAL: Align after byte array read
         }
     }
 

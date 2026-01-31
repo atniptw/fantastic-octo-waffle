@@ -78,47 +78,58 @@ public sealed class BundleFile
 
         try
         {
-            // Step 1: Parse Header
+            // Step 1: Parse Header (UnityPy: BundleFile.py line 27-50)
             var headerParser = new UnityFSHeaderParser();
             var header = headerParser.Parse(stream);
             currentState = ParsingState.HeaderValid;
 
-            // Step 2: Determine BlocksInfo location
-            var blocksInfoLocation = headerParser.CalculateBlocksInfoLocation(header, stream.Length);
+            // Step 2: Determine BlocksInfo location and read (UnityPy: BundleFile.py lines 130-141)
+            // CRITICAL: This is the exact UnityPy logic, NOT custom calculation
+            long startPos = stream.Position;
+            byte[] compressedBlocksInfo;
 
-            // Step 3: Read and decompress BlocksInfo
-            stream.Position = blocksInfoLocation.BlocksInfoPosition;
-            byte[] compressedBlocksInfo = new byte[header.CompressedBlocksInfoSize];
-            int bytesRead = stream.Read(compressedBlocksInfo, 0, compressedBlocksInfo.Length);
-            if (bytesRead != compressedBlocksInfo.Length)
+            if (header.BlocksInfoAtEnd)  // BlocksInfoAtTheEnd = 0x80
             {
-                throw new BlocksInfoParseException(
-                    $"Failed to read BlocksInfo: expected {compressedBlocksInfo.Length} bytes, got {bytesRead}");
+                // Seek to: file_length - compressed_size
+                stream.Position = stream.Length - header.CompressedBlocksInfoSize;
+                compressedBlocksInfo = new byte[header.CompressedBlocksInfoSize];
+                int bytesRead = stream.Read(compressedBlocksInfo, 0, compressedBlocksInfo.Length);
+                if (bytesRead != compressedBlocksInfo.Length)
+                {
+                    throw new BlocksInfoParseException(
+                        $"Failed to read BlocksInfo from end: expected {compressedBlocksInfo.Length} bytes, got {bytesRead}");
+                }
+                // Seek back to where we started (for data region)
+                stream.Position = startPos;
+            }
+            else  // BlocksAndDirectoryInfoCombined = 0x40
+            {
+                // Read from current position
+                compressedBlocksInfo = new byte[header.CompressedBlocksInfoSize];
+                int bytesRead = stream.Read(compressedBlocksInfo, 0, compressedBlocksInfo.Length);
+                if (bytesRead != compressedBlocksInfo.Length)
+                {
+                    throw new BlocksInfoParseException(
+                        $"Failed to read BlocksInfo: expected {compressedBlocksInfo.Length} bytes, got {bytesRead}");
+                }
             }
             currentState = ParsingState.BlocksInfoDecompressed;
 
-            // Step 4: Determine data region start (UnityPy flow)
-            long dataOffset;
-            if (header.BlocksInfoAtEnd)
+            // Step 3: Alignment check for v7+ (UnityPy: BundleFile.py lines 165-168)
+            // If BlockInfoNeedPaddingAtStart is set (flag 0x200), align to 16 bytes before reading block data
+            if (header.Version >= 7 && header.NeedsPaddingAtStart)
             {
-                // Streamed: data starts at aligned header position
-                dataOffset = blocksInfoLocation.AlignedHeaderPosition;
-            }
-            else
-            {
-                // Embedded: data starts after BlocksInfo (current position)
-                dataOffset = stream.Position;
-            }
-
-            // Step 5: Apply alignment if BlockInfoNeedPaddingAtStart is set
-            // This aligns the data region start to 16-byte boundary if flag is set
-            if (header.NeedsPaddingAtStartFlagSet)
-            {
-                long alignedDataOffset = BinaryReaderExtensions.CalculateAlignedPosition(dataOffset, 16);
-                dataOffset = alignedDataOffset;
+                long currentPos = stream.Position;
+                long remainder = currentPos % 16;
+                if (remainder != 0)
+                {
+                    stream.Position = currentPos + (16 - remainder);
+                }
             }
 
-            // Step 6: Parse BlocksInfo
+            long dataOffset = stream.Position;
+
+            // Step 4: Parse BlocksInfo
             var decompressor = new Decompressor();
             var blocksInfoParser = new BlocksInfoParser(decompressor);
             var blocksInfo = blocksInfoParser.Parse(
@@ -128,8 +139,7 @@ public sealed class BundleFile
                 dataOffset);
             currentState = ParsingState.HashVerified;
 
-            // Step 7: Reconstruct data region
-            stream.Position = dataOffset;
+            // Step 5: Reconstruct data region
             var dataRegionBuilder = new DataRegionBuilder(decompressor);
             var dataRegion = dataRegionBuilder.Build(stream, dataOffset, blocksInfo.Blocks);
 

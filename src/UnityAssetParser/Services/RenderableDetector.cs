@@ -212,6 +212,7 @@ public static class RenderableDetector
         }
 
         header.Reserved = reader.ReadBytes(3);
+        reader.Align(4);  // CRITICAL: Align after 3-byte read
 
         // Validate version
         if (header.Version < 14 || header.Version > 30)
@@ -243,6 +244,8 @@ public static class RenderableDetector
 
         reader.ReadByte(); // Endianness
         reader.ReadBytes(3); // Reserved
+        reader.Align(4);  // CRITICAL: Align after 3-byte read
+
     }
 
     private static void SkipTypeTree(EndianBinaryReader reader, uint version, bool enableTypeTree)
