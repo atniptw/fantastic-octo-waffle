@@ -495,21 +495,47 @@ public sealed class SerializedFile
 
     private static List<TypeTreeNode> ParseTypeTreeNodes(EndianBinaryReader reader, uint version)
     {
-        // Unity 5.5+ type trees use the blob format: a packed array of fixed-size structs
-        // followed by a string buffer.
+        // CRITICAL: TypeTree has TWO formats depending on version (UnityPy: SerializedFile.py#L134-135)
+        // - Legacy format (v < 10): Text-based null-terminated strings, completely different struct
+        // - Blob format (v >= 12 or v == 10): Binary struct with string offsets (packed array)
+        
         long startPos = reader.Position;
+        Console.WriteLine($"DEBUG: ParseTypeTreeNodes at pos={startPos}, version={version}");
+
+        // Determine which format to use
+        bool usesBlobFormat = version >= 12 || version == 10;
+
+        if (usesBlobFormat)
+        {
+            return ParseTypeTreeNodesBlob(reader, version, startPos);
+        }
+        else
+        {
+            // Legacy format for v < 10 (but v == 10 uses blob)
+            // This handles v0-9 (very old Unity versions)
+            return ParseTypeTreeNodesLegacy(reader, version, startPos);
+        }
+    }
+
+    /// <summary>
+    /// Parses blob format TypeTree (v >= 12 or v == 10).
+    /// Binary struct array with string offset pool.
+    /// </summary>
+    private static List<TypeTreeNode> ParseTypeTreeNodesBlob(EndianBinaryReader reader, uint version, long startPos)
+    {
         int nodeCount = reader.ReadInt32();
         int stringBufferSize = reader.ReadInt32();
 
-        Console.WriteLine($"DEBUG: ParseTypeTreeNodes at pos={startPos}, nodeCount={nodeCount}, stringBufSize={stringBufferSize}");
+        Console.WriteLine($"DEBUG: ParseTypeTreeNodesBlob at pos={startPos}, nodeCount={nodeCount}, stringBufSize={stringBufferSize}");
 
         if (nodeCount == 0)
         {
             return new List<TypeTreeNode>();
         }
 
-        // Determine struct size per UnityPy's _get_blob_node_struct
-        // Version >= 19 has 32-byte nodes, otherwise 24-byte
+        // Determine struct size per UnityPy's _get_blob_node_struct (TypeTreeNode.py#L330-347)
+        // v < 19: hBBIIiii = 2+1+1+4+4+4+4+4 = 24 bytes
+        // v >= 19: hBBIIiiiQ = 2+1+1+4+4+4+4+4+8 = 32 bytes (adds m_RefTypeHash)
         int nodeStructSize = version >= 19 ? 32 : 24;
 
         // Read all node structs
@@ -533,25 +559,31 @@ public sealed class SerializedFile
 
         for (int i = 0; i < nodeCount; i++)
         {
+            // BLOB FORMAT FIELD ORDER (UnityPy: TypeTreeNode.py#L330-347):
+            // m_Version (int16) → m_Level (uint8) → m_TypeFlags (uint8) 
+            // → m_TypeStrOffset (uint32) → m_NameStrOffset (uint32)
+            // → m_ByteSize (int32) → m_Index (int32) → m_MetaFlag (int32)
+            // [→ m_RefTypeHash (uint64) if v >= 19]
+            
             var node = new TypeTreeNode
             {
-                Version = nodeReader.ReadInt16(),
-                Level = nodeReader.ReadByte(),
-                TypeFlags = nodeReader.ReadByte()
+                Version = nodeReader.ReadInt16(),      // 2 bytes
+                Level = nodeReader.ReadByte(),         // 1 byte
+                TypeFlags = nodeReader.ReadByte()      // 1 byte
             };
 
-            // Read string offsets (no size fields - strings are null-terminated in buffer)
-            uint typeStrOffset = nodeReader.ReadUInt32();
-            uint nameStrOffset = nodeReader.ReadUInt32();
+            // Read string offsets from string pool (not null-terminated in blob format)
+            uint typeStrOffset = nodeReader.ReadUInt32();    // 4 bytes
+            uint nameStrOffset = nodeReader.ReadUInt32();    // 4 bytes
 
-            node.ByteSize = nodeReader.ReadInt32();
-            int index = nodeReader.ReadInt32();  // Index field in struct
-            node.MetaFlag = nodeReader.ReadInt32();
+            node.ByteSize = nodeReader.ReadInt32();          // 4 bytes
+            int index = nodeReader.ReadInt32();              // 4 bytes  
+            node.MetaFlag = nodeReader.ReadInt32();          // 4 bytes
 
-            // For version >= 19, there are 8 more bytes (refTypeHash)
+            // For version >= 19, there are 8 more bytes (refTypeHash - not used yet)
             if (version >= 19)
             {
-                nodeReader.ReadUInt64(); // refTypeHash, we don't use it yet
+                nodeReader.ReadUInt64(); // 8 bytes - m_RefTypeHash
             }
 
             // Extract null-terminated strings from string buffer
@@ -560,6 +592,103 @@ public sealed class SerializedFile
             node.Index = i;  // Use loop counter as logical index
 
             nodes.Add(node);
+        }
+
+        return nodes;
+    }
+
+    /// <summary>
+    /// Parses legacy format TypeTree (v < 10, except v == 10 which uses blob).
+    /// Text-based format with null-terminated strings and different field order.
+    /// Port of UnityPy: TypeTreeNode.py#L248-306 (parse method for legacy format).
+    /// </summary>
+    private static List<TypeTreeNode> ParseTypeTreeNodesLegacy(EndianBinaryReader reader, uint version, long startPos)
+    {
+        var nodes = new List<TypeTreeNode>();
+
+        // LEGACY FORMAT (v < 10): Reads nodes sequentially with text strings
+        // Field order differs from blob format!
+        // UnityPy: TypeTreeNode.parse (legacy) reads:
+        // 1. m_Version (int32, 4 bytes) - differs from blob (int16)!
+        // 2. m_Type (string_to_null) - read directly, not offset!
+        // 3. m_Name (string_to_null) - read directly, not offset!
+        // 4. m_ByteSize (int32, 4 bytes)
+        // 5. m_Index (int32, 4 bytes)
+        // 6. [if v >= 2] m_TypeFlags (int32, 4 bytes) - stored as int32, not uint8!
+        // 7. [if v >= 3] m_MetaFlag (int32, 4 bytes)
+        // 8. [if v == 2] m_VariableCount (int32, 4 bytes)
+        // NO m_Level in legacy format!
+        // NO string offsets - strings embedded inline!
+
+        try
+        {
+            while (reader.BaseStream.Position < reader.BaseStream.Length)
+            {
+                // Try to read legacy node - if we fail, stop
+                int startNodePos = (int)reader.BaseStream.Position;
+
+                var node = new TypeTreeNode();
+
+                // Field 1: m_Version (int32 in legacy, NOT int16 like blob!)
+                if (reader.BaseStream.Position + 4 > reader.BaseStream.Length)
+                    break;
+                node.Version = reader.ReadInt32();
+
+                // Field 2: m_Type (null-terminated string, NOT offset!)
+                node.Type = reader.ReadUtf8NullTerminated();
+
+                // Field 3: m_Name (null-terminated string, NOT offset!)
+                node.Name = reader.ReadUtf8NullTerminated();
+
+                // Field 4: m_ByteSize (int32)
+                if (reader.BaseStream.Position + 4 > reader.BaseStream.Length)
+                    break;
+                node.ByteSize = reader.ReadInt32();
+
+                // Field 5: m_Index (int32)
+                node.Index = reader.ReadInt32();
+
+                // Field 6: m_TypeFlags (int32 in legacy, not uint8 like blob!)
+                if (version >= 2)
+                {
+                    if (reader.BaseStream.Position + 4 > reader.BaseStream.Length)
+                        break;
+                    node.TypeFlags = reader.ReadInt32();
+                }
+
+                // Field 7: m_MetaFlag (int32)
+                if (version >= 3)
+                {
+                    if (reader.BaseStream.Position + 4 > reader.BaseStream.Length)
+                        break;
+                    node.MetaFlag = reader.ReadInt32();
+                }
+
+                // Field 8: m_VariableCount (legacy only, v==2)
+                if (version == 2)
+                {
+                    if (reader.BaseStream.Position + 4 > reader.BaseStream.Length)
+                        break;
+                    // m_VariableCount not stored in our TypeTreeNode, but we must read it
+                    int variableCount = reader.ReadInt32();
+                }
+
+                // m_Level doesn't exist in legacy format - default to 0
+                node.Level = 0;
+
+                nodes.Add(node);
+
+                // Safety check: if we haven't moved forward, something is wrong
+                if ((int)reader.BaseStream.Position == startNodePos)
+                    break;
+            }
+
+            Console.WriteLine($"DEBUG: ParseTypeTreeNodesLegacy read {nodes.Count} nodes (v{version})");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"DEBUG: Error parsing legacy TypeTree nodes: {ex.Message}");
+            // Return what we got so far
         }
 
         return nodes;
