@@ -95,8 +95,8 @@ public class ZipIndexerTests
         Assert.Single(items);
         Assert.Equal("asset.hhh", items[0].FileName);
         Assert.Equal(FileType.UnityFS, items[0].Type);
-        // Mock UnityFS files that fail to parse are marked as non-renderable (conservative default)
-        Assert.False(items[0].Renderable);
+        // UnityFS bundles are treated as potentially renderable to avoid full parsing.
+        Assert.True(items[0].Renderable);
     }
 
     [Fact]
@@ -147,8 +147,8 @@ public class ZipIndexerTests
 
         var assetItem = items.First(i => i.FileName == "asset.hhh");
         Assert.Equal(FileType.UnityFS, assetItem.Type);
-        // Mock UnityFS files that fail to parse are marked as non-renderable
-        Assert.False(assetItem.Renderable);
+        // UnityFS bundles are treated as potentially renderable to avoid full parsing.
+        Assert.True(assetItem.Renderable);
 
         var resSItem = items.First(i => i.FileName == "data.resS");
         Assert.Equal(FileType.Resource, resSItem.Type);
@@ -188,8 +188,8 @@ public class ZipIndexerTests
         Assert.Single(items);
         Assert.Equal("asset.hhh", items[0].FileName);
         Assert.Equal(FileType.UnityFS, items[0].Type);
-        // Mock UnityFS files that fail to parse are marked as non-renderable
-        Assert.False(items[0].Renderable);
+        // UnityFS bundles are treated as potentially renderable to avoid full parsing.
+        Assert.True(items[0].Renderable);
     }
 
     [Fact]
@@ -209,8 +209,8 @@ public class ZipIndexerTests
         // Assert
         Assert.Single(items);
         Assert.Equal(FileType.UnityFS, items[0].Type);
-        // Mock UnityWeb files that fail to parse are marked as non-renderable
-        Assert.False(items[0].Renderable);
+        // UnityFS bundles are treated as potentially renderable to avoid full parsing.
+        Assert.True(items[0].Renderable);
     }
 
     [Fact]

@@ -37,13 +37,19 @@ public class SerializedFileTests
         using var stream = new MemoryStream();
         using var writer = new BinaryWriter(stream);
 
-        // Version 22 header
-        writer.Write((uint)100);      // MetadataSize
-        writer.Write((long)1000);     // FileSize
+        // Initial header for version detection (little-endian uint32 x 4)
+        writer.Write((uint)0);        // Dummy metadataSize
+        writer.Write((uint)0);        // Dummy fileSize
         writer.Write((uint)22);       // Version
-        writer.Write((long)500);      // DataOffset
-        writer.Write((byte)2);        // Invalid Endianness
+        writer.Write((uint)0);        // Dummy dataOffset
+        writer.Write((byte)2);        // Invalid Endianness (not 0 or 1)
         writer.Write(new byte[3]);    // Reserved
+        
+    // Parser will try to read real header for version >= 22, so add dummy data
+    writer.Write((uint)0);        // MetadataSize
+    writer.Write((long)0);        // FileSize  
+    writer.Write((long)0);        // DataOffset
+    writer.Write((long)0);        // Unknown
 
         byte[] data = stream.ToArray();
 
@@ -57,13 +63,15 @@ public class SerializedFileTests
     public void Parse_UnsupportedVersion_ThrowsInvalidVersionException()
     {
         // Arrange: Create header with unsupported version (99)
+        // For version detection, version must be in the initial 16-byte header
         using var stream = new MemoryStream();
         using var writer = new BinaryWriter(stream);
 
-        writer.Write((uint)100);      // MetadataSize
-        writer.Write((long)1000);     // FileSize
-        writer.Write((uint)99);       // Invalid Version
-        writer.Write((long)500);      // DataOffset
+        // Initial header for version detection (little-endian uint32 x 4)
+        writer.Write((uint)0);        // Dummy metadataSize
+        writer.Write((uint)0);        // Dummy fileSize
+        writer.Write((uint)99);       // Version (INVALID - not in range 9-30)
+        writer.Write((uint)0);        // Dummy dataOffset
         writer.Write((byte)0);        // Endianness
         writer.Write(new byte[3]);    // Reserved
 
@@ -148,21 +156,35 @@ public class SerializedFileTests
     private static UnityAssetParser.SerializedFile.SerializedFile CreateMinimalSerializedFile()
     {
         // Create a minimal valid SerializedFile (version 22, no objects)
+        // Version 22 format per UnityPy SerializedFile.py:
+        // 1. First 16 bytes: Initial header for endianness detection (uint32 x 4)
+        // 2. Bytes 16-19: Endianness byte + 3 reserved
+        // 3. Bytes 20+: REAL header (metadataSize uint32, fileSize int64, dataOffset int64, unknown int64)
+        // 4. Then metadata (types, objects, externals)
         using var stream = new MemoryStream();
         using var writer = new BinaryWriter(stream);
 
         // Calculate sizes
-        int headerSize = 28; // MetadataSize(4) + FileSize(8) + Version(4) + DataOffset(8) + Endianness(1) + Reserved(3)
-        int metadataSize = headerSize + 4 + 4 + 4; // Header + type count + object count + identifier count
-        int fileSize = metadataSize + 100; // Add some padding for object data region
+        int realHeaderSize = 4 + 8 + 8 + 8; // metadataSize(4) + fileSize(8) + dataOffset(8) + unknown(8)
+        int metadataSize = realHeaderSize + 4 + 4 + 4; // Real header + type count + object count + identifier count
+        int fileSize = 20 + metadataSize + 100; // Initial header(16) + endian+reserved(4) + metadata + object data
 
-        // Header (version 22 format)
-        writer.Write((uint)metadataSize);  // MetadataSize
-        writer.Write((long)fileSize);      // FileSize (int64)
-        writer.Write((uint)22);            // Version
-        writer.Write((long)metadataSize);  // DataOffset
-        writer.Write((byte)0);             // Endianness (little)
-        writer.Write(new byte[3]);         // Reserved
+        // Initial header for version detection (little-endian uint32 x 4)
+        writer.Write((uint)0);     // Dummy metadataSize
+        writer.Write((uint)0);     // Dummy fileSize  
+        writer.Write((uint)22);    // Version (CRITICAL: must be 9-30 for detection)
+        writer.Write((uint)0);     // Dummy dataOffset
+        
+        // Endianness + reserved
+        writer.Write((byte)0);     // Endianness (0=little)
+        writer.Write(new byte[3]); // Reserved
+        
+        // REAL header (little-endian since endianness byte = 0)
+        writer.Write((uint)metadataSize);   // MetadataSize
+        writer.Write((long)fileSize);       // FileSize (int64)
+        int dataOffset = 20 + metadataSize; // Skip initial header + endian + metadata
+        writer.Write((long)dataOffset);     // DataOffset (int64)
+        writer.Write((long)0);              // Unknown (int64)
 
         // Type tree (empty)
         writer.Write((int)0);              // Type count
@@ -185,72 +207,68 @@ public class SerializedFileTests
 
     private static UnityAssetParser.SerializedFile.SerializedFile CreateSerializedFileWithObjects()
     {
-        // Create SerializedFile with some objects including Mesh (ClassID 43)
+        // Create SerializedFile with objects (version 22 format)
+        // Version 22 format: Initial header(16) + endian+reserved(4) + real header(28) + metadata
         using var stream = new MemoryStream();
         using var writer = new BinaryWriter(stream);
-
-        // Calculate header size (version 22)
-        int headerSize = 28; // MetadataSize(4) + FileSize(8) + Version(4) + DataOffset(8) + Endianness(1) + Reserved(3)
         
-        // Calculate metadata sections
-        int typeTreeSize = 4; // Type count only (empty type tree for simplicity)
+        // Calculate metadata sections (metadataSize does NOT include the real header, only the content after it)
+        int typeTreeSize = 4; // Type count only (empty type tree)
         int objectCount = 2;
-        // For version 22: align + PathId(8) + ByteStart(8) + ByteSize(4) + TypeId(4) + Stripped(1) = 25 bytes per object (with alignment)
-        int objectEntrySize = 29; // With 4-byte alignment padding
-        int objectTableSize = 4 + (objectCount * objectEntrySize); // Object count + entries
+        // For version 22: PathId(8) + ByteStart(8) + ByteSize(4) + TypeId(4) + Stripped(1) = 25 bytes per object
+        int objectEntrySize = 25;  // No dynamic alignment
+        int objectTableSize = 4 + (objectCount * objectEntrySize);  // Count + entries
         int externalSize = 4; // Identifier count
         
-        int metadataSize = headerSize + typeTreeSize + objectTableSize + externalSize;
+        // metadataSize is everything AFTER the real header (28 bytes)
+        int metadataSize = typeTreeSize + objectTableSize + externalSize;
+        int realHeaderSize = 4 + 8 + 8 + 8; // metadataSize(4) + fileSize(8) + dataOffset(8) + unknown(8)
         int objectDataSize = 150; // Space for object data
-        int fileSize = metadataSize + objectDataSize;
+        int fileSize = 20 + realHeaderSize + metadataSize + objectDataSize; // Initial header + endian + real header + metadata + data
 
-        // Header (version 22)
-        writer.Write((uint)metadataSize);
-        writer.Write((long)fileSize);
-        writer.Write((uint)22);
-        writer.Write((long)metadataSize);
-        writer.Write((byte)0);             // Little endian
-        writer.Write(new byte[3]);         // Reserved
+        // Initial header for version detection (little-endian uint32 x 4)
+        writer.Write((uint)0);     // Dummy metadataSize
+        writer.Write((uint)0);     // Dummy fileSize
+        writer.Write((uint)22);    // Version
+        writer.Write((uint)0);     // Dummy dataOffset
+        
+        // Endianness + reserved
+        writer.Write((byte)0);     // Endianness (0=little)
+        writer.Write(new byte[3]); // Reserved
+        
+        // REAL header (little-endian)
+        writer.Write((uint)metadataSize);   // MetadataSize
+        writer.Write((long)fileSize);       // FileSize (int64)
+        int dataOffset = 20 + metadataSize;
+        writer.Write((long)dataOffset);     // DataOffset (int64)
+        writer.Write((long)0);              // Unknown (int64)
 
         // Type tree (empty - will use TypeId as ClassId)
         writer.Write((int)0);              // Type count
 
-        // Align to 4 bytes before object table
-        while (stream.Position % 4 != 0)
-        {
-            writer.Write((byte)0);
-        }
-
         // Object table
         writer.Write((int)objectCount);
 
-        // Object 1 (Mesh, ClassID 43 via TypeId)
-        while (stream.Position % 4 != 0) writer.Write((byte)0); // Align
+        // Object 1 (Mesh, ClassID 43)
         writer.Write((long)1);             // PathId
         writer.Write((long)0);             // ByteStart
         writer.Write((uint)100);           // ByteSize
-        writer.Write((int)43);             // TypeId (will be used as ClassId since no type tree)
+        writer.Write((int)43);             // TypeId
         writer.Write((byte)0);             // Stripped
 
         // Object 2 (Texture, ClassID 28)
-        while (stream.Position % 4 != 0) writer.Write((byte)0); // Align
         writer.Write((long)2);             // PathId
         writer.Write((long)100);           // ByteStart
         writer.Write((uint)50);            // ByteSize
-        writer.Write((int)28);             // TypeId (Texture2D)
+        writer.Write((int)28);             // TypeId
         writer.Write((byte)0);             // Stripped
-
-        // Align to 4 bytes before file identifiers
-        while (stream.Position % 4 != 0)
-        {
-            writer.Write((byte)0);
-        }
 
         // File identifiers (empty)
         writer.Write((int)0);
 
-        // Align to metadata size
-        while (stream.Position < metadataSize)
+        // Pad to metadata end
+        int metadataEnd = 20 + realHeaderSize + metadataSize;
+        while (stream.Position < metadataEnd)
         {
             writer.Write((byte)0);
         }
