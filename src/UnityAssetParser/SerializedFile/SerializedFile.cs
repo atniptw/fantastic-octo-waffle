@@ -590,6 +590,14 @@ public sealed class SerializedFile
 
     private static List<ObjectInfo> ParseObjectTable(EndianBinaryReader reader, uint version)
     {
+        // Read big_id_enabled flag for v7-13 (UnityPy: SerializedFile.py lines 284-286)
+        // CRITICAL: Must read BEFORE object count for v7-13
+        if (version >= 7 && version < 14)
+        {
+            int bigIdEnabled = reader.ReadInt32();
+            Console.WriteLine($"DEBUG: BigIdEnabled={bigIdEnabled} (v{version})");
+        }
+
         int objectCount = reader.ReadInt32();
         var objects = new List<ObjectInfo>(objectCount);
 
