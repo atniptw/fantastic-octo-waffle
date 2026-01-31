@@ -83,11 +83,24 @@ public sealed class BundleFile
             var header = headerParser.Parse(stream);
             currentState = ParsingState.HeaderValid;
 
-            // Step 2: Determine BlocksInfo location and read (UnityPy: BundleFile.py lines 130-141)
-            // CRITICAL: This is the exact UnityPy logic, NOT custom calculation
+            // Step 2: Apply alignment BEFORE reading BlocksInfo (UnityPy: BundleFile.py lines 118-130)
+            // CRITICAL: Alignment must happen BEFORE reading the compressed BlocksInfo bytes
             long startPos = stream.Position;
+            
+            if (header.Version >= 7)
+            {
+                // Align to 16 bytes unconditionally for v7+
+                long currentPos = stream.Position;
+                long remainder = currentPos % 16;
+                if (remainder != 0)
+                {
+                    stream.Position = currentPos + (16 - remainder);
+                }
+            }
+            
             byte[] compressedBlocksInfo;
 
+            // Step 3: Read BlocksInfo from correct location (UnityPy: BundleFile.py lines 130-141)
             if (header.BlocksInfoAtEnd)  // BlocksInfoAtTheEnd = 0x80
             {
                 // Seek to: file_length - compressed_size
@@ -99,12 +112,21 @@ public sealed class BundleFile
                     throw new BlocksInfoParseException(
                         $"Failed to read BlocksInfo from end: expected {compressedBlocksInfo.Length} bytes, got {bytesRead}");
                 }
-                // Seek back to where we started (for data region)
+                // Seek back to aligned position for data region
                 stream.Position = startPos;
+                if (header.Version >= 7)
+                {
+                    long currentPos = stream.Position;
+                    long remainder = currentPos % 16;
+                    if (remainder != 0)
+                    {
+                        stream.Position = currentPos + (16 - remainder);
+                    }
+                }
             }
             else  // BlocksAndDirectoryInfoCombined = 0x40
             {
-                // Read from current position
+                // Read from current position (already aligned)
                 compressedBlocksInfo = new byte[header.CompressedBlocksInfoSize];
                 int bytesRead = stream.Read(compressedBlocksInfo, 0, compressedBlocksInfo.Length);
                 if (bytesRead != compressedBlocksInfo.Length)
@@ -114,18 +136,6 @@ public sealed class BundleFile
                 }
             }
             currentState = ParsingState.BlocksInfoDecompressed;
-
-            // Step 3: Alignment check for v7+ (UnityPy: BundleFile.py lines 165-168)
-            // If BlockInfoNeedPaddingAtStart is set (flag 0x200), align to 16 bytes before reading block data
-            if (header.Version >= 7 && header.NeedsPaddingAtStart)
-            {
-                long currentPos = stream.Position;
-                long remainder = currentPos % 16;
-                if (remainder != 0)
-                {
-                    stream.Position = currentPos + (16 - remainder);
-                }
-            }
 
             long dataOffset = stream.Position;
 

@@ -16,7 +16,7 @@ public class RealBundleTests
         "Fixtures",
         "RealBundles");
 
-    [Fact(Skip = "Fixture bundle data corrupted - bundle name not properly null-terminated")]
+    [Fact]
     public void Parse_CigarNeck_Success()
     {
         // Arrange
