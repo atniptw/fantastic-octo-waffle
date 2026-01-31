@@ -20,8 +20,9 @@ public sealed class NodeInfo
     /// <summary>
     /// Node-level flags (reserved, meaning unknown).
     /// Must be preserved for round-trip fidelity.
+    /// Type is uint32 per UnityPy reference implementation.
     /// </summary>
-    public required int Flags { get; init; }
+    public required uint Flags { get; init; }
 
     /// <summary>
     /// Path/name of the node (null-terminated UTF-8 in binary format).

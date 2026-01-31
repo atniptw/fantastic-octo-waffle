@@ -90,7 +90,7 @@ public sealed class NodeMetadata
     public required long Size { get; init; }
 
     [JsonPropertyName("flags")]
-    public required int Flags { get; init; }
+    public required uint Flags { get; init; }
 
     [JsonPropertyName("path")]
     public required string Path { get; init; }

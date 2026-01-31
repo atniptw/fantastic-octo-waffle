@@ -144,7 +144,7 @@ public class BlocksInfoParserTests
         var node = result.Nodes[0];
         Assert.Equal(0, node.Offset);
         Assert.Equal(512, node.Size);
-        Assert.Equal(0, node.Flags);
+        Assert.Equal(0u, node.Flags);
         Assert.Equal("CAB-test123/test.resS", node.Path);
     }
 

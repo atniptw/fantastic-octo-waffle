@@ -106,19 +106,22 @@ public class BlocksInfoParser : IBlocksInfoParser
 
     /// <summary>
     /// Parses storage blocks and nodes from uncompressed BlocksInfo data.
+    /// Ported directly from UnityPy:
+    /// https://github.com/K0lb3/UnityPy/blob/master/UnityPy/files/BundleFile.py#L130-L186
     /// </summary>
     private static BlocksInfo ParseTables(byte[] uncompressedData)
     {
         using var stream = new MemoryStream(uncompressedData);
-        // BlocksInfo tables are big-endian (matching UnityPy's EndianBinaryReader default)
+        // BlocksInfo is BIG-ENDIAN (this is the key difference from typical file parsing)
         using var reader = new EndianBinaryReader(stream, isBigEndian: true);
-
-        // Skip hash (first 16 bytes) - Hash128 (unused)
-        reader.BaseStream.Seek(16, SeekOrigin.Begin);
 
         try
         {
-            // Parse storage blocks
+            // UnityPy reads hash first (16 bytes) before counts
+            byte[] hash = reader.ReadBytes(16);  // Hash128 (unused per UnityPy)
+
+            // ==================== BLOCKS TABLE ====================
+            // Read block count
             int blockCount = reader.ReadInt32();
             if (blockCount < 0)
             {
@@ -128,16 +131,18 @@ public class BlocksInfoParser : IBlocksInfoParser
             var blocks = new List<StorageBlock>(blockCount);
             for (int i = 0; i < blockCount; i++)
             {
+                // Per UnityPy: uncompressedSize, compressedSize, flags (uint16 NOT uint32!)
                 var block = new StorageBlock
                 {
-                    UncompressedSize = reader.ReadUInt32(),
-                    CompressedSize = reader.ReadUInt32(),
-                    Flags = reader.ReadUInt16()
+                    UncompressedSize = reader.ReadUInt32(),    // uint32
+                    CompressedSize = reader.ReadUInt32(),      // uint32
+                    Flags = reader.ReadUInt16()                // ushort (2 bytes, not 4!)
                 };
                 blocks.Add(block);
             }
 
-            // Parse nodes immediately after block table (UnityPy does not align here)
+            // ==================== NODES TABLE ====================
+            // Read node count
             int nodeCount = reader.ReadInt32();
             if (nodeCount < 0)
             {
@@ -147,19 +152,16 @@ public class BlocksInfoParser : IBlocksInfoParser
             var nodes = new List<NodeInfo>(nodeCount);
             for (int i = 0; i < nodeCount; i++)
             {
+                // Per UnityPy: offset (int64), size (int64), flags (uint32), path (string)
                 var node = new NodeInfo
                 {
-                    Offset = reader.ReadInt64(),
-                    Size = reader.ReadInt64(),
-                    Flags = reader.ReadInt32(),
-                    Path = reader.ReadUtf8NullTerminated(maxLength: 65536) // 64 KiB limit
+                    Offset = reader.ReadInt64(),                        // int64 (8 bytes)
+                    Size = reader.ReadInt64(),                          // int64 (8 bytes)
+                    Flags = reader.ReadUInt32(),                        // uint32 (4 bytes, not int32!)
+                    Path = reader.ReadUtf8NullTerminated(maxLength: 65536) // null-terminated UTF-8 string
                 };
                 nodes.Add(node);
             }
-
-            // Extract 16-byte Hash128 field for return (not verified)
-            byte[] hash = new byte[16];
-            Buffer.BlockCopy(uncompressedData, 0, hash, 0, 16);
 
             return new BlocksInfo
             {
