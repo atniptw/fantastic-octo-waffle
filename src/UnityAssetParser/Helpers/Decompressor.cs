@@ -80,11 +80,11 @@ public class Decompressor : IDecompressor
             var decoder = new Decoder();
             // Set decoder properties from the full 5-byte header
             decoder.SetDecoderProperties(properties);
-            
+
             // Ensure input stream is at the beginning
             inputStream.Position = 0;
             outputStream.Position = 0;
-            
+
             // Code method: (inStream, outStream, inSize, outSize, progress)
             // -1 for sizes means "unknown" or "until EOF"
             decoder.Code(inputStream, outputStream, -1, expectedSize, null);

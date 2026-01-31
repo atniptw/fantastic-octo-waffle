@@ -11,18 +11,18 @@ class Program
     static void Main()
     {
         var bundlePath = "Tests/UnityAssetParser.Tests/Fixtures/RealBundles/Cigar_neck.hhh";
-        
+
         using var fs = File.OpenRead(bundlePath);
         using var br = new BinaryReader(fs);
-        
+
         // Read header
         string sig = new string(br.ReadChars(4));
         Console.WriteLine($"Signature: {sig}");
-        
+
         // Try using BundleFile parser directly with some diagnostics
         fs.Seek(0, SeekOrigin.Begin);
         var reader = new EndianBinaryReader(fs, isBigEndian: true);
-        
+
         try
         {
             // Read the bundle

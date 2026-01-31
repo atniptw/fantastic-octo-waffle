@@ -46,7 +46,7 @@ for (int i = 0; i < Math.Min(100, blocksInfoCompressed.Length); i++)
 }
 Console.WriteLine();
 
-static uint ReadBigEndianUInt32(BinaryReader br) => 
+static uint ReadBigEndianUInt32(BinaryReader br) =>
     ((uint)br.ReadByte() << 24) | ((uint)br.ReadByte() << 16) | ((uint)br.ReadByte() << 8) | br.ReadByte();
 
 static long ReadBigEndianInt64(BinaryReader br) =>

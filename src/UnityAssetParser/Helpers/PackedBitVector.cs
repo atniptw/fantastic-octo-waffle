@@ -123,7 +123,7 @@ public sealed class PackedBitVector
 
         // Read fields in order as defined in UnityPy TypeTree
         NumItems = reader.ReadUInt32();
-        
+
         // Conditionally read Range and Start based on data type
         if (hasRangeStart)
         {
@@ -193,7 +193,7 @@ public sealed class PackedBitVector
 
                 // Extract bits from current byte
                 value |= (uint)((Data[indexPos] >> bitPos) << bits);
-                
+
                 // Calculate how many bits we can read from current byte
                 var num = Math.Min(bitSize - bits, 8 - bitPos);
                 bitPos += num;

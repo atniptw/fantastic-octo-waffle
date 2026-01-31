@@ -257,13 +257,13 @@ public sealed class MeshHelper
             for (var i = 0; i < count; i++)
             {
                 ushort value = BitConverter.ToUInt16(rawIndices, i * 2);
-                
+
                 // If big-endian, byte-swap the 16-bit value
                 if (!isLittleEndian)
                 {
                     value = (ushort)((value << 8) | (value >> 8));
                 }
-                
+
                 indices[i] = value;
             }
             return indices;
@@ -276,7 +276,7 @@ public sealed class MeshHelper
             for (var i = 0; i < count; i++)
             {
                 uint value = BitConverter.ToUInt32(rawIndices, i * 4);
-                
+
                 // If big-endian, byte-swap the 32-bit value
                 if (!isLittleEndian)
                 {
@@ -285,7 +285,7 @@ public sealed class MeshHelper
                             ((value & 0x00FF0000) >> 8) |
                             ((value & 0xFF000000) >> 24);
                 }
-                
+
                 indices[i] = value;
             }
             return indices;
@@ -1099,9 +1099,12 @@ public sealed class MeshHelper
     /// </summary>
     private static int CompareVersion((int, int, int, int) v1, (int, int, int, int) v2)
     {
-        if (v1.Item1 != v2.Item1) return v1.Item1.CompareTo(v2.Item1);
-        if (v1.Item2 != v2.Item2) return v1.Item2.CompareTo(v2.Item2);
-        if (v1.Item3 != v2.Item3) return v1.Item3.CompareTo(v2.Item3);
+        if (v1.Item1 != v2.Item1)
+            return v1.Item1.CompareTo(v2.Item1);
+        if (v1.Item2 != v2.Item2)
+            return v1.Item2.CompareTo(v2.Item2);
+        if (v1.Item3 != v2.Item3)
+            return v1.Item3.CompareTo(v2.Item3);
         return v1.Item4.CompareTo(v2.Item4);
     }
 }

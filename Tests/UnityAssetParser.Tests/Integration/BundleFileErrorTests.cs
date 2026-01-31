@@ -36,14 +36,14 @@ public class BundleFileErrorTests
         // Arrange: Create truncated bundle (only 12 bytes, incomplete header)
         using var stream = new MemoryStream();
         using var writer = new BinaryWriter(stream);
-        
+
         // Signature
         writer.Write(Encoding.UTF8.GetBytes("UnityFS"));
         writer.Write((byte)0);
-        
+
         // Version: 99 (but stream ends early - incomplete header)
         writer.Write((uint)99);
-        
+
         stream.Position = 0;
 
         // Act & Assert: Throws BundleException (header parsing fails)
@@ -62,34 +62,34 @@ public class BundleFileErrorTests
         // Arrange: Create bundle header only (no BlocksInfo or data)
         using var stream = new MemoryStream();
         using var writer = new BinaryWriter(stream);
-        
+
         // Signature
         writer.Write(Encoding.UTF8.GetBytes("UnityFS"));
         writer.Write((byte)0);
-        
+
         // Version: 6
         writer.Write((uint)6);
-        
+
         // Unity version
         writer.Write(Encoding.UTF8.GetBytes("2020.3.48f1"));
         writer.Write((byte)0);
-        
+
         // Unity revision
         writer.Write(Encoding.UTF8.GetBytes("b805b124c6b7"));
         writer.Write((byte)0);
-        
+
         // Size: large value
         writer.Write((long)1000);
-        
+
         // Compressed BlocksInfo size: 100 (but we won't provide it)
         writer.Write((uint)100);
-        
+
         // Uncompressed BlocksInfo size: 100
         writer.Write((uint)100);
-        
+
         // Flags: 0
         writer.Write((uint)0);
-        
+
         stream.Position = 0;
 
         // Act & Assert
@@ -224,14 +224,14 @@ public class BundleFileErrorTests
 
         // 2 nodes with same path
         biWriter.Write((int)2);
-        
+
         // Node 1
         biWriter.Write((long)0);
         biWriter.Write((long)16);
         biWriter.Write((int)0);
         biWriter.Write(Encoding.UTF8.GetBytes("CAB-same"));
         biWriter.Write((byte)0);
-        
+
         // Node 2 (duplicate path)
         biWriter.Write((long)16);
         biWriter.Write((long)16);
@@ -323,14 +323,14 @@ public class BundleFileErrorTests
 
         // Two overlapping nodes
         biWriter.Write((int)2);
-        
+
         // Node 1: [0, 20)
         biWriter.Write((long)0);
         biWriter.Write((long)20);
         biWriter.Write((int)0);
         biWriter.Write(Encoding.UTF8.GetBytes("CAB-first"));
         biWriter.Write((byte)0);
-        
+
         // Node 2: [10, 30) - overlaps with node 1
         biWriter.Write((long)10);
         biWriter.Write((long)20);

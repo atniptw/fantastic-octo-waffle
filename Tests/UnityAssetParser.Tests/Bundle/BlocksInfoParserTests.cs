@@ -289,7 +289,7 @@ public class BlocksInfoParserTests
         var nodes = new List<(long offset, long size, int flags, string path)> { (0, 512, 0, "test.data") };
 
         byte[] fullBlob = CreateBlocksInfoBlob(blocks, nodes);
-        
+
         // Truncate after hash (16 bytes) and block count (4 bytes) but before all blocks are read
         // Hash: 16 bytes
         // Block count: 4 bytes
@@ -322,9 +322,9 @@ public class BlocksInfoParserTests
         writer.Write((uint)2048); // block 1 uncompressed size
         writer.Write((uint)2048); // block 1 compressed size
         writer.Write((ushort)0);  // block 1 flags
-        // Current position: 20 (hash) + 4 (count) + 20 (2 blocks) = 44
-        // Position 44 is already 4-byte aligned, so NO padding needed!
-        
+                                  // Current position: 20 (hash) + 4 (count) + 20 (2 blocks) = 44
+                                  // Position 44 is already 4-byte aligned, so NO padding needed!
+
         // Let's make it so we need padding by writing an odd number of blocks
         // Actually, let me use a different approach - write 1 block
 
@@ -343,7 +343,7 @@ public class BlocksInfoParserTests
         writer.Write((ushort)0);
         // Current position: 16 + 4 + 10 = 30
         // Need 2 bytes padding to reach 32 (next 4-byte boundary)
-        
+
         // Write NON-ZERO padding (should fail validation)
         writer.Write((byte)0xFF);
         writer.Write((byte)0xFF);

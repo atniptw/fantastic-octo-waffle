@@ -104,7 +104,7 @@ public sealed class SerializedFile
 
         // Step 3: Parse metadata region following UnityPy's exact order
         // See UnityPy/files/SerializedFile.py lines 270-280
-    
+
         // Read Unity version string if version >= 7
         if (header.Version >= 7)
         {
@@ -112,16 +112,16 @@ public sealed class SerializedFile
             Console.WriteLine($"DEBUG: UnityVersion='{header.UnityVersionString}'");
         }
 
-            // Read target platform if version >= 8
-            if (header.Version >= 8)
+        // Read target platform if version >= 8
+        if (header.Version >= 8)
         {
             header.TargetPlatform = endianReader.ReadUInt32();
             Console.WriteLine($"DEBUG: TargetPlatform={header.TargetPlatform}");
         }
 
-            // Read EnableTypeTree flag if version >= 13
-            bool enableTypeTree = true; // Default
-            if (header.Version >= 13)
+        // Read EnableTypeTree flag if version >= 13
+        bool enableTypeTree = true; // Default
+        if (header.Version >= 13)
         {
             enableTypeTree = endianReader.ReadBoolean();
             header.EnableTypeTree = enableTypeTree;
@@ -142,7 +142,7 @@ public sealed class SerializedFile
 
         // Step 7: Align and parse file identifiers (externals)
         endianReader.Align(4);
-        
+
         // Try to parse externals, but if we're at the metadata boundary, skip
         List<FileIdentifier> externals;
         try
@@ -257,25 +257,25 @@ public sealed class SerializedFile
     {
         var header = new SerializedFileHeader();
 
-            // CRITICAL: Match UnityPy's exact parsing sequence!
+        // CRITICAL: Match UnityPy's exact parsing sequence!
         // The initial 4 uint32s can be either big-endian or little-endian.
         // We detect by checking which gives a valid version (9-30).
-        
+
         long startPos = reader.BaseStream.Position;
         byte[] headerBytes = reader.ReadBytes(20); // First 16 bytes + 4 for endian+reserved
-        
+
         // Try reading as big-endian first (common for SerializedFiles)
         uint metadataSizeBE = (uint)((headerBytes[0] << 24) | (headerBytes[1] << 16) | (headerBytes[2] << 8) | headerBytes[3]);
         uint fileSizeBE = (uint)((headerBytes[4] << 24) | (headerBytes[5] << 16) | (headerBytes[6] << 8) | headerBytes[7]);
         uint versionBE = (uint)((headerBytes[8] << 24) | (headerBytes[9] << 16) | (headerBytes[10] << 8) | headerBytes[11]);
         uint dataOffsetBE = (uint)((headerBytes[12] << 24) | (headerBytes[13] << 16) | (headerBytes[14] << 8) | headerBytes[15]);
-        
+
         // Try reading as little-endian
         uint metadataSizeLE = (uint)(headerBytes[0] | (headerBytes[1] << 8) | (headerBytes[2] << 16) | (headerBytes[3] << 24));
         uint fileSizeLE = (uint)(headerBytes[4] | (headerBytes[5] << 8) | (headerBytes[6] << 16) | (headerBytes[7] << 24));
         uint versionLE = (uint)(headerBytes[8] | (headerBytes[9] << 8) | (headerBytes[10] << 16) | (headerBytes[11] << 24));
         uint dataOffsetLE = (uint)(headerBytes[12] | (headerBytes[13] << 8) | (headerBytes[14] << 16) | (headerBytes[15] << 24));
-        
+
         // Determine which endianness gives a valid version (9-30)
         uint version;
         bool initialEndianWasBig; // Track which endianness was used for initial read
@@ -302,18 +302,18 @@ public sealed class SerializedFile
             throw new InvalidVersionException(
                 $"Could not detect valid SerializedFile version (BE={versionBE}, LE={versionLE})", versionLE);
         }
-        
+
         // Read endianness byte and reserved (bytes 16-19)
         header.Endianness = headerBytes[16];
         header.Reserved = new byte[] { headerBytes[17], headerBytes[18], headerBytes[19] };
-        
+
         // For version >= 22, actual header values come AFTER endian+reserved bytes
         // CRITICAL: Use the SAME endianness as we detected for the initial read!
         // The endianness byte tells us about metadata/objects, NOT the version 22+ header fields.
         if (version >= 22)
         {
             using var endianReader = new EndianBinaryReader(reader.BaseStream, initialEndianWasBig);
-            
+
             header.MetadataSize = endianReader.ReadUInt32();
             header.FileSize = endianReader.ReadInt64();
             header.DataOffset = endianReader.ReadInt64();
@@ -369,10 +369,10 @@ public sealed class SerializedFile
 
     private static void SkipHeader(EndianBinaryReader reader, uint version)
     {
-            // Skip past header to start of metadata
+        // Skip past header to start of metadata
         // For version >= 22, header is: 20 bytes initial + 28 bytes extended = 48 bytes total
         // For version < 22, header is: 20 bytes total
-        
+
         if (version >= 22)
         {
             reader.Position = 48; // 20 (initial header) + 28 (extended header)
@@ -380,8 +380,8 @@ public sealed class SerializedFile
         else
         {
             reader.Position = 20; // Just initial header
-            }
         }
+    }
 
     private static TypeTree ParseTypeTree(EndianBinaryReader reader, uint version, bool enableTypeTree)
     {
@@ -433,7 +433,7 @@ public sealed class SerializedFile
     {
         long startPos = reader.BaseStream.Position;
         Console.WriteLine($"DEBUG: ParseSerializedType starting at pos={startPos}");
-        
+
         var type = new SerializedType
         {
             ClassId = reader.ReadInt32()
@@ -467,7 +467,7 @@ public sealed class SerializedFile
         {
             var nodes = ParseTypeTreeNodes(reader, version);
             type.Nodes = nodes;
-            
+
             // Build hierarchical tree from flat list
             type.TreeRoot = BuildTypeTree(nodes);
         }
@@ -498,7 +498,7 @@ public sealed class SerializedFile
         // CRITICAL: TypeTree has TWO formats depending on version (UnityPy: SerializedFile.py#L134-135)
         // - Legacy format (v < 10): Text-based null-terminated strings, completely different struct
         // - Blob format (v >= 12 or v == 10): Binary struct with string offsets (packed array)
-        
+
         long startPos = reader.Position;
         Console.WriteLine($"DEBUG: ParseTypeTreeNodes at pos={startPos}, version={version}");
 
@@ -543,7 +543,7 @@ public sealed class SerializedFile
         Console.WriteLine($"DEBUG: About to read {expectedNodeDataSize} bytes of node data (nodeStructSize={nodeStructSize}, nodeCount={nodeCount})");
         var nodeData = reader.ReadBytes(expectedNodeDataSize);
         Console.WriteLine($"DEBUG: Actually read {nodeData.Length} bytes of node data");
-        
+
         // Read string buffer
         Console.WriteLine($"DEBUG: About to read {stringBufferSize} bytes of string buffer");
         var stringBuffer = reader.ReadBytes(stringBufferSize);
@@ -553,7 +553,7 @@ public sealed class SerializedFile
 
         // Parse node structs into TypeTreeNode objects
         var nodes = new List<TypeTreeNode>(nodeCount);
-        
+
         using var nodeStream = new MemoryStream(nodeData, writable: false);
         using var nodeReader = new BinaryReader(nodeStream);
 
@@ -564,7 +564,7 @@ public sealed class SerializedFile
             // → m_TypeStrOffset (uint32) → m_NameStrOffset (uint32)
             // → m_ByteSize (int32) → m_Index (int32) → m_MetaFlag (int32)
             // [→ m_RefTypeHash (uint64) if v >= 19]
-            
+
             var node = new TypeTreeNode
             {
                 Version = nodeReader.ReadInt16(),      // 2 bytes
@@ -775,7 +775,7 @@ public sealed class SerializedFile
         // Build a lookup of TypeId -> SerializedType
         // For bundles with enableTypeTree, TypeId is an index into the types array
         // However, UnityPy also supports TypeId as a hash value when types are indexed by hash
-        
+
         foreach (var obj in objects)
         {
             // If ClassId is already set, skip
@@ -886,7 +886,7 @@ public sealed class SerializedFile
         }
 
         var root = flatNodes[0];
-        
+
         // For each node, populate its Children list with immediate children
         // A child has level = parent.level + 1
         for (int i = 0; i < flatNodes.Count; i++)
@@ -895,35 +895,35 @@ public sealed class SerializedFile
             {
                 Console.WriteLine($"[BuildTypeTree] Processed {i}/{flatNodes.Count} nodes...");
             }
-            
+
             var parentNode = flatNodes[i];
             int parentLevel = parentNode.Level;
             int childLevel = parentLevel + 1;
-            
+
             // Find all immediate children (next level down)
             var childrenIndices = new List<int>();
             for (int j = i + 1; j < flatNodes.Count; j++)
             {
                 var potentialChild = flatNodes[j];
-                
+
                 // If we've reached a node at same level or lower, stop looking
                 if (potentialChild.Level <= parentLevel)
                     break;
-                
+
                 // If this is an immediate child, add it
                 if (potentialChild.Level == childLevel)
                 {
                     childrenIndices.Add(j);
                 }
             }
-            
+
             // Attach children to parent
             foreach (var childIdx in childrenIndices)
             {
                 parentNode.Children.Add(flatNodes[childIdx]);
             }
         }
-        
+
         return root;
     }
 }

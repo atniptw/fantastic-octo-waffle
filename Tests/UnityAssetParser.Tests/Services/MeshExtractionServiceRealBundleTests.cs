@@ -18,47 +18,47 @@ public class MeshExtractionServiceRealBundleTests
     [Fact(Skip = "Fixture bundle data corrupted - bundle name not properly null-terminated")]
     public void ExtractMeshes_CigarNeck_ExtractsMesh()
     {
-            // Arrange
-            string filePath = Path.Combine(FixturesPath, "Cigar_neck.hhh");
-            var bundleData = File.ReadAllBytes(filePath);
-            var service = new MeshExtractionService();
+        // Arrange
+        string filePath = Path.Combine(FixturesPath, "Cigar_neck.hhh");
+        var bundleData = File.ReadAllBytes(filePath);
+        var service = new MeshExtractionService();
 
-            // Act
-            var meshes = service.ExtractMeshes(bundleData);
+        // Act
+        var meshes = service.ExtractMeshes(bundleData);
 
-            // Assert - should extract at least one mesh
-            Assert.NotNull(meshes);
-            Assert.NotEmpty(meshes); // Now we expect mesh extraction to work
+        // Assert - should extract at least one mesh
+        Assert.NotNull(meshes);
+        Assert.NotEmpty(meshes); // Now we expect mesh extraction to work
+    }
+
+    [Fact(Skip = "Fixture bundle data corrupted - bundle name not properly null-terminated")]
+    public void ExtractMeshes_CigarNeck_ExtractsMeshData()
+    {
+        // Arrange
+        string filePath = Path.Combine(FixturesPath, "Cigar_neck.hhh");
+        var bundleData = File.ReadAllBytes(filePath);
+        var service = new MeshExtractionService();
+
+        // Act
+        var meshes = service.ExtractMeshes(bundleData);
+
+        // Debug output
+        Console.WriteLine($"DEBUG: Extracted {meshes.Count} meshes from Cigar_neck.hhh");
+        foreach (var mesh in meshes)
+        {
+            Console.WriteLine($"DEBUG: Mesh Name={mesh.Name}, VertexCount={mesh.VertexCount}");
         }
 
-        [Fact(Skip = "Fixture bundle data corrupted - bundle name not properly null-terminated")]
-        public void ExtractMeshes_CigarNeck_ExtractsMeshData()
-        {
-            // Arrange
-            string filePath = Path.Combine(FixturesPath, "Cigar_neck.hhh");
-            var bundleData = File.ReadAllBytes(filePath);
-            var service = new MeshExtractionService();
+        // Assert
+        Assert.NotEmpty(meshes);
+        var cigarMesh = meshes[0];
 
-            // Act
-            var meshes = service.ExtractMeshes(bundleData);
-
-            // Debug output
-            Console.WriteLine($"DEBUG: Extracted {meshes.Count} meshes from Cigar_neck.hhh");
-            foreach (var mesh in meshes)
-            {
-                Console.WriteLine($"DEBUG: Mesh Name={mesh.Name}, VertexCount={mesh.VertexCount}");
-            }
-
-            // Assert
-            Assert.NotEmpty(meshes);
-            var cigarMesh = meshes[0];
-        
-            // From UnityPy output:
-            // - Name: 雪茄
-            // - VertexCount: 220
-            // - m_IndexBuffer has 936 items
-            // - 3 submeshes
-            Assert.Equal("雪茄", cigarMesh.Name);
+        // From UnityPy output:
+        // - Name: 雪茄
+        // - VertexCount: 220
+        // - m_IndexBuffer has 936 items
+        // - 3 submeshes
+        Assert.Equal("雪茄", cigarMesh.Name);
         Assert.Equal(220, cigarMesh.VertexCount);
         Assert.NotNull(cigarMesh.Positions);
         Assert.Equal(220 * 3, cigarMesh.Positions.Length); // 220 vertices * 3 floats each

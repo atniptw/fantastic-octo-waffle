@@ -84,7 +84,7 @@ public class BlocksInfoParser : IBlocksInfoParser
         catch (Exception ex)
         {
             throw new BlocksInfoParseException(
-                $"Failed to decompress BlocksInfo (compression: {compressionType}, compressed size: {compressedData.Length}, expected uncompressed: {expectedUncompressedSize}): {ex.Message}", 
+                $"Failed to decompress BlocksInfo (compression: {compressionType}, compressed size: {compressedData.Length}, expected uncompressed: {expectedUncompressedSize}): {ex.Message}",
                 ex);
         }
     }

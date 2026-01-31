@@ -27,19 +27,19 @@ public class RealBundleSnapshotTests
     {
         // These tests validate bundle parsing against UnityPy reference output.
         // Currently blocked by LZMA decompression support.
-        
+
         var bundlePath = Path.Combine(_fixtureDir, bundleFileName);
         var reference = SnapshotTestHelper.LoadSnapshot(referenceFileName);
         var (expectedTotalObjects, expectedNodes, expectedMeshes) = SnapshotTestHelper.GetSnaphotSummary(reference);
-        
+
         // Verify fixture exists and reference loaded correctly
         Assert.True(File.Exists(bundlePath));
         Assert.True(expectedTotalObjects > 0, "Reference fixture should have objects");
-        
+
         // Attempt to parse bundle
         using var fs = new FileStream(bundlePath, FileMode.Open, FileAccess.Read);
         var bundle = BundleFile.Parse(fs);
-        
+
         // If we reach here, LZMA has been fixed
         Assert.Equal("UnityFS", bundle.Header.Signature);
     }

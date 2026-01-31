@@ -39,13 +39,13 @@ public class RealBundleTests
 
         // Act  
         stream.Position = 0;
-        
+
         // Manually check what bytes are at BlocksInfoPosition before BundleFile.Parse tries to read them
         stream.Seek(location.BlocksInfoPosition, SeekOrigin.Begin);
         byte[] sample = new byte[20];
         stream.Read(sample, 0, 20);
         Console.WriteLine($"DEBUG: Bytes at BlocksInfoPosition={location.BlocksInfoPosition}: {string.Join(" ", sample.Select(b => b.ToString("x2")))}");
-        
+
         stream.Position = 0;
         var bundle = BundleFile.Parse(stream);
 
@@ -68,11 +68,11 @@ public class RealBundleTests
         Assert.Equal(41989, bundle.Header.Size); // 0xa405 -> Fixed: actual file size is 41989 bytes
         Assert.Equal(88u, bundle.Header.CompressedBlocksInfoSize); // 0x58
         Assert.Equal(153u, bundle.Header.UncompressedBlocksInfoSize); // 0x99
-        
+
         Assert.NotNull(bundle.BlocksInfo);
         Assert.NotEmpty(bundle.BlocksInfo.Blocks);
         Assert.NotEmpty(bundle.BlocksInfo.Nodes);
-        
+
         // Verify we have 2 nodes: CAB-* and CAB-*.resS
         Assert.Equal(2, bundle.BlocksInfo.Nodes.Count);
         Assert.Contains(bundle.BlocksInfo.Nodes, n => n.Path.StartsWith("CAB-") && !n.Path.EndsWith(".resS"));

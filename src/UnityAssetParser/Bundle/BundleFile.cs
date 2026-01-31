@@ -86,7 +86,7 @@ public sealed class BundleFile
             // Step 2: Apply alignment BEFORE reading BlocksInfo (UnityPy: BundleFile.py lines 118-130)
             // CRITICAL: Alignment must happen BEFORE reading the compressed BlocksInfo bytes
             long startPos = stream.Position;
-            
+
             if (header.Version >= 7)
             {
                 // Align to 16 bytes unconditionally for v7+
@@ -97,7 +97,7 @@ public sealed class BundleFile
                     stream.Position = currentPos + (16 - remainder);
                 }
             }
-            
+
             byte[] compressedBlocksInfo;
 
             // Step 3: Read BlocksInfo from correct location (UnityPy: BundleFile.py lines 130-141)
@@ -137,9 +137,21 @@ public sealed class BundleFile
             }
             currentState = ParsingState.BlocksInfoDecompressed;
 
+            // Step 4: Apply padding before reading blocks if needed (UnityPy: BundleFile.py line 170)
+            // The 0x200 flag (NeedsPaddingAtStart) indicates that blocks should start on a 16-byte boundary
+            if (header.NeedsPaddingAtStart)
+            {
+                long currentPos = stream.Position;
+                long remainder = currentPos % 16;
+                if (remainder != 0)
+                {
+                    stream.Position = currentPos + (16 - remainder);
+                }
+            }
+
             long dataOffset = stream.Position;
 
-            // Step 4: Parse BlocksInfo
+            // Step 5: Parse BlocksInfo
             var decompressor = new Decompressor();
             var blocksInfoParser = new BlocksInfoParser(decompressor);
             var blocksInfo = blocksInfoParser.Parse(
@@ -149,7 +161,7 @@ public sealed class BundleFile
                 dataOffset);
             currentState = ParsingState.HashVerified;
 
-            // Step 5: Reconstruct data region
+            // Step 6: Reconstruct data region
             var dataRegionBuilder = new DataRegionBuilder(decompressor);
             var dataRegion = dataRegionBuilder.Build(stream, dataOffset, blocksInfo.Blocks);
 
