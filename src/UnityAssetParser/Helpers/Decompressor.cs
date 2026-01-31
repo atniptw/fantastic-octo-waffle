@@ -1,5 +1,5 @@
 using UnityAssetParser.Exceptions;
-using SharpCompress.Compressors.LZMA;
+using SevenZip.Compression.LZMA;
 using K4os.Compression.LZ4;
 
 namespace UnityAssetParser.Helpers;
@@ -69,29 +69,25 @@ public class Decompressor : IDecompressor
         try
         {
             // Unity LZMA format: 5-byte header (1 byte props + 4 bytes dict size)
-            // SharpCompress expects this exact format, so we can use the first 5 bytes as-is
+            // LZMA-SDK expects the full 5-byte properties block for SetDecoderProperties
             byte[] properties = new byte[5];
             Array.Copy(compressedData, 0, properties, 0, 5);
 
-            // Create input stream with compressed payload (skip 5-byte header)
+            // Decompress using LZMA-SDK Decoder (implements ICoder interface)
             using var inputStream = new MemoryStream(compressedData, 5, compressedData.Length - 5);
             using var outputStream = new MemoryStream(expectedSize);
 
-            // Decompress using SharpCompress
-            // Try with both inputSize and outputSize parameters
-            try
-            {
-                using var decoder = new LzmaStream(properties, inputStream, compressedData.Length - 5, expectedSize);
-                decoder.CopyTo(outputStream);
-            }
-            catch (NullReferenceException nre)
-            {
-                // If NullReferenceException occurs, try simpler constructor (no output size)
-                inputStream.Position = 0;
-                outputStream.Position = 0;
-                using var decoder = new LzmaStream(properties, inputStream);
-                decoder.CopyTo(outputStream);
-            }
+            var decoder = new Decoder();
+            // Set decoder properties from the full 5-byte header
+            decoder.SetDecoderProperties(properties);
+            
+            // Ensure input stream is at the beginning
+            inputStream.Position = 0;
+            outputStream.Position = 0;
+            
+            // Code method: (inStream, outStream, inSize, outSize, progress)
+            // -1 for sizes means "unknown" or "until EOF"
+            decoder.Code(inputStream, outputStream, -1, expectedSize, null);
 
             byte[] result = outputStream.ToArray();
 

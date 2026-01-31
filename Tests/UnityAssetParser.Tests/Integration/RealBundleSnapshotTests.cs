@@ -19,7 +19,7 @@ public class RealBundleSnapshotTests
     /// 
     /// The snapshot infrastructure is working and correctly loads UnityPy reference data.
     /// </summary>
-    [Theory(Skip = "LZMA decompression not supported by SharpCompress library")]
+    [Theory]
     [InlineData("Cigar_neck.hhh", "Cigar_neck_reference.json")]
     [InlineData("ClownNose_head.hhh", "ClownNose_head_reference.json")]
     [InlineData("Glasses_head.hhh", "Glasses_head_reference.json")]

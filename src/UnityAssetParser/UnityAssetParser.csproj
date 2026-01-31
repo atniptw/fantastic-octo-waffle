@@ -14,13 +14,13 @@
 
   <ItemGroup>
     <!-- Code Analysis -->
+    <PackageReference Include="LZMA-SDK" Version="22.1.1" />
     <PackageReference Include="Microsoft.CodeAnalysis.NetAnalyzers" Version="10.0.100" />
     <PackageReference Include="SonarAnalyzer.CSharp" Version="10.4.0.108396" />
   </ItemGroup>
 
   <ItemGroup>
     <!-- Compression Libraries -->
-    <PackageReference Include="SharpCompress" Version="0.38.0" />
     <PackageReference Include="K4os.Compression.LZ4" Version="1.3.8" />
   </ItemGroup>
 
