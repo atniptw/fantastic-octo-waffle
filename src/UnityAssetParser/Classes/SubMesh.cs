@@ -85,3 +85,71 @@ public readonly struct Vector3f
         Z = z;
     }
 }
+/// <summary>
+/// 4D vector with float components (used for tangents and bone weights).
+/// </summary>
+public readonly struct Vector4f
+{
+    public float X { get; init; }
+    public float Y { get; init; }
+    public float Z { get; init; }
+    public float W { get; init; }
+
+    public Vector4f(float x, float y, float z, float w)
+    {
+        X = x;
+        Y = y;
+        Z = z;
+        W = w;
+    }
+}
+
+/// <summary>
+/// 2D vector with float components (used for UV texture coordinates).
+/// </summary>
+public readonly struct Vector2f
+{
+    public float U { get; init; }
+    public float V { get; init; }
+
+    public Vector2f(float u, float v)
+    {
+        U = u;
+        V = v;
+    }
+}
+
+/// <summary>
+/// Color with RGBA channels as single-precision floats (0.0 to 1.0 range).
+/// </summary>
+public readonly struct ColorRGBA
+{
+    public float R { get; init; }
+    public float G { get; init; }
+    public float B { get; init; }
+    public float A { get; init; }
+
+    public ColorRGBA(float r, float g, float b, float a)
+    {
+        R = r;
+        G = g;
+        B = b;
+        A = a;
+    }
+}
+
+/// <summary>
+/// Per-bone axis-aligned bounding box (min and max corners).
+/// </summary>
+public sealed class MinMaxAABB
+{
+    /// <summary>
+    /// Gets or sets the minimum corner of the bounding box.
+    /// </summary>
+    public required Vector3f Min { get; init; }
+
+    /// <summary>
+    /// Gets or sets the maximum corner of the bounding box.
+    /// </summary>
+    public required Vector3f Max { get; init; }
+}
