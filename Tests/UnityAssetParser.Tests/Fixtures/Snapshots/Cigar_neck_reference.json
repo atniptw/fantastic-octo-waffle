@@ -1,0 +1,41 @@
+{
+  "file": "Cigar_neck.hhh",
+  "header": {
+    "signature": "UnityFS"
+  },
+  "object_types": {
+    "GameObject": 3,
+    "Material": 4,
+    "Shader": 1,
+    "Mesh": 1,
+    "AssetBundle": 1,
+    "Transform": 3,
+    "ParticleSystemRenderer": 1,
+    "ParticleSystem": 1,
+    "MeshFilter": 1,
+    "MeshRenderer": 1
+  },
+  "nodes": [
+    {
+      "path": "assets/moxing/cigar.prefab",
+      "type": "PPtr"
+    }
+  ],
+  "meshes": [
+    {
+      "name": "\u96ea\u8304",
+      "vertex_count": 0,
+      "index_count": 468,
+      "has_normals": false,
+      "has_uv0": false,
+      "object_path": "Object -3876313651872223835"
+    }
+  ],
+  "extraction_errors": [],
+  "summary": {
+    "total_objects": 17,
+    "total_nodes": 1,
+    "total_meshes": 1,
+    "total_extraction_errors": 0
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "file": "Glasses_head.hhh",
+  "header": {
+    "signature": "UnityFS"
+  },
+  "object_types": {
+    "Mesh": 1,
+    "GameObject": 3,
+    "Shader": 1,
+    "Transform": 3,
+    "MeshFilter": 1,
+    "AssetBundle": 1,
+    "MeshRenderer": 1,
+    "Material": 1
+  },
+  "nodes": [
+    {
+      "path": "assets/\u6253\u5305/glasses.prefab",
+      "type": "PPtr"
+    }
+  ],
+  "meshes": [
+    {
+      "name": "Glasses \u773c\u955c",
+      "vertex_count": 0,
+      "index_count": 1416,
+      "has_normals": false,
+      "has_uv0": false,
+      "object_path": "Object -7989615855593889409"
+    }
+  ],
+  "extraction_errors": [],
+  "summary": {
+    "total_objects": 12,
+    "total_nodes": 1,
+    "total_meshes": 1,
+    "total_extraction_errors": 0
+  }
+}
