@@ -142,7 +142,8 @@ public sealed class PackedBitVector
         reader.Align(4);
 
         // Read bit size (stored as UInt8 in TypeTree, but we read as uint for the count)
-        BitSize = reader.ReadByte();
+        byte bitSizeValue = reader.ReadByte();
+        BitSize = bitSizeValue == 0 ? null : bitSizeValue;
         reader.Align(4);
     }
 
@@ -183,6 +184,13 @@ public sealed class PackedBitVector
 
             while (bits < bitSize)
             {
+                // Check bounds before accessing Data array
+                if (indexPos >= Data.Length)
+                {
+                    throw new IndexOutOfRangeException(
+                        $"PackedBitVector data out of bounds: trying to read byte at index {indexPos}, but Data.Length is {Data.Length}");
+                }
+
                 // Extract bits from current byte
                 value |= (uint)((Data[indexPos] >> bitPos) << bits);
                 
