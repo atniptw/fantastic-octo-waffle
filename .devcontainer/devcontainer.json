@@ -1,0 +1,76 @@
+{
+  "name": "R.E.P.O. Mod Browser - Full Stack",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "containerUser": "vscode",
+  "remoteUser": "vscode",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "20"
+    },
+    "ghcr.io/devcontainers/features/python:1": {
+      "version": "3.11"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-dotnettools.csharp",
+        "ms-dotnettools.vscode-dotnet-runtime",
+        "ms-vscode.makefile-tools",
+        "ms-vscode.vscode-typescript-next",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "formulahendry.dotnet-test-explorer",
+        "firsttimersonly.first-timers-only",
+        "ms-vscode.theme-solarized-dark",
+        "ms-vscode-remote.remote-containers"
+      ],
+      "settings": {
+        "dotnet.defaultSolutionOrFolder": "${workspaceFolder}/fantastic-octo-waffle.sln",
+        "dotnet.backgroundAnalysis": "openFilesOnly",
+        "[csharp]": {
+          "editor.formatOnSave": true,
+          "editor.defaultFormatter": "ms-dotnettools.csharp"
+        },
+        "[javascript]": {
+          "editor.formatOnSave": true,
+          "editor.defaultFormatter": "esbenp.prettier-vscode"
+        },
+        "[json]": {
+          "editor.formatOnSave": true,
+          "editor.defaultFormatter": "esbenp.prettier-vscode"
+        },
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "python.linting.enabled": true,
+        "python.linting.pylintEnabled": true,
+        "python.formatting.provider": "black"
+      }
+    }
+  },
+  "forwardPorts": [5001, 5002, 8787],
+  "portsAttributes": {
+    "5001": {
+      "label": "Blazor App (HTTP)",
+      "onAutoForward": "notify"
+    },
+    "5002": {
+      "label": "Blazor App (HTTPS)",
+      "onAutoForward": "notify"
+    },
+    "8787": {
+      "label": "Cloudflare Worker (Local)",
+      "onAutoForward": "notify"
+    }
+  },
+  "mounts": [],
+  "updateContentCommand": "bash .devcontainer/post-create.sh",
+  "remoteEnv": {
+    "DOTNET_TRY_CLI_TELEMETRY_OPTOUT": "1",
+    "DOTNET_CLI_TELEMETRY_OPTOUT": "1"
+  }
+}

@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  repo-mod-browser:
+    image: mcr.microsoft.com/devcontainers/dotnet:1-10.0-jammy
+    container_name: repo-mod-browser
+    volumes:
+      - ..:/workspace:cached
+      - vscode-extensions:/home/vscode/.vscode-server/extensions
+    environment:
+      - DOTNET_CLI_TELEMETRY_OPTOUT=1
+      - DOTNET_TRY_CLI_TELEMETRY_OPTOUT=1
+    ports:
+      - "5000:5000"
+      - "5001:5001"
+      - "8787:8787"
+    working_dir: /workspace
+    command: sleep infinity
+    networks:
+      - repo-network
+
+volumes:
+  vscode-extensions:
+
+networks:
+  repo-network:
+    driver: bridge

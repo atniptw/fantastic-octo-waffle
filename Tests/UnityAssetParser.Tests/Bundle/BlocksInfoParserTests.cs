@@ -279,6 +279,11 @@ public class BlocksInfoParserTests
         Assert.Contains("empty", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public void Parse_TruncatedBlockData_ThrowsBlocksInfoParseException()
+    {
+        // Arrange
+        var blocks = new List<BlockInfo> { new BlockInfo { CompressedSize = 512, UncompressedSize = 512, Flags = 0x3f } };
         var nodes = new List<(long, long, int, string)> { (0, 512, 0, "test.data") };
 
         byte[] fullBlob = CreateBlocksInfoBlob(blocks, nodes);
