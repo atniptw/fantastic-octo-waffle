@@ -220,7 +220,7 @@ public sealed class MeshHelper
         // Copy index buffer if present
         if (_mesh.IndexBuffer != null && _mesh.IndexBuffer.Length > 0)
         {
-            _indices = UnpackIndexBuffer(_mesh.IndexBuffer, _use16BitIndices);
+            _indices = UnpackIndexBuffer(_mesh.IndexBuffer, _use16BitIndices, _isLittleEndian);
         }
 
         // Read vertex data from channels/streams (Unity 3.5+)
@@ -244,9 +244,10 @@ public sealed class MeshHelper
 
     /// <summary>
     /// Unpacks the index buffer from raw bytes to uint array.
-    /// Verbatim port of index buffer unpacking logic from UnityPy MeshHandler.process().
+    /// Respects endianness flag (UnityPy: MeshHelper.py lines 159-185).
+    /// CRITICAL: Must use little-endian format string per UnityPy struct.unpack("<...") usage.
     /// </summary>
-    private static uint[] UnpackIndexBuffer(byte[] rawIndices, bool use16Bit)
+    private static uint[] UnpackIndexBuffer(byte[] rawIndices, bool use16Bit, bool isLittleEndian)
     {
         if (use16Bit)
         {
@@ -255,7 +256,15 @@ public sealed class MeshHelper
             var indices = new uint[count];
             for (var i = 0; i < count; i++)
             {
-                indices[i] = BitConverter.ToUInt16(rawIndices, i * 2);
+                ushort value = BitConverter.ToUInt16(rawIndices, i * 2);
+                
+                // If big-endian, byte-swap the 16-bit value
+                if (!isLittleEndian)
+                {
+                    value = (ushort)((value << 8) | (value >> 8));
+                }
+                
+                indices[i] = value;
             }
             return indices;
         }
@@ -266,7 +275,18 @@ public sealed class MeshHelper
             var indices = new uint[count];
             for (var i = 0; i < count; i++)
             {
-                indices[i] = BitConverter.ToUInt32(rawIndices, i * 4);
+                uint value = BitConverter.ToUInt32(rawIndices, i * 4);
+                
+                // If big-endian, byte-swap the 32-bit value
+                if (!isLittleEndian)
+                {
+                    value = ((value & 0x000000FF) << 24) |
+                            ((value & 0x0000FF00) << 8) |
+                            ((value & 0x00FF0000) >> 8) |
+                            ((value & 0xFF000000) >> 24);
+                }
+                
+                indices[i] = value;
             }
             return indices;
         }
