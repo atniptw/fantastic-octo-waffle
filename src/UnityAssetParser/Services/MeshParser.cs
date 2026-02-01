@@ -41,12 +41,13 @@ public static class MeshParser
                 // Read m_Name (string with length prefix)
                 int nameLength = reader.ReadInt32();
                 Console.WriteLine($"DEBUG: Mesh name length={nameLength}");
-                if (nameLength > 0 && nameLength < 1000)
+                if (nameLength > 0 && nameLength < 10000)
                 {
-                    mesh.Name = reader.ReadUtf8String(nameLength);
+                    byte[] nameBytes = reader.ReadBytes(nameLength);
+                    mesh.Name = System.Text.Encoding.UTF8.GetString(nameBytes);
                     Console.WriteLine($"DEBUG: Mesh.Name = '{mesh.Name}'");
                     
-                    // Align to 4 bytes after string
+                    // CRITICAL: Align to 4 bytes after string data
                     reader.Align(4);
                 }
 
