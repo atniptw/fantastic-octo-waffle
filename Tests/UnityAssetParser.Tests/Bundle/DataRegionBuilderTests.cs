@@ -43,7 +43,7 @@ public class DataRegionBuilderTests
         // Arrange
         var data1 = DataRegionTestFixtures.HelloWorldBytes;
         var data2 = DataRegionTestFixtures.Test123Bytes;
-        
+
         using var stream = new MemoryStream();
         stream.Write(data1);
         stream.Write(data2);
@@ -72,7 +72,7 @@ public class DataRegionBuilderTests
         // Arrange
         var padding = new byte[100];
         var data = DataRegionTestFixtures.HelloWorldBytes;
-        
+
         using var stream = new MemoryStream();
         stream.Write(padding);  // Write 100 bytes of padding
         stream.Write(data);     // Write data at offset 100
@@ -94,7 +94,7 @@ public class DataRegionBuilderTests
     {
         // Arrange
         var compressedData = Helpers.DecompressionTestFixtures.Lz4HelloWorld;
-        
+
         using var stream = new MemoryStream();
         stream.Write(compressedData);
         stream.Position = 0;
@@ -158,7 +158,7 @@ public class DataRegionBuilderTests
     {
         // Arrange
         var compressedData = Helpers.DecompressionTestFixtures.Lz4HelloWorld;
-        
+
         using var stream = new MemoryStream();
         stream.Write(compressedData);
         stream.Position = 0;

@@ -622,12 +622,12 @@ public sealed class SerializedFile
             bool needsHashes = (isRefType && type.ScriptTypeIndex >= 0)
                               || (version < 16 && type.ClassId < 0)
                               || (version >= 16 && type.ClassId == 114);
-            
+
             if (needsHashes)
             {
                 type.ScriptId = reader.ReadBytes(16); // Hash128
             }
-            
+
             type.OldTypeHash = reader.ReadBytes(16); // Hash128
         }
 
@@ -637,8 +637,11 @@ public sealed class SerializedFile
             var nodes = ParseTypeTreeNodes(reader, version);
             type.Nodes = nodes;
 
-            // Build hierarchical tree from flat list
-            type.TreeRoot = BuildTypeTree(nodes);
+            // Build hierarchical tree from flat list (skip if nodes is empty)
+            if (nodes.Count > 0)
+            {
+                type.TreeRoot = BuildTypeTree(nodes);
+            }
         }
 
         // For v>=21, ref types have class metadata OR type dependencies (lines 144-148)
@@ -709,8 +712,16 @@ public sealed class SerializedFile
 
         Console.WriteLine($"DEBUG: ParseTypeTreeNodesBlob at pos={startPos}, nodeCount={nodeCount}, stringBufSize={stringBufferSize}");
 
+        // Handle empty node lists - but still need to consume the data if present
         if (nodeCount == 0)
         {
+            // Even with 0 nodes, we might have string buffer data in v22+ (for ref types)
+            // Skip it to maintain alignment
+            if (stringBufferSize > 0)
+            {
+                reader.ReadBytes(stringBufferSize);
+                Console.WriteLine($"DEBUG: Skipped {stringBufferSize} bytes of empty string buffer");
+            }
             return new List<TypeTreeNode>();
         }
 
@@ -918,13 +929,13 @@ public sealed class SerializedFile
     {
         int scriptCount = reader.ReadInt32();
         Console.WriteLine($"DEBUG: Parsing {scriptCount} script types (v{version})");
-        
+
         var scriptTypes = new List<LocalSerializedObjectIdentifier>(scriptCount);
         for (int i = 0; i < scriptCount; i++)
         {
             int localSerializedFileIndex = reader.ReadInt32();
             long localIdentifierInFile;
-            
+
             if (version < 14)
             {
                 localIdentifierInFile = reader.ReadInt32();
@@ -934,14 +945,14 @@ public sealed class SerializedFile
                 reader.Align(4); // align_stream() in UnityPy
                 localIdentifierInFile = reader.ReadInt64();
             }
-            
+
             scriptTypes.Add(new LocalSerializedObjectIdentifier
             {
                 LocalSerializedFileIndex = localSerializedFileIndex,
                 LocalIdentifierInFile = localIdentifierInFile
             });
         }
-        
+
         return scriptTypes;
     }
 
@@ -952,8 +963,15 @@ public sealed class SerializedFile
     private static List<SerializedType> ParseRefTypes(EndianBinaryReader reader, uint version, bool enableTypeTree)
     {
         int refTypeCount = reader.ReadInt32();
-        Console.WriteLine($"DEBUG: Parsing {refTypeCount} ref types (v{version})");
-        
+        Console.WriteLine($"DEBUG: Parsing {refTypeCount} ref types (v{version}) at pos={reader.Position}");
+
+        // Sanity check - refTypeCount should be reasonable
+        if (refTypeCount < 0 || refTypeCount > 100000)
+        {
+            Console.WriteLine($"DEBUG: WARNING - RefTypeCount {refTypeCount} seems invalid, treating as 0");
+            return new List<SerializedType>();
+        }
+
         var refTypes = new List<SerializedType>(refTypeCount);
         for (int i = 0; i < refTypeCount; i++)
         {
@@ -961,7 +979,7 @@ public sealed class SerializedFile
             var refType = ParseSerializedType(reader, version, enableTypeTree, isRefType: true);
             refTypes.Add(refType);
         }
-        
+
         return refTypes;
     }
 
@@ -1130,7 +1148,7 @@ public sealed class SerializedFile
     {
         if (flatNodes.Count == 0)
         {
-            throw new InvalidOperationException("Cannot build tree from empty node list");
+            throw new InvalidOperationException("Cannot build tree from empty node list. Check calling code to avoid calling BuildTypeTree with empty lists.");
         }
 
         var root = flatNodes[0];

@@ -27,25 +27,25 @@ public sealed class TypeTreeReader
     public static TypeTreeReader CreateFromFlatList(EndianBinaryReader reader, IReadOnlyList<TypeTreeNode> nodes)
     {
         TypeTreeNode? root = null;
-        
+
         if (nodes.Count > 0)
         {
             root = nodes[0];
-            
+
             // Rebuild children for each node (in case it wasn't done during parsing)
             for (int i = 0; i < nodes.Count; i++)
             {
                 var parentNode = nodes[i];
                 int parentLevel = parentNode.Level;
                 int childLevel = parentLevel + 1;
-                
+
                 for (int j = i + 1; j < nodes.Count; j++)
                 {
                     var potentialChild = nodes[j];
-                    
+
                     if (potentialChild.Level <= parentLevel)
                         break;
-                    
+
                     if (potentialChild.Level == childLevel)
                     {
                         parentNode.Children.Add(potentialChild);
@@ -53,7 +53,7 @@ public sealed class TypeTreeReader
                 }
             }
         }
-        
+
         return new TypeTreeReader(reader, root);
     }
 
@@ -84,9 +84,9 @@ public sealed class TypeTreeReader
     {
         // Check if this node requires alignment AFTER reading its value
         bool shouldAlign = (node.MetaFlag & 0x4000) != 0;
-        
+
         object? value;
-        
+
         // If no children, it's a primitive type
         if (node.IsPrimitive)
         {
@@ -102,13 +102,13 @@ public sealed class TypeTreeReader
         {
             value = ReadObject(node);
         }
-        
+
         // Align stream AFTER reading this node's value if MetaFlag indicates alignment
         if (shouldAlign)
         {
             _reader.Align();
         }
-        
+
         return value;
     }
 
@@ -159,30 +159,30 @@ public sealed class TypeTreeReader
     private List<object?> ReadArray(TypeTreeNode arrayNode)
     {
         var result = new List<object?>();
-        
+
         // Array structure (TypeFlags bit 0x01):
         // arrayNode (TF=0x01, e.g., "m_Vertices")
         //   ├─ children[0]: Size field (reads 4-byte int)
         //   └─ children[1]: Data template (describes one element)
-        
+
         if (arrayNode.Children.Count != 2)
         {
             Console.WriteLine($"[ARRAY-ERROR] Array node has {arrayNode.Children.Count} children, expected exactly 2: {arrayNode.Name}");
             return result;
         }
-        
+
         TypeTreeNode sizeNode = arrayNode.Children[0];
         TypeTreeNode dataTemplate = arrayNode.Children[1];
-        
+
         // Read array size from binary stream
         int size = _reader.ReadInt32();
-        
+
         // Reject arrays with nonsensical sizes
         if (size < 0 || size > 100_000_000)
         {
             return result;
         }
-        
+
         if (size == 0)
         {
             return result;
@@ -199,12 +199,12 @@ public sealed class TypeTreeReader
                 // Also check if requested bytes exceed available stream data
                 long bytesNeeded = (long)size * Math.Max(1, dataTemplate.ByteSize);
                 long bytesAvailable = _reader.BaseStream.Length - _reader.BaseStream.Position;
-                
+
                 if (size > 100_000 || bytesNeeded > bytesAvailable)
                 {
                     return result; // External resource or stream overflow
                 }
-                
+
                 if (dataTemplate.ByteSize > 0)
                 {
                     // Small fixed-size elements - read as byte arrays
@@ -226,7 +226,7 @@ public sealed class TypeTreeReader
                 }
                 return result;
             }
-            
+
             // Primitive array - simple loop
             for (int i = 0; i < size; i++)
             {

@@ -66,7 +66,7 @@ public class DataRegionEdgeCaseTests
     {
         // Arrange
         using var stream = new MemoryStream();
-        
+
         // Create blocks that would exceed int.MaxValue when combined
         var blocks = new[]
         {
@@ -95,7 +95,7 @@ public class DataRegionEdgeCaseTests
     {
         // Arrange
         using var stream = new MemoryStream(new byte[10]);
-        
+
         // Test each reserved bit individually
         ushort[] invalidFlags =
         [
@@ -154,7 +154,7 @@ public class DataRegionEdgeCaseTests
         // Arrange - Test that compression type bits (0-5) don't trigger reserved bit check
         var data = "Test"u8.ToArray();
         using var stream = new MemoryStream();
-        
+
         // Test valid compression flags (0-3 are supported)
         ushort[] validFlags = [0x0000, 0x0001, 0x0002, 0x0003];
 
@@ -206,7 +206,7 @@ public class DataRegionEdgeCaseTests
     {
         // Arrange
         var extractor = new NodeExtractor(detectOverlaps: true);
-        
+
         var nodes = new[]
         {
             new NodeInfo { Path = "node1", Offset = 0, Size = 5, Flags = 0 },
@@ -225,7 +225,7 @@ public class DataRegionEdgeCaseTests
         var data = "TestData"u8.ToArray();
         var region = new DataRegion(data);
         var resolver = new StreamingInfoResolver();
-        
+
         var nodes = new[]
         {
             new NodeInfo
@@ -257,7 +257,7 @@ public class DataRegionEdgeCaseTests
         // Arrange
         var offset = 1024 * 1024;  // 1 MB offset
         var data = "DataAfterLargeOffset"u8.ToArray();
-        
+
         using var stream = new MemoryStream();
         stream.Write(new byte[offset]);  // Write padding
         stream.Write(data);
@@ -287,7 +287,7 @@ public class DataRegionEdgeCaseTests
     {
         // Arrange
         using var stream = new MemoryStream();
-        
+
         var blocks = new[]
         {
             new StorageBlock

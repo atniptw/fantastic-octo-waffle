@@ -249,7 +249,7 @@ public class DecompressorTests
     {
         // Arrange - int.MaxValue is the limit, which is valid
         var input = DecompressionTestFixtures.HelloWorldBytes;
-        
+
         // Act & Assert - Size mismatch will occur before overflow check
         var ex = Assert.Throws<DecompressionSizeMismatchException>(() =>
             _decompressor.Decompress(input, int.MaxValue, 0));

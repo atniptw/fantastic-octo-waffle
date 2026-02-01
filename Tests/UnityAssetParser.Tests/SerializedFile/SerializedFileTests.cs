@@ -44,12 +44,12 @@ public class SerializedFileTests
         writer.Write((uint)0);        // Dummy dataOffset
         writer.Write((byte)2);        // Invalid Endianness (not 0 or 1)
         writer.Write(new byte[3]);    // Reserved
-        
-    // Parser will try to read real header for version >= 22, so add dummy data
-    writer.Write((uint)0);        // MetadataSize
-    writer.Write((long)0);        // FileSize  
-    writer.Write((long)0);        // DataOffset
-    writer.Write((long)0);        // Unknown
+
+        // Parser will try to read real header for version >= 22, so add dummy data
+        writer.Write((uint)0);        // MetadataSize
+        writer.Write((long)0);        // FileSize  
+        writer.Write((long)0);        // DataOffset
+        writer.Write((long)0);        // Unknown
 
         byte[] data = stream.ToArray();
 
@@ -174,11 +174,11 @@ public class SerializedFileTests
         writer.Write((uint)0);     // Dummy fileSize  
         writer.Write((uint)22);    // Version (CRITICAL: must be 9-30 for detection)
         writer.Write((uint)0);     // Dummy dataOffset
-        
+
         // Endianness + reserved
         writer.Write((byte)0);     // Endianness (0=little)
         writer.Write(new byte[3]); // Reserved
-        
+
         // REAL header (little-endian since endianness byte = 0)
         writer.Write((uint)metadataSize);   // MetadataSize
         writer.Write((long)fileSize);       // FileSize (int64)
@@ -211,7 +211,7 @@ public class SerializedFileTests
         // Version 22 format: Initial header(16) + endian+reserved(4) + real header(28) + metadata
         using var stream = new MemoryStream();
         using var writer = new BinaryWriter(stream);
-        
+
         // Calculate metadata sections (metadataSize does NOT include the real header, only the content after it)
         int typeTreeSize = 4; // Type count only (empty type tree)
         int objectCount = 2;
@@ -219,7 +219,7 @@ public class SerializedFileTests
         int objectEntrySize = 25;  // No dynamic alignment
         int objectTableSize = 4 + (objectCount * objectEntrySize);  // Count + entries
         int externalSize = 4; // Identifier count
-        
+
         // metadataSize is everything AFTER the real header (28 bytes)
         int metadataSize = typeTreeSize + objectTableSize + externalSize;
         int realHeaderSize = 4 + 8 + 8 + 8; // metadataSize(4) + fileSize(8) + dataOffset(8) + unknown(8)
@@ -231,11 +231,11 @@ public class SerializedFileTests
         writer.Write((uint)0);     // Dummy fileSize
         writer.Write((uint)22);    // Version
         writer.Write((uint)0);     // Dummy dataOffset
-        
+
         // Endianness + reserved
         writer.Write((byte)0);     // Endianness (0=little)
         writer.Write(new byte[3]); // Reserved
-        
+
         // REAL header (little-endian)
         writer.Write((uint)metadataSize);   // MetadataSize
         writer.Write((long)fileSize);       // FileSize (int64)
