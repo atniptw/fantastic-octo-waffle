@@ -127,12 +127,28 @@ public sealed class TypeTreeReader
             "UInt8" or "char" => _reader.ReadByte(),
             "SInt64" or "long long" => _reader.ReadInt64(),
             "UInt64" or "unsigned long long" => _reader.ReadUInt64(),
+            "FileSize" => _reader.ReadUInt64(),
             "float" => _reader.ReadSingle(),
             "double" => _reader.ReadDouble(),
             "bool" => _reader.ReadBoolean(),
             "string" => ReadAlignedString(),
+            "TypelessData" => ReadTypelessData(),
             _ => null
         };
+    }
+
+    private byte[] ReadTypelessData()
+    {
+        int length = _reader.ReadInt32();
+        if (length <= 0)
+        {
+            _reader.Align();
+            return Array.Empty<byte>();
+        }
+
+        byte[] bytes = _reader.ReadBytes(length);
+        _reader.Align();
+        return bytes;
     }
 
     /// <summary>

@@ -6,6 +6,11 @@ namespace UnityAssetParser.SerializedFile;
 public sealed class FileIdentifier
 {
     /// <summary>
+    /// Temporary empty string field present in version >= 6.
+    /// </summary>
+    public string TempEmpty { get; set; } = string.Empty;
+
+    /// <summary>
     /// GUID of the external file (16 bytes, version >= 6).
     /// </summary>
     public Guid Guid { get; set; }

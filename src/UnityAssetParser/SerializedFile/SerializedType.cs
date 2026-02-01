@@ -31,9 +31,27 @@ public sealed class SerializedType
     public byte[]? OldTypeHash { get; set; }
 
     /// <summary>
-    /// Type dependency indices (version >= 21).
+    /// Type dependency indices (version >= 21, regular types only).
     /// </summary>
     public int[]? TypeDependencies { get; set; }
+
+    /// <summary>
+    /// Class name (version >= 21, ref types only).
+    /// Reference: UnityPy SerializedType.m_ClassName.
+    /// </summary>
+    public string? ClassName { get; set; }
+
+    /// <summary>
+    /// Namespace (version >= 21, ref types only).
+    /// Reference: UnityPy SerializedType.m_NameSpace.
+    /// </summary>
+    public string? NameSpace { get; set; }
+
+    /// <summary>
+    /// Assembly name (version >= 21, ref types only).
+    /// Reference: UnityPy SerializedType.m_AssemblyName.
+    /// </summary>
+    public string? AssemblyName { get; set; }
 
     /// <summary>
     /// Field tree nodes in flat list form (kept for compatibility).

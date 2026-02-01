@@ -10,6 +10,118 @@ namespace UnityAssetParser.SerializedFile;
 /// </summary>
 public sealed class SerializedFile
 {
+    private static readonly Dictionary<uint, string> CommonStrings = new()
+    {
+        { 0, "AABB" },
+        { 5, "AnimationClip" },
+        { 19, "AnimationCurve" },
+        { 34, "AnimationState" },
+        { 49, "Array" },
+        { 55, "Base" },
+        { 60, "BitField" },
+        { 69, "bitset" },
+        { 76, "bool" },
+        { 81, "char" },
+        { 86, "ColorRGBA" },
+        { 96, "Component" },
+        { 106, "data" },
+        { 111, "deque" },
+        { 117, "double" },
+        { 124, "dynamic_array" },
+        { 138, "FastPropertyName" },
+        { 155, "first" },
+        { 161, "float" },
+        { 167, "Font" },
+        { 172, "GameObject" },
+        { 183, "Generic Mono" },
+        { 196, "GradientNEW" },
+        { 208, "GUID" },
+        { 213, "GUIStyle" },
+        { 222, "int" },
+        { 226, "list" },
+        { 231, "long long" },
+        { 241, "map" },
+        { 245, "Matrix4x4f" },
+        { 256, "MdFour" },
+        { 263, "MonoBehaviour" },
+        { 277, "MonoScript" },
+        { 288, "m_ByteSize" },
+        { 299, "m_Curve" },
+        { 307, "m_EditorClassIdentifier" },
+        { 331, "m_EditorHideFlags" },
+        { 349, "m_Enabled" },
+        { 359, "m_ExtensionPtr" },
+        { 374, "m_GameObject" },
+        { 387, "m_Index" },
+        { 395, "m_IsArray" },
+        { 405, "m_IsStatic" },
+        { 416, "m_MetaFlag" },
+        { 427, "m_Name" },
+        { 434, "m_ObjectHideFlags" },
+        { 452, "m_PrefabInternal" },
+        { 469, "m_PrefabParentObject" },
+        { 490, "m_Script" },
+        { 499, "m_StaticEditorFlags" },
+        { 519, "m_Type" },
+        { 526, "m_Version" },
+        { 536, "Object" },
+        { 543, "pair" },
+        { 548, "PPtr<Component>" },
+        { 564, "PPtr<GameObject>" },
+        { 581, "PPtr<Material>" },
+        { 596, "PPtr<MonoBehaviour>" },
+        { 616, "PPtr<MonoScript>" },
+        { 633, "PPtr<Object>" },
+        { 646, "PPtr<Prefab>" },
+        { 659, "PPtr<Sprite>" },
+        { 672, "PPtr<TextAsset>" },
+        { 688, "PPtr<Texture>" },
+        { 702, "PPtr<Texture2D>" },
+        { 718, "PPtr<Transform>" },
+        { 734, "Prefab" },
+        { 741, "Quaternionf" },
+        { 753, "Rectf" },
+        { 759, "RectInt" },
+        { 767, "RectOffset" },
+        { 778, "second" },
+        { 785, "set" },
+        { 789, "short" },
+        { 795, "size" },
+        { 800, "SInt16" },
+        { 807, "SInt32" },
+        { 814, "SInt64" },
+        { 821, "SInt8" },
+        { 827, "staticvector" },
+        { 840, "string" },
+        { 847, "TextAsset" },
+        { 857, "TextMesh" },
+        { 866, "Texture" },
+        { 874, "Texture2D" },
+        { 884, "Transform" },
+        { 894, "TypelessData" },
+        { 907, "UInt16" },
+        { 914, "UInt32" },
+        { 921, "UInt64" },
+        { 928, "UInt8" },
+        { 934, "unsigned int" },
+        { 947, "unsigned long long" },
+        { 966, "unsigned short" },
+        { 981, "vector" },
+        { 988, "Vector2f" },
+        { 997, "Vector3f" },
+        { 1006, "Vector4f" },
+        { 1015, "m_ScriptingClassIdentifier" },
+        { 1042, "Gradient" },
+        { 1051, "Type*" },
+        { 1057, "int2_storage" },
+        { 1070, "int3_storage" },
+        { 1083, "BoundsInt" },
+        { 1093, "m_CorrespondingSourceObject" },
+        { 1121, "m_PrefabInstance" },
+        { 1138, "m_PrefabAsset" },
+        { 1152, "FileSize" },
+    };
+
     private readonly Dictionary<long, ObjectInfo> _objectsByPathId;
     private readonly ReadOnlyMemory<byte> _objectDataRegion;
 
@@ -34,6 +146,21 @@ public sealed class SerializedFile
     public IReadOnlyList<FileIdentifier> Externals { get; }
 
     /// <summary>
+    /// Gets the list of local serialized object identifiers (script types).
+    /// </summary>
+    public IReadOnlyList<LocalSerializedObjectIdentifier> ScriptTypes { get; }
+
+    /// <summary>
+    /// Gets the list of referenced types (version >= 20).
+    /// </summary>
+    public IReadOnlyList<SerializedType> RefTypes { get; }
+
+    /// <summary>
+    /// Gets the user information string (version >= 5), if present.
+    /// </summary>
+    public string? UserInformation { get; }
+
+    /// <summary>
     /// Gets the raw object data region for downstream readers.
     /// </summary>
     public ReadOnlyMemory<byte> ObjectDataRegion => _objectDataRegion;
@@ -43,12 +170,18 @@ public sealed class SerializedFile
         TypeTree typeTree,
         IReadOnlyList<ObjectInfo> objects,
         IReadOnlyList<FileIdentifier> externals,
+        IReadOnlyList<LocalSerializedObjectIdentifier> scriptTypes,
+        IReadOnlyList<SerializedType> refTypes,
+        string? userInformation,
         ReadOnlyMemory<byte> objectDataRegion)
     {
         Header = header;
         TypeTree = typeTree;
         Objects = objects;
         Externals = externals;
+        ScriptTypes = scriptTypes;
+        RefTypes = refTypes;
+        UserInformation = userInformation;
         _objectDataRegion = objectDataRegion;
 
         // Build PathId lookup dictionary
@@ -140,7 +273,14 @@ public sealed class SerializedFile
         // Step 6: Resolve ClassIds for objects
         ResolveClassIds(objects, typeTree);
 
-        // Step 7: Align and parse file identifiers (externals)
+        // Step 7: Parse script types (version >= 11)
+        List<LocalSerializedObjectIdentifier> scriptTypes = new();
+        if (header.Version >= 11)
+        {
+            scriptTypes = ParseScriptTypes(endianReader, header.Version);
+        }
+
+        // Step 8: Align and parse file identifiers (externals)
         endianReader.Align(4);
 
         // Try to parse externals, but if we're at the metadata boundary, skip
@@ -155,7 +295,28 @@ public sealed class SerializedFile
             externals = new List<FileIdentifier>();
         }
 
-        // Step 8: Extract object data region
+        // Step 9: Parse ref types (version >= 20)
+        List<SerializedType> refTypes = new();
+        if (header.Version >= 20)
+        {
+            refTypes = ParseRefTypes(endianReader, header.Version, enableTypeTree);
+        }
+
+        // Step 10: Read user information (version >= 5)
+        string? userInformation = null;
+        if (header.Version >= 5)
+        {
+            try
+            {
+                userInformation = endianReader.ReadUtf8NullTerminated();
+            }
+            catch (Exception)
+            {
+                userInformation = null;
+            }
+        }
+
+        // Step 11: Extract object data region
         var dataStartOffset = (int)header.DataOffset;
         if (dataStartOffset < 0 || dataStartOffset > buffer.Length)
         {
@@ -185,7 +346,7 @@ public sealed class SerializedFile
         // Step 9: Validate object bounds
         ValidateObjectBounds(objects, objectDataRegion.Length, header.DataOffset);
 
-        return new SerializedFile(header, typeTree, objects, externals, objectDataRegion);
+        return new SerializedFile(header, typeTree, objects, externals, scriptTypes, refTypes, userInformation, objectDataRegion);
     }
 
     /// <summary>
@@ -429,10 +590,15 @@ public sealed class SerializedFile
         return new TypeTree(types, enableTypeTree);
     }
 
-    private static SerializedType ParseSerializedType(EndianBinaryReader reader, uint version, bool enableTypeTree)
+    /// <summary>
+    /// Parses a SerializedType structure.
+    /// Reference: UnityPy/files/SerializedFile.py SerializedType.__init__ lines 116-148.
+    /// </summary>
+    /// <param name="isRefType">True if parsing a ref type (for v>=20 ref_types list)</param>
+    private static SerializedType ParseSerializedType(EndianBinaryReader reader, uint version, bool enableTypeTree, bool isRefType = false)
     {
         long startPos = reader.BaseStream.Position;
-        Console.WriteLine($"DEBUG: ParseSerializedType starting at pos={startPos}");
+        Console.WriteLine($"DEBUG: ParseSerializedType starting at pos={startPos}, isRefType={isRefType}");
 
         var type = new SerializedType
         {
@@ -450,19 +616,22 @@ public sealed class SerializedFile
             type.ScriptTypeIndex = reader.ReadInt16();
         }
 
-        // ScriptId hash (16 bytes) for MonoBehaviour (ClassId 114)
-        if (version >= 17 && type.ClassId == 114)
+        // UnityPy logic for ScriptId/OldTypeHash (lines 128-133)
+        if (version >= 13)
         {
-            type.ScriptId = reader.ReadBytes(16);
+            bool needsHashes = (isRefType && type.ScriptTypeIndex >= 0)
+                              || (version < 16 && type.ClassId < 0)
+                              || (version >= 16 && type.ClassId == 114);
+            
+            if (needsHashes)
+            {
+                type.ScriptId = reader.ReadBytes(16); // Hash128
+            }
+            
+            type.OldTypeHash = reader.ReadBytes(16); // Hash128
         }
 
-        // OldTypeHash (16 bytes)
-        if (version >= 5)
-        {
-            type.OldTypeHash = reader.ReadBytes(16);
-        }
-
-        // Read type tree nodes if enabled
+        // Read type tree nodes if enabled (lines 135-142)
         if (enableTypeTree)
         {
             var nodes = ParseTypeTreeNodes(reader, version);
@@ -472,22 +641,34 @@ public sealed class SerializedFile
             type.TreeRoot = BuildTypeTree(nodes);
         }
 
-        // Type dependencies (version >= 21)
+        // For v>=21, ref types have class metadata OR type dependencies (lines 144-148)
         if (version >= 21)
         {
-            long depCountPos = reader.BaseStream.Position;
-            int depCount = reader.ReadInt32();
-            Console.WriteLine($"DEBUG: TypeDependencies at pos={depCountPos}, count={depCount}");
-            if (depCount > 0)
+            if (isRefType)
             {
-                var deps = new int[depCount];
-                for (int i = 0; i < depCount; i++)
-                {
-                    deps[i] = reader.ReadInt32();
-                }
-                type.TypeDependencies = deps;
+                // Ref types: read MonoBehaviour class metadata
+                type.ClassName = reader.ReadUtf8NullTerminated();
+                type.NameSpace = reader.ReadUtf8NullTerminated();
+                type.AssemblyName = reader.ReadUtf8NullTerminated();
+                Console.WriteLine($"DEBUG: RefType metadata: {type.ClassName} ({type.NameSpace}.{type.AssemblyName})");
             }
-            Console.WriteLine($"DEBUG: After TypeDependencies, pos={reader.BaseStream.Position}");
+            else
+            {
+                // Regular types: read type dependencies array
+                long depCountPos = reader.BaseStream.Position;
+                int depCount = reader.ReadInt32();
+                Console.WriteLine($"DEBUG: TypeDependencies at pos={depCountPos}, count={depCount}");
+                if (depCount > 0)
+                {
+                    var deps = new int[depCount];
+                    for (int i = 0; i < depCount; i++)
+                    {
+                        deps[i] = reader.ReadInt32();
+                    }
+                    type.TypeDependencies = deps;
+                }
+                Console.WriteLine($"DEBUG: After TypeDependencies, pos={reader.BaseStream.Position}");
+            }
         }
 
         return type;
@@ -572,7 +753,7 @@ public sealed class SerializedFile
                 TypeFlags = nodeReader.ReadByte()      // 1 byte
             };
 
-            // Read string offsets from string pool (not null-terminated in blob format)
+            // Read string offsets from string pool or common string table (UnityPy: TypeTreeNode.parse_blob)
             uint typeStrOffset = nodeReader.ReadUInt32();    // 4 bytes
             uint nameStrOffset = nodeReader.ReadUInt32();    // 4 bytes
 
@@ -586,9 +767,9 @@ public sealed class SerializedFile
                 nodeReader.ReadUInt64(); // 8 bytes - m_RefTypeHash
             }
 
-            // Extract null-terminated strings from string buffer
-            node.Type = ExtractNullTerminatedString(stringBuffer, typeStrOffset);
-            node.Name = ExtractNullTerminatedString(stringBuffer, nameStrOffset);
+            // Resolve strings using blob offset/common string rules
+            node.Type = ResolveTypeTreeString(stringBuffer, typeStrOffset);
+            node.Name = ResolveTypeTreeString(stringBuffer, nameStrOffset);
             node.Index = i;  // Use loop counter as logical index
 
             nodes.Add(node);
@@ -715,6 +896,73 @@ public sealed class SerializedFile
         }
 
         return Encoding.UTF8.GetString(stringBuffer, (int)offset, length);
+    }
+
+    private static string ResolveTypeTreeString(byte[] stringBuffer, uint value)
+    {
+        bool isOffset = (value & 0x80000000) == 0;
+        if (isOffset)
+        {
+            return ExtractNullTerminatedString(stringBuffer, value);
+        }
+
+        uint offset = value & 0x7FFFFFFF;
+        return CommonStrings.TryGetValue(offset, out var common) ? common : offset.ToString();
+    }
+
+    /// <summary>
+    /// Parses script types (LocalSerializedObjectIdentifier entries) for v>=11.
+    /// Reference: UnityPy/files/SerializedFile.py lines 298-300.
+    /// </summary>
+    private static List<LocalSerializedObjectIdentifier> ParseScriptTypes(EndianBinaryReader reader, uint version)
+    {
+        int scriptCount = reader.ReadInt32();
+        Console.WriteLine($"DEBUG: Parsing {scriptCount} script types (v{version})");
+        
+        var scriptTypes = new List<LocalSerializedObjectIdentifier>(scriptCount);
+        for (int i = 0; i < scriptCount; i++)
+        {
+            int localSerializedFileIndex = reader.ReadInt32();
+            long localIdentifierInFile;
+            
+            if (version < 14)
+            {
+                localIdentifierInFile = reader.ReadInt32();
+            }
+            else
+            {
+                reader.Align(4); // align_stream() in UnityPy
+                localIdentifierInFile = reader.ReadInt64();
+            }
+            
+            scriptTypes.Add(new LocalSerializedObjectIdentifier
+            {
+                LocalSerializedFileIndex = localSerializedFileIndex,
+                LocalIdentifierInFile = localIdentifierInFile
+            });
+        }
+        
+        return scriptTypes;
+    }
+
+    /// <summary>
+    /// Parses ref types (SerializedType entries with is_ref_type=true) for v>=20.
+    /// Reference: UnityPy/files/SerializedFile.py lines 305-307.
+    /// </summary>
+    private static List<SerializedType> ParseRefTypes(EndianBinaryReader reader, uint version, bool enableTypeTree)
+    {
+        int refTypeCount = reader.ReadInt32();
+        Console.WriteLine($"DEBUG: Parsing {refTypeCount} ref types (v{version})");
+        
+        var refTypes = new List<SerializedType>(refTypeCount);
+        for (int i = 0; i < refTypeCount; i++)
+        {
+            // Parse as ref type (is_ref_type=true)
+            var refType = ParseSerializedType(reader, version, enableTypeTree, isRefType: true);
+            refTypes.Add(refType);
+        }
+        
+        return refTypes;
     }
 
     private static List<ObjectInfo> ParseObjectTable(EndianBinaryReader reader, uint version)
