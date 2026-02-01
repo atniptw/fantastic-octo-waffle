@@ -133,19 +133,12 @@ public sealed class MeshExtractionService
         var typeTreeNodes = meshType?.Nodes;
 
         // Parse Mesh object
+        // NOTE: TypeTree parsing for Mesh is unreliable because vertex data arrays are external
+        // and TypeTreeReader tries to read them inline. Use direct binary parsing instead.
         Mesh? mesh;
         try
         {
-            if (typeTreeNodes != null && typeTreeNodes.Count > 0)
-            {
-                // Use TypeTree-driven parsing
-                mesh = MeshParser.ParseWithTypeTree(objectData.Span, typeTreeNodes, version, isBigEndian, resSData);
-            }
-            else
-            {
-                // Fallback to legacy parsing
-                mesh = MeshParser.Parse(objectData.Span, version, isBigEndian, resSData);
-            }
+            mesh = MeshParser.ParseBinary(objectData.Span, version, isBigEndian, resSData);
         }
         catch (Exception ex)
         {

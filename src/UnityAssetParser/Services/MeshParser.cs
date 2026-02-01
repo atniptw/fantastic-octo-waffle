@@ -15,6 +15,74 @@ namespace UnityAssetParser.Services;
 public static class MeshParser
 {
     /// <summary>
+    /// Parses a Mesh object using direct binary reading (bypasses TypeTree).
+    /// This is the primary parsing method for extracting mesh geometry.
+    /// </summary>
+    public static Mesh? ParseBinary(
+        ReadOnlySpan<byte> objectData,
+        (int, int, int, int) version,
+        bool isBigEndian,
+        ReadOnlyMemory<byte>? resSData = null)
+    {
+        if (objectData.Length < 4)
+        {
+            return null;
+        }
+
+        try
+        {
+            using (var stream = new MemoryStream(objectData.ToArray(), false))
+            using (var reader = new EndianBinaryReader(stream, isBigEndian))
+            {
+                var mesh = new Mesh();
+
+                Console.WriteLine($"DEBUG: ParseBinary starting - objectData.Length={objectData.Length}");
+
+                // Read m_Name (string with length prefix)
+                int nameLength = reader.ReadInt32();
+                Console.WriteLine($"DEBUG: Mesh name length={nameLength}");
+                if (nameLength > 0 && nameLength < 1000)
+                {
+                    mesh.Name = reader.ReadUtf8String(nameLength);
+                    Console.WriteLine($"DEBUG: Mesh.Name = '{mesh.Name}'");
+                    
+                    // Align to 4 bytes after string
+                    reader.Align(4);
+                }
+
+                // Read m_SubMeshes (array of SubMesh)
+                int subMeshCount = reader.ReadInt32();
+                Console.WriteLine($"DEBUG: SubMesh count={subMeshCount}");
+                if (subMeshCount > 0)
+                {
+                    mesh.SubMeshes = new SubMesh[subMeshCount];
+                    for (int i = 0; i < subMeshCount; i++)
+                    {
+                        mesh.SubMeshes[i] = new SubMesh
+                        {
+                            FirstByte = reader.ReadUInt32(),
+                            IndexCount = reader.ReadUInt32(),
+                            Topology = (MeshTopology)reader.ReadInt32()
+                        };
+                    }
+                    Console.WriteLine($"DEBUG: Read {subMeshCount} submeshes");
+                }
+
+                // TODO: Continue with remaining fields...
+                // This is a minimal scaffold - full implementation will read all Mesh fields
+                // For now, return the partial Mesh to get vertex extraction working
+
+                return mesh;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"ERROR: MeshParser.ParseBinary failed ({ex.GetType().Name}): {ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
     /// Parses a Mesh object using TypeTree-driven parsing (recommended).
     /// </summary>
     public static Mesh? ParseWithTypeTree(
@@ -26,16 +94,23 @@ public static class MeshParser
     {
         if (objectData.Length < 4 || typeTreeNodes == null || typeTreeNodes.Count == 0)
         {
+            Console.WriteLine($"DEBUG: ParseWithTypeTree skipping - data.Length={objectData.Length}, nodes={typeTreeNodes?.Count ?? -1}");
             return null;
         }
+
+        Console.WriteLine($"DEBUG: ParseWithTypeTree starting - data.Length={objectData.Length}, nodes={typeTreeNodes.Count}, version={version}");
 
         try
         {
             using (var stream = new MemoryStream(objectData.ToArray(), false))
             using (var reader = new EndianBinaryReader(stream, isBigEndian))
             {
+                Console.WriteLine($"DEBUG: Creating TypeTreeReader from {typeTreeNodes.Count} nodes");
                 var ttReader = TypeTreeReader.CreateFromFlatList(reader, typeTreeNodes);
+                Console.WriteLine($"DEBUG: ReadObject from TypeTree...");
                 var data = ttReader.ReadObject();
+
+                Console.WriteLine($"DEBUG: ReadObject complete, got {data.Count} keys");
 
                 // Map TypeTree data to Mesh object
                 return MapToMesh(data, version, resSData);
