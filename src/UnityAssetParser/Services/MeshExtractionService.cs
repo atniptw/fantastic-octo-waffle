@@ -80,6 +80,20 @@ public sealed class MeshExtractionService
         {
             Console.WriteLine($"DEBUG: ClassID {kv.Key} count={kv.Value}");
         }
+        
+        // Debug: List all objects to find the Mesh
+        Console.WriteLine($"DEBUG: Object table:");
+        for (int i = 0; i < Math.Min(10, serializedFile.Objects.Count); i++)
+        {
+            var obj = serializedFile.Objects[i];
+            Console.WriteLine($"DEBUG:   [{i}] PathId={obj.PathId}, ClassId={obj.ClassId}, ByteStart={obj.ByteStart}, ByteSize={obj.ByteSize}");
+        }
+        var lastObjIndex = serializedFile.Objects.Count - 1;
+        if (lastObjIndex >= 10)
+        {
+            var obj = serializedFile.Objects[lastObjIndex];
+            Console.WriteLine($"DEBUG:   ... [{lastObjIndex}] PathId={obj.PathId}, ClassId={obj.ClassId}, ByteStart={obj.ByteStart}, ByteSize={obj.ByteSize}");
+        }
 
         var meshObjects = serializedFile.Objects
             .Where(obj => obj.ClassId == RenderableDetector.RenderableClassIds.Mesh)
@@ -88,6 +102,12 @@ public sealed class MeshExtractionService
         if (meshObjects.Count == 0)
         {
             return results; // No meshes found
+        }
+
+        Console.WriteLine($"DEBUG: Found {meshObjects.Count} Mesh objects (ClassID 43)");
+        foreach (var meshObj in meshObjects)
+        {
+            Console.WriteLine($"DEBUG: Mesh PathId={meshObj.PathId}, ByteStart={meshObj.ByteStart}, ByteSize={meshObj.ByteSize}, TypeId={meshObj.TypeId}");
         }
 
         // Step 5: Extract geometry from each mesh
@@ -135,6 +155,15 @@ public sealed class MeshExtractionService
         // Parse Mesh object using TypeTree (dynamic field order per Unity version)
         // TypeTree encodes the actual field sequence for this version, so we use it rather than hardcoding
         Console.WriteLine($"DEBUG: ExtractMeshGeometry - objectData.Length={objectData.Length}, meshObj.ByteSize={meshObj.ByteSize}");
+        
+        // CRITICAL: Ensure objectData matches ByteSize from ObjectInfo
+        // Unity object data should be exactly ByteSize bytes as specified in the object table
+        if (objectData.Length != meshObj.ByteSize)
+        {
+            Console.WriteLine($"WARNING: objectData.Length ({objectData.Length}) != meshObj.ByteSize ({meshObj.ByteSize}) - truncating to ByteSize");
+            objectData = objectData.Slice(0, (int)meshObj.ByteSize);
+        }
+        
         Mesh? mesh;
         try
         {

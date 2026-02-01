@@ -24,10 +24,10 @@
   "meshes": [
     {
       "name": "\u96ea\u8304",
-      "vertex_count": 220,
+      "vertex_count": 0,
       "index_count": 468,
-      "has_normals": true,
-      "has_uv0": true,
+      "has_normals": false,
+      "has_uv0": false,
       "object_path": "Object -3876313651872223835"
     }
   ],

@@ -22,10 +22,10 @@
   "meshes": [
     {
       "name": "Glasses \u773c\u955c",
-      "vertex_count": 823,
+      "vertex_count": 0,
       "index_count": 1416,
-      "has_normals": true,
-      "has_uv0": true,
+      "has_normals": false,
+      "has_uv0": false,
       "object_path": "Object -7989615855593889409"
     }
   ],

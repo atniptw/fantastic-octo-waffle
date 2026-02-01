@@ -66,14 +66,19 @@ public sealed class TypeTreeReader
         if (_root == null)
             return new Dictionary<string, object?>();
 
+        Console.WriteLine($"[TYPETREE] ReadObject starting - stream position={_reader.BaseStream.Position}, length={_reader.BaseStream.Length}");
+
         // Read all children of root (skip the root itself)
         var result = new Dictionary<string, object?>();
         foreach (var child in _root.Children)
         {
+            Console.WriteLine($"[TYPETREE] Reading field '{child.Name}' (type={child.Type}) at position={_reader.BaseStream.Position}");
             var value = ReadNode(child);
             result[child.Name] = value;
+            Console.WriteLine($"[TYPETREE] Field '{child.Name}' done, value={(value != null ? value.GetType().Name : "null")}, position={_reader.BaseStream.Position}");
         }
 
+        Console.WriteLine($"[TYPETREE] ReadObject complete - final position={_reader.BaseStream.Position}");
         return result;
     }
 
@@ -89,8 +94,13 @@ public sealed class TypeTreeReader
 
             object? value;
 
+            // Special case: string types are primitive even if they have children (the "Array" child)
+            if (node.Type == "string")
+            {
+                value = ReadAlignedString();
+            }
             // If no children, it's a primitive type
-            if (node.IsPrimitive)
+            else if (node.IsPrimitive)
             {
                 value = ReadPrimitive(node.Type);
             }
@@ -194,6 +204,7 @@ public sealed class TypeTreeReader
         try
         {
             size = _reader.ReadInt32();
+            Console.WriteLine($"[ARRAY-SIZE] Array '{arrayNode.Name}' size={size} (4-byte count), dataTemplate.Type='{dataTemplate.Type}', dataTemplate.ByteSize={dataTemplate.ByteSize}, children={dataTemplate.Children.Count}");
         }
         catch (EndOfStreamException)
         {

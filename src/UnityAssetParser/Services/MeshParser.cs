@@ -35,18 +35,23 @@ public static class MeshParser
 
         try
         {
-            using (var stream = new MemoryStream(objectData.ToArray(), false))
-            using (var reader = new EndianBinaryReader(stream, isBigEndian))
+            var dataArray = objectData.ToArray();
+            Console.WriteLine($"DEBUG: dataArray.Length={dataArray.Length}");
+            using (var stream = new MemoryStream(dataArray, false))
             {
-                Console.WriteLine($"DEBUG: Creating TypeTreeReader from {typeTreeNodes.Count} nodes");
-                var ttReader = TypeTreeReader.CreateFromFlatList(reader, typeTreeNodes);
-                Console.WriteLine($"DEBUG: ReadObject from TypeTree...");
-                var data = ttReader.ReadObject();
+                Console.WriteLine($"DEBUG: MemoryStream created - Length={stream.Length}, Position={stream.Position}, Capacity={stream.Capacity}");
+                using (var reader = new EndianBinaryReader(stream, isBigEndian))
+                {
+                    Console.WriteLine($"DEBUG: Creating TypeTreeReader from {typeTreeNodes.Count} nodes");
+                    var ttReader = TypeTreeReader.CreateFromFlatList(reader, typeTreeNodes);
+                    Console.WriteLine($"DEBUG: ReadObject from TypeTree...");
+                    var data = ttReader.ReadObject();
 
-                Console.WriteLine($"DEBUG: ReadObject complete, got {data.Count} keys");
+                    Console.WriteLine($"DEBUG: ReadObject complete, got {data.Count} keys");
 
-                // Map TypeTree data to Mesh object
-                return MapToMesh(data, version, resSData);
+                    // Map TypeTree data to Mesh object
+                    return MapToMesh(data, version, resSData);
+                }
             }
         }
         catch (Exception ex)
@@ -67,10 +72,24 @@ public static class MeshParser
         Console.WriteLine($"DEBUG: MapToMesh - data has {data.Count} keys: {string.Join(", ", data.Keys)}");
 
         // Field 1: m_Name
-        if (data.TryGetValue("m_Name", out var nameObj) && nameObj is string name)
+        if (data.TryGetValue("m_Name", out var nameObj))
         {
-            mesh.Name = name;
-            Console.WriteLine($"DEBUG: Mapped m_Name = '{name}'");
+            Console.WriteLine($"DEBUG: m_Name type={nameObj?.GetType().Name ?? "null"}, value={(nameObj is string s ? $"'{s}'" : nameObj?.ToString() ?? "null")}");
+            if (nameObj is string name)
+            {
+                mesh.Name = name;
+            }
+            else if (nameObj is Dictionary<string, object?> nameDict)
+            {
+                Console.WriteLine($"DEBUG: m_Name is a dictionary with keys: {string.Join(", ", nameDict.Keys)}");
+                if (nameDict.TryGetValue("Array", out var arrayVal) && arrayVal is List<object?> charList)
+                {
+                    // Name might be encoded as char array
+                    var chars = charList.Where(x => x != null).Select(x => (char)Convert.ToByte(x)).ToArray();
+                    mesh.Name = new string(chars);
+                    Console.WriteLine($"DEBUG: Extracted name from char array: '{mesh.Name}'");
+                }
+            }
         }
 
         // Field 2: m_SubMeshes
@@ -79,6 +98,7 @@ public static class MeshParser
             Console.WriteLine($"DEBUG: m_SubMeshes type={subMeshesObj?.GetType().Name ?? "null"}");
             if (subMeshesObj is List<object?> subMeshesList)
             {
+                Console.WriteLine($"DEBUG: m_SubMeshes list has {subMeshesList.Count} items");
                 mesh.SubMeshes = MapSubMeshes(subMeshesList);
                 Console.WriteLine($"DEBUG: Mapped {mesh.SubMeshes.Length} SubMeshes");
             }

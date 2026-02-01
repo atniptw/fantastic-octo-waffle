@@ -15,20 +15,43 @@ public class MeshExtractionServiceRealBundleTests
         "Fixtures",
         "RealBundles");
 
-    [Fact(Skip = "TypeTree parsing incomplete: mesh data fields empty (no positions/normals/submeshes). Investigating TypeTreeReader traversal logic.")]
+    [Fact]
     public void ExtractMeshes_CigarNeck_ExtractsMesh()
     {
-        // Arrange
-        string filePath = Path.Combine(FixturesPath, "Cigar_neck.hhh");
-        var bundleData = File.ReadAllBytes(filePath);
-        var service = new MeshExtractionService();
+        // Redirect Console.Out to capture service diagnostics
+        var debugFile = "/tmp/mesh_extraction_debug.log";
+        var writer = new StreamWriter(debugFile, append: true);
+        writer.AutoFlush = true;
+        var oldOut = Console.Out;
+        Console.SetOut(writer);
 
-        // Act
-        var meshes = service.ExtractMeshes(bundleData);
+        try
+        {
+            // Arrange
+            string filePath = Path.Combine(FixturesPath, "Cigar_neck.hhh");
+            var bundleData = File.ReadAllBytes(filePath);
+            var service = new MeshExtractionService();
 
-        // Assert - should extract at least one mesh
-        Assert.NotNull(meshes);
-        Assert.NotEmpty(meshes); // Now we expect mesh extraction to work
+            // Act
+            Console.WriteLine("=== ExtractMeshes_CigarNeck_ExtractsMesh ===");
+            var meshes = service.ExtractMeshes(bundleData);
+
+            Console.WriteLine($"Extracted {meshes.Count} meshes");
+            foreach (var mesh in meshes)
+            {
+                Console.WriteLine($"Mesh: Name={mesh.Name}, VertexCount={mesh.VertexCount}");
+            }
+
+            // Assert - should extract at least one mesh
+            Assert.NotNull(meshes);
+            Assert.NotEmpty(meshes); // Now we expect mesh extraction to work
+        }
+        finally
+        {
+            Console.SetOut(oldOut);
+            writer.Close();
+            writer.Dispose();
+        }
     }
 
     [Fact(Skip = "TypeTree parsing incomplete: mesh data fields empty (no positions/normals/submeshes). Investigating TypeTreeReader traversal logic.")]
