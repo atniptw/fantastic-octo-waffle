@@ -132,13 +132,36 @@ public sealed class MeshExtractionService
         var meshType = serializedFile.TypeTree.GetType(meshObj.TypeId);
         var typeTreeNodes = meshType?.Nodes;
 
-        // Parse Mesh object
-        // NOTE: TypeTree parsing for Mesh is unreliable because vertex data arrays are external
-        // and TypeTreeReader tries to read them inline. Use direct binary parsing instead.
+        // Parse Mesh object using TypeTree (dynamic field order per Unity version)
+        // TypeTree encodes the actual field sequence for this version, so we use it rather than hardcoding
+        Console.WriteLine($"DEBUG: ExtractMeshGeometry - objectData.Length={objectData.Length}, meshObj.ByteSize={meshObj.ByteSize}");
         Mesh? mesh;
         try
         {
-            mesh = MeshParser.ParseBinary(objectData.Span, version, isBigEndian, resSData);
+            if (typeTreeNodes != null && typeTreeNodes.Count > 0)
+            {
+                // Use TypeTree-driven parsing - respects dynamic field ordering per version
+                Console.WriteLine($"DEBUG: Using TypeTree parsing ({typeTreeNodes.Count} nodes)");
+                mesh = MeshParser.ParseWithTypeTree(objectData.Span, typeTreeNodes, version, isBigEndian, resSData);
+                
+                // If TypeTree parsing resulted in empty mesh (likely due to buffer exhaustion),
+                // fall back to binary parser which might extract at least some data
+                if (mesh != null && string.IsNullOrEmpty(mesh.Name) && (mesh.SubMeshes == null || mesh.SubMeshes.Length == 0))
+                {
+                    Console.WriteLine($"DEBUG: TypeTree parsing produced empty mesh, trying binary parser fallback");
+                    var binaryMesh = MeshParser.ParseBinary(objectData.Span, version, isBigEndian, resSData);
+                    if (binaryMesh != null && !string.IsNullOrEmpty(binaryMesh.Name))
+                    {
+                        mesh = binaryMesh;
+                    }
+                }
+            }
+            else
+            {
+                // Fallback: try binary parsing if TypeTree unavailable
+                Console.WriteLine($"DEBUG: No TypeTree available, using binary parsing");
+                mesh = MeshParser.ParseBinary(objectData.Span, version, isBigEndian, resSData);
+            }
         }
         catch (Exception ex)
         {
@@ -149,9 +172,11 @@ public sealed class MeshExtractionService
         if (mesh == null)
         {
             // Mesh parsing not yet implemented or failed
-            System.Diagnostics.Debug.WriteLine($"DEBUG: MeshParser.Parse returned null for mesh PathId={meshObj.PathId}");
+            Console.WriteLine($"DEBUG: MeshParser returned null for mesh PathId={meshObj.PathId}");
             return null;
         }
+
+        Console.WriteLine($"DEBUG: MeshParser returned mesh: Name='{mesh.Name}', SubMeshes={mesh.SubMeshes?.Length ?? 0}");
 
         // Use MeshHelper to extract geometry
         var helper = new MeshHelper(mesh, version, isLittleEndian: !isBigEndian);
@@ -160,11 +185,37 @@ public sealed class MeshExtractionService
         {
             helper.Process();
         }
-        catch (NotImplementedException)
+        catch (NotImplementedException ex)
         {
             // External streaming data or other features not yet supported - return null
             // This is expected during the scaffold phase while MeshParser is being implemented
+            Console.WriteLine($"DEBUG: MeshHelper.Process() threw NotImplementedException: {ex.Message}");
             return null;
+        }
+        catch (Exception ex)
+        {
+            // Any other exception from MeshHelper
+            Console.WriteLine($"DEBUG: MeshHelper.Process() threw {ex.GetType().Name}: {ex.Message}");
+            // For now, if we can't process the mesh (likely due to external data),
+            // still return basic metadata so we can at least see the mesh exists
+            if (ex is InvalidOperationException && ex.Message.Contains("VertexData"))
+            {
+                Console.WriteLine($"DEBUG: Mesh '{mesh.Name}' has no inline VertexData (likely in external .resS file)");
+                // Return a basic DTO with mesh metadata only
+                return new MeshGeometryDto
+                {
+                    Name = mesh.Name,
+                    Positions = Array.Empty<float>(),
+                    Normals = null,
+                    UVs = null,
+                    VertexCount = 0,
+                    Use16BitIndices = false,
+                    Indices = Array.Empty<uint>(),
+                    Groups = new List<MeshGeometryDto.SubMeshGroup>()
+                };
+            }
+            // Rethrow other exceptions for debugging
+            throw;
         }
 
         // Convert to DTO

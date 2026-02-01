@@ -142,10 +142,22 @@ public static class MeshParser
         }
 
         // Field 2: m_SubMeshes
-        if (data.TryGetValue("m_SubMeshes", out var subMeshesObj) && subMeshesObj is List<object?> subMeshesList)
+        if (data.TryGetValue("m_SubMeshes", out var subMeshesObj))
         {
-            mesh.SubMeshes = MapSubMeshes(subMeshesList);
-            Console.WriteLine($"DEBUG: Mapped {mesh.SubMeshes.Length} SubMeshes");
+            Console.WriteLine($"DEBUG: m_SubMeshes type={subMeshesObj?.GetType().Name ?? "null"}");
+            if (subMeshesObj is List<object?> subMeshesList)
+            {
+                mesh.SubMeshes = MapSubMeshes(subMeshesList);
+                Console.WriteLine($"DEBUG: Mapped {mesh.SubMeshes.Length} SubMeshes");
+            }
+            else
+            {
+                Console.WriteLine($"DEBUG: m_SubMeshes is not List<object?>, skipping");
+            }
+        }
+        else
+        {
+            Console.WriteLine($"DEBUG: m_SubMeshes key not found in data");
         }
 
         // Field 3: m_BindPose (legacy vertices/normals data)

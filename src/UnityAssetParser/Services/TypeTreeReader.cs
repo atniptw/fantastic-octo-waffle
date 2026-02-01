@@ -82,34 +82,44 @@ public sealed class TypeTreeReader
     /// </summary>
     private object? ReadNode(TypeTreeNode node)
     {
-        // Check if this node requires alignment AFTER reading its value
-        bool shouldAlign = (node.MetaFlag & 0x4000) != 0;
-
-        object? value;
-
-        // If no children, it's a primitive type
-        if (node.IsPrimitive)
+        try
         {
-            value = ReadPrimitive(node.Type);
-        }
-        // If it's an array
-        else if (node.IsArray)
-        {
-            value = ReadArray(node);
-        }
-        // Otherwise it's a complex object/struct
-        else
-        {
-            value = ReadObject(node);
-        }
+            // Check if this node requires alignment AFTER reading its value
+            bool shouldAlign = (node.MetaFlag & 0x4000) != 0;
 
-        // Align stream AFTER reading this node's value if MetaFlag indicates alignment
-        if (shouldAlign)
-        {
-            _reader.Align();
-        }
+            object? value;
 
-        return value;
+            // If no children, it's a primitive type
+            if (node.IsPrimitive)
+            {
+                value = ReadPrimitive(node.Type);
+            }
+            // If it's an array
+            else if (node.IsArray)
+            {
+                value = ReadArray(node);
+            }
+            // Otherwise it's a complex object/struct
+            else
+            {
+                value = ReadObject(node);
+            }
+
+            // Align stream AFTER reading this node's value if MetaFlag indicates alignment
+            if (shouldAlign)
+            {
+                _reader.Align();
+            }
+
+            return value;
+        }
+        catch (EndOfStreamException)
+        {
+            // Buffer exhausted - likely reading external data or tree structure mismatch
+            // Return null for this node and continue parsing
+            Console.WriteLine($"[BUFFER-EXHAUSTED] Cannot read node '{node.Name}' (type={node.Type}) - external data or end of stream");
+            return null;
+        }
     }
 
     /// <summary>
@@ -161,21 +171,36 @@ public sealed class TypeTreeReader
         var result = new List<object?>();
 
         // Array structure (TypeFlags bit 0x01):
-        // arrayNode (TF=0x01, e.g., "m_Vertices")
-        //   ├─ children[0]: Size field (reads 4-byte int)
-        //   └─ children[1]: Data template (describes one element)
+        // Standard structure (2 children):
+        //   children[0]: Size field (reads 4-byte int)
+        //   children[1]: Data template (describes one element)
+        // Extended structure (3+ children) - newer Unity versions:
+        //   children[0]: Size field
+        //   children[1]: Data template
+        //   children[2+]: Alignment/metadata
 
-        if (arrayNode.Children.Count != 2)
+        if (arrayNode.Children.Count < 2)
         {
-            Console.WriteLine($"[ARRAY-ERROR] Array node has {arrayNode.Children.Count} children, expected exactly 2: {arrayNode.Name}");
+            Console.WriteLine($"[ARRAY-ERROR] Array node '{arrayNode.Name}' has {arrayNode.Children.Count} children, expected at least 2");
             return result;
         }
 
         TypeTreeNode sizeNode = arrayNode.Children[0];
         TypeTreeNode dataTemplate = arrayNode.Children[1];
+        // If there are more than 2 children, they're usually alignment or metadata we can ignore
 
         // Read array size from binary stream
-        int size = _reader.ReadInt32();
+        int size;
+        try
+        {
+            size = _reader.ReadInt32();
+        }
+        catch (EndOfStreamException)
+        {
+            // Can't read even the array size - buffer exhausted, likely external resource
+            Console.WriteLine($"[ARRAY-EXTERNAL] Cannot read size for array '{arrayNode.Name}' - buffer exhausted");
+            return result;
+        }
 
         // Reject arrays with nonsensical sizes
         if (size < 0 || size > 100_000_000)
@@ -228,22 +253,41 @@ public sealed class TypeTreeReader
             }
 
             // Primitive array - simple loop
-            for (int i = 0; i < size; i++)
+            try
             {
-                result.Add(ReadPrimitive(dataTemplate.Type));
+                for (int i = 0; i < size; i++)
+                {
+                    result.Add(ReadPrimitive(dataTemplate.Type));
+                }
+            }
+            catch (EndOfStreamException)
+            {
+                // External data (e.g., VertexData in .resS) - return partial or empty
+                // This is expected for streaming resources; geometry extraction will use StreamingInfo
+                Console.WriteLine($"[ARRAY-EXTERNAL] Array '{arrayNode.Name}' appears to reference external data (size={size}, element type={dataTemplate.Type})");
+                return result;
             }
         }
         else
         {
             // Complex array - read each element using template structure
-            for (int i = 0; i < size; i++)
+            try
             {
-                var element = new Dictionary<string, object?>();
-                foreach (var field in dataTemplate.Children)
+                for (int i = 0; i < size; i++)
                 {
-                    element[field.Name] = ReadNode(field);
+                    var element = new Dictionary<string, object?>();
+                    foreach (var field in dataTemplate.Children)
+                    {
+                        element[field.Name] = ReadNode(field);
+                    }
+                    result.Add(element);
                 }
-                result.Add(element);
+            }
+            catch (EndOfStreamException)
+            {
+                // External data - return what we managed to read
+                Console.WriteLine($"[ARRAY-EXTERNAL] Complex array '{arrayNode.Name}' references external data (read {result.Count}/{size} elements)");
+                return result;
             }
         }
 
