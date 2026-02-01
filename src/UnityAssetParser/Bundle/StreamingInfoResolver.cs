@@ -1,3 +1,4 @@
+using System.IO;
 using UnityAssetParser.Exceptions;
 
 namespace UnityAssetParser.Bundle;
@@ -24,9 +25,29 @@ public sealed class StreamingInfoResolver
         ArgumentNullException.ThrowIfNull(region);
         ArgumentNullException.ThrowIfNull(info);
 
-        // Find node by exact path match (case-sensitive, UTF-8)
-        var node = nodes.FirstOrDefault(n => n.Path == info.Path);
-        
+        // UnityPy-style resolution: try basename and common variations
+        string basename = Path.GetFileName(info.Path);
+        if (string.IsNullOrEmpty(basename))
+        {
+            basename = info.Path;
+        }
+
+        string nameWithoutExt = Path.GetFileNameWithoutExtension(basename);
+        var possibleNames = new[]
+        {
+            basename,
+            $"{nameWithoutExt}.resource",
+            $"{nameWithoutExt}.assets.resS",
+            $"{nameWithoutExt}.resS"
+        };
+
+        // Find node by exact path match or by basename variations
+        // UnityPy approach: check if node path ends with any of the possible names
+        // Path matching is case-sensitive
+        var node = nodes.FirstOrDefault(n =>
+            n.Path == info.Path ||
+            possibleNames.Any(name => n.Path.EndsWith(name, StringComparison.Ordinal)));
+
         if (node == null)
         {
             throw new StreamingInfoException(

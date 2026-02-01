@@ -15,76 +15,8 @@ namespace UnityAssetParser.Services;
 public static class MeshParser
 {
     /// <summary>
-    /// Parses a Mesh object using direct binary reading (bypasses TypeTree).
-    /// This is the primary parsing method for extracting mesh geometry.
-    /// </summary>
-    public static Mesh? ParseBinary(
-        ReadOnlySpan<byte> objectData,
-        (int, int, int, int) version,
-        bool isBigEndian,
-        ReadOnlyMemory<byte>? resSData = null)
-    {
-        if (objectData.Length < 4)
-        {
-            return null;
-        }
-
-        try
-        {
-            using (var stream = new MemoryStream(objectData.ToArray(), false))
-            using (var reader = new EndianBinaryReader(stream, isBigEndian))
-            {
-                var mesh = new Mesh();
-
-                Console.WriteLine($"DEBUG: ParseBinary starting - objectData.Length={objectData.Length}");
-
-                // Read m_Name (string with length prefix)
-                int nameLength = reader.ReadInt32();
-                Console.WriteLine($"DEBUG: Mesh name length={nameLength}");
-                if (nameLength > 0 && nameLength < 10000)
-                {
-                    byte[] nameBytes = reader.ReadBytes(nameLength);
-                    mesh.Name = System.Text.Encoding.UTF8.GetString(nameBytes);
-                    Console.WriteLine($"DEBUG: Mesh.Name = '{mesh.Name}'");
-                    
-                    // CRITICAL: Align to 4 bytes after string data
-                    reader.Align(4);
-                }
-
-                // Read m_SubMeshes (array of SubMesh)
-                int subMeshCount = reader.ReadInt32();
-                Console.WriteLine($"DEBUG: SubMesh count={subMeshCount}");
-                if (subMeshCount > 0)
-                {
-                    mesh.SubMeshes = new SubMesh[subMeshCount];
-                    for (int i = 0; i < subMeshCount; i++)
-                    {
-                        mesh.SubMeshes[i] = new SubMesh
-                        {
-                            FirstByte = reader.ReadUInt32(),
-                            IndexCount = reader.ReadUInt32(),
-                            Topology = (MeshTopology)reader.ReadInt32()
-                        };
-                    }
-                    Console.WriteLine($"DEBUG: Read {subMeshCount} submeshes");
-                }
-
-                // TODO: Continue with remaining fields...
-                // This is a minimal scaffold - full implementation will read all Mesh fields
-                // For now, return the partial Mesh to get vertex extraction working
-
-                return mesh;
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"ERROR: MeshParser.ParseBinary failed ({ex.GetType().Name}): {ex.Message}");
-            return null;
-        }
-    }
-
-    /// <summary>
-    /// Parses a Mesh object using TypeTree-driven parsing (recommended).
+    /// Parses a Mesh object using TypeTree-driven parsing.
+    /// TypeTree provides version-specific field ordering and is the only supported approach.
     /// </summary>
     public static Mesh? ParseWithTypeTree(
         ReadOnlySpan<byte> objectData,
@@ -951,14 +883,13 @@ public static class MeshParser
 
     private static StreamingInfo? ReadStreamingInfo(EndianBinaryReader reader)
     {
-        // m_StreamData: offset (UInt64), size (uint), path (string)
+        // m_StreamData: path (string), offset (UInt64), size (uint)
         long streamPos = reader.BaseStream.Position;
+        string path = ReadAlignedString(reader);
         ulong offset = reader.ReadUInt64();
         uint size = reader.ReadUInt32();
-        string path = ReadAlignedString(reader);
-        reader.Align();
 
-        Console.WriteLine($"DEBUG: ReadStreamingInfo - offset={offset}, size={size}, path='{path}', pos={streamPos}");
+        Console.WriteLine($"DEBUG: ReadStreamingInfo - path='{path}', offset={offset}, size={size}, pos={streamPos}");
 
         if (string.IsNullOrEmpty(path))
         {

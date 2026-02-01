@@ -15,10 +15,10 @@ try
     Console.WriteLine("Attempting to extract meshes...");
     var service = new MeshExtractionService();
     var meshes = service.ExtractMeshes(bundleData);
-    
+
     Console.WriteLine($"✓ SUCCESS: Extracted {meshes.Count} meshes");
     Console.WriteLine();
-    
+
     foreach (var mesh in meshes)
     {
         Console.WriteLine($"Mesh: {mesh.Name}");

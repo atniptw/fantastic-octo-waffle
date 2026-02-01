@@ -226,14 +226,26 @@ public sealed class SerializedFile
         // Validate header consistency
         ValidateHeader(header, buffer.Length);
 
-        // Step 2: Create endian-aware reader
+        // Step 2: Determine metadata endianness (v22+ stores this byte at metadata start)
+        if (header.Version >= 22 && header.Endianness > 1)
+        {
+            int metadataEndianByte = stream.ReadByte();
+            if (metadataEndianByte < 0)
+            {
+                throw new CorruptedHeaderException("Unexpected EOF while reading metadata endianness byte");
+            }
+
+            header.Endianness = (byte)metadataEndianByte;
+        }
+
+        // Step 3: Create endian-aware reader for metadata/object parsing
         // The header.Endianness tells us the endianness for metadata and objects
         bool isBigEndian = header.Endianness == 1;
-        // Note: stream is already positioned after header by ParseHeader
+        // Note: stream is already positioned after header (and metadata endianness byte for v22+)
         using var endianReader = new EndianBinaryReader(stream, isBigEndian);
 
-        // Note: For version 22+, metadata starts immediately after the extended header.
-        // Do NOT consume additional bytes here; the first metadata field is the Unity version string.
+        // Note: For version 22+, metadata starts immediately after the extended header + endianness byte.
+        // The first metadata field is the Unity version string.
 
         // Step 3: Parse metadata region following UnityPy's exact order
         // See UnityPy/files/SerializedFile.py lines 270-280

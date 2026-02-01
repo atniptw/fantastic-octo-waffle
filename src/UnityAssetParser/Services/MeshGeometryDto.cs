@@ -46,6 +46,34 @@ public sealed class MeshGeometryDto
     public List<SubMeshGroup> Groups { get; set; } = new();
 
     /// <summary>
+    /// Gets or sets the second UV set (TexCoord1) as a flat Float32 array (optional).
+    /// Format: [u0, v0, u1, v1, ...]
+    /// Length: VertexCount * 2, or null if not present.
+    /// </summary>
+    public float[]? UV2 { get; set; }
+
+    /// <summary>
+    /// Gets or sets the third UV set (TexCoord2) as a flat Float32 array (optional).
+    /// Format: [u0, v0, u1, v1, ...]
+    /// Length: VertexCount * 2, or null if not present.
+    /// </summary>
+    public float[]? UV3 { get; set; }
+
+    /// <summary>
+    /// Gets or sets the vertex colors as a flat Float32 array (optional).
+    /// Format: [r0, g0, b0, a0, r1, g1, b1, a1, ...]
+    /// Length: VertexCount * 4, or null if not present.
+    /// </summary>
+    public float[]? Colors { get; set; }
+
+    /// <summary>
+    /// Gets or sets the vertex tangents as a flat Float32 array (optional).
+    /// Format: [x0, y0, z0, w0, x1, y1, z1, w1, ...]
+    /// Length: VertexCount * 4, or null if not present.
+    /// </summary>
+    public float[]? Tangents { get; set; }
+
+    /// <summary>
     /// Gets or sets the vertex count.
     /// </summary>
     public int VertexCount { get; set; }

@@ -138,37 +138,23 @@ public sealed class MeshExtractionService
         Mesh? mesh;
         try
         {
-            if (typeTreeNodes != null && typeTreeNodes.Count > 0)
+            // TypeTree-driven parsing is the only supported approach.
+            // TypeTree provides version-specific field ordering.
+            if (typeTreeNodes == null || typeTreeNodes.Count == 0)
             {
-                // Use TypeTree-driven parsing - respects dynamic field ordering per version
-                Console.WriteLine($"DEBUG: Using TypeTree parsing ({typeTreeNodes.Count} nodes)");
-                mesh = MeshParser.ParseWithTypeTree(objectData.Span, typeTreeNodes, version, isBigEndian, resSData);
-                
-                // If TypeTree parsing resulted in empty mesh (likely due to buffer exhaustion),
-                // fall back to binary parser which might extract at least some data
-                if (mesh != null && string.IsNullOrEmpty(mesh.Name) && (mesh.SubMeshes == null || mesh.SubMeshes.Length == 0))
-                {
-                    Console.WriteLine($"DEBUG: TypeTree parsing produced empty mesh, trying binary parser fallback");
-                    var binaryMesh = MeshParser.ParseBinary(objectData.Span, version, isBigEndian, resSData);
-                    if (binaryMesh != null && !string.IsNullOrEmpty(binaryMesh.Name))
-                    {
-                        mesh = binaryMesh;
-                    }
-                }
+                Console.WriteLine($"DEBUG: No TypeTree available for Mesh object, skipping");
+                return null;
             }
-            else
-            {
-                // Fallback: try binary parsing if TypeTree unavailable
-                Console.WriteLine($"DEBUG: No TypeTree available, using binary parsing");
-                mesh = MeshParser.ParseBinary(objectData.Span, version, isBigEndian, resSData);
-            }
+
+            Console.WriteLine($"DEBUG: Using TypeTree parsing ({typeTreeNodes.Count} nodes)");
+            mesh = MeshParser.ParseWithTypeTree(objectData.Span, typeTreeNodes, version, isBigEndian, resSData);
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"DEBUG: MeshParser failed: {ex.GetType().Name}: {ex.Message}");
             throw;
         }
-        
+
         if (mesh == null)
         {
             // Mesh parsing not yet implemented or failed
@@ -180,7 +166,7 @@ public sealed class MeshExtractionService
 
         // Use MeshHelper to extract geometry
         var helper = new MeshHelper(mesh, version, isLittleEndian: !isBigEndian);
-        
+
         try
         {
             helper.Process();
@@ -239,12 +225,12 @@ public sealed class MeshExtractionService
                 var triangles = helper.GetTriangles();
                 var indicesList = new List<uint>();
                 int indexOffset = 0;
-                
+
                 for (int i = 0; i < triangles.Count; i++)
                 {
                     var submeshTriangles = triangles[i];
                     var indexCount = submeshTriangles.Count * 3;
-                    
+
                     // Add group metadata
                     dto.Groups.Add(new MeshGeometryDto.SubMeshGroup
                     {
@@ -252,7 +238,7 @@ public sealed class MeshExtractionService
                         Count = indexCount,
                         MaterialIndex = i
                     });
-                    
+
                     // Flatten triangles to index array
                     foreach (var tri in submeshTriangles)
                     {
@@ -260,10 +246,10 @@ public sealed class MeshExtractionService
                         indicesList.Add(tri.Item2);
                         indicesList.Add(tri.Item3);
                     }
-                    
+
                     indexOffset += indexCount;
                 }
-                
+
                 dto.Indices = indicesList.ToArray();
             }
             catch (Exception ex)

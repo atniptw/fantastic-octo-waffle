@@ -15,7 +15,7 @@ public class MeshExtractionServiceRealBundleTests
         "Fixtures",
         "RealBundles");
 
-    [Fact(Skip = "Fixture bundle data corrupted - bundle name not properly null-terminated")]
+    [Fact(Skip = "TypeTree parsing incomplete: mesh data fields empty (no positions/normals/submeshes). Investigating TypeTreeReader traversal logic.")]
     public void ExtractMeshes_CigarNeck_ExtractsMesh()
     {
         // Arrange
@@ -31,7 +31,7 @@ public class MeshExtractionServiceRealBundleTests
         Assert.NotEmpty(meshes); // Now we expect mesh extraction to work
     }
 
-    [Fact(Skip = "Fixture bundle data corrupted - bundle name not properly null-terminated")]
+    [Fact(Skip = "TypeTree parsing incomplete: mesh data fields empty (no positions/normals/submeshes). Investigating TypeTreeReader traversal logic.")]
     public void ExtractMeshes_CigarNeck_ExtractsMeshData()
     {
         // Arrange
@@ -68,7 +68,7 @@ public class MeshExtractionServiceRealBundleTests
         Assert.Equal(3, cigarMesh.Groups.Count); // 3 submeshes
     }
 
-    [Fact(Skip = "Fixture bundle data corrupted - bundle name not properly null-terminated")]
+    [Fact(Skip = "TypeTree parsing incomplete: mesh data fields empty (no positions/normals/submeshes). Investigating TypeTreeReader traversal logic.")]
     public void ExtractMeshes_ClownNoseHead_ExtractsMesh()
     {
         // Arrange
@@ -90,7 +90,7 @@ public class MeshExtractionServiceRealBundleTests
         Assert.NotEmpty(meshes);
     }
 
-    [Fact(Skip = "Fixture bundle data corrupted - bundle name not properly null-terminated")]
+    [Fact(Skip = "TypeTree parsing incomplete: mesh data fields empty (no positions/normals/submeshes). Investigating TypeTreeReader traversal logic.")]
     public void ExtractMeshes_GlassesHead_ExtractsMesh()
     {
         // Arrange
