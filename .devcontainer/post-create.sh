@@ -5,29 +5,29 @@ echo "🚀 Setting up R.E.P.O. Mod Browser dev environment..."
 
 # Install .NET Blazor WebAssembly workload
 echo "📦 Installing Blazor WebAssembly workload..."
-dotnet workload install wasm-tools
+dotnet workload install wasm-tools 2>&1 || echo "⚠️  Blazor workload installation warning (may already be installed)"
 
 # Restore .NET dependencies
 echo "📦 Restoring .NET dependencies..."
-dotnet restore
-
-# Install Cloudflare Wrangler CLI globally
-echo "📦 Installing Cloudflare Wrangler CLI..."
-npm install -g wrangler
+dotnet restore 2>&1 || { echo "❌ dotnet restore failed"; exit 1; }
 
 # Install Node.js dependencies for Cloudflare Worker
 echo "📦 Installing Cloudflare Worker dependencies..."
 cd cloudflare-worker
-npm install
+npm install 2>&1 || { echo "❌ npm install failed for worker"; exit 1; }
 cd ..
+
+# Install Cloudflare Wrangler CLI globally
+echo "📦 Installing Cloudflare Wrangler CLI..."
+npm install -g wrangler 2>&1 || { echo "❌ Wrangler CLI installation failed"; exit 1; }
 
 # Install Python dependencies for validation scripts
 echo "📦 Installing Python dependencies..."
-pip install --user UnityPy pyyaml jsonschema
+pip3 install UnityPy pyyaml jsonschema 2>&1 || echo "⚠️  Python dependencies installation warning"
 
 # Build the solution to verify setup (allow failure for now)
 echo "🔨 Building solution..."
-dotnet build || echo "⚠️  Build had errors - you may need to fix them manually"
+dotnet build 2>&1 || echo "⚠️  Build had warnings/errors - you may need to fix them manually"
 
 echo "✅ Dev environment setup complete!"
 echo ""

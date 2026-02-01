@@ -319,12 +319,13 @@ public class RenderableDetectorTests
 
         // Calculate sizes
         int headerSize = version >= 22 ? 28 : 20;
+        int prefixSize = GetMetadataPrefixSize(version);
         int typeTreeSize = 4; // Just type count (0)
         int objectCount = 1;
         int objectEntrySize = CalculateObjectEntrySize(version);
         int objectTableSize = 4 + (objectCount * objectEntrySize);
         int externalSize = 4; // Identifier count
-        int metadataSize = headerSize + typeTreeSize + objectTableSize + externalSize + 20; // Add padding
+        int metadataSize = headerSize + prefixSize + typeTreeSize + objectTableSize + externalSize + 20; // Add padding
         int objectDataSize = 100;
         int fileSize = metadataSize + objectDataSize;
 
@@ -366,14 +367,10 @@ public class RenderableDetectorTests
 
     private static void WriteMetadataWithEndianness(MemoryStream stream, uint version, bool hasMesh, bool isBigEndian)
     {
+        WriteMetadataPrefix(stream, version, isBigEndian);
+
         // Type tree (empty)
         WriteInt32(stream, 0, isBigEndian);
-
-        // Align to 4 bytes
-        while (stream.Position % 4 != 0)
-        {
-            stream.WriteByte(0);
-        }
 
         // Object table
         WriteInt32(stream, 1, isBigEndian); // Object count
@@ -471,6 +468,45 @@ public class RenderableDetectorTests
         stream.Write(bytes, 0, 2);
     }
 
+    private static int GetMetadataPrefixSize(uint version)
+    {
+        int size = 0;
+        if (version >= 7)
+        {
+            size += 1; // Empty unity version string terminator
+        }
+
+        if (version >= 8)
+        {
+            size += 4; // TargetPlatform
+        }
+
+        if (version >= 13)
+        {
+            size += 1; // EnableTypeTree
+        }
+
+        return size;
+    }
+
+    private static void WriteMetadataPrefix(MemoryStream stream, uint version, bool isBigEndian)
+    {
+        if (version >= 7)
+        {
+            stream.WriteByte(0); // Empty Unity version string
+        }
+
+        if (version >= 8)
+        {
+            WriteUInt32(stream, 0, isBigEndian); // TargetPlatform
+        }
+
+        if (version >= 13)
+        {
+            stream.WriteByte(0); // EnableTypeTree = false
+        }
+    }
+
     private static int CalculateObjectEntrySize(uint version)
     {
         int size = 0;
@@ -499,9 +535,10 @@ public class RenderableDetectorTests
         using var writer = new BinaryWriter(stream);
 
         int headerSize = version >= 22 ? 28 : 20;
+        int prefixSize = GetMetadataPrefixSize(version);
         int objectCount = 3;
         int objectEntrySize = CalculateObjectEntrySize(version);
-        int metadataSize = headerSize + 4 + (objectCount * objectEntrySize) + 4 + 20;
+        int metadataSize = headerSize + prefixSize + 4 + (objectCount * objectEntrySize) + 4 + 20;
         int fileSize = metadataSize + 300;
 
         // Header
@@ -521,11 +558,10 @@ public class RenderableDetectorTests
         writer.Write((byte)0);
         writer.Write(new byte[3]);
 
+        WriteMetadataPrefix(stream, version, isBigEndian: false);
+
         // Type tree (empty)
         writer.Write((int)0);
-
-        // Align
-        while (stream.Position % 4 != 0) writer.Write((byte)0);
 
         // Object table
         writer.Write((int)objectCount);
@@ -593,7 +629,8 @@ public class RenderableDetectorTests
         using var writer = new BinaryWriter(stream);
 
         int headerSize = version >= 22 ? 28 : 20;
-        int metadataSize = headerSize + 4 + 4 + 10;
+        int prefixSize = GetMetadataPrefixSize(version);
+        int metadataSize = headerSize + prefixSize + 4 + 4 + 10;
         int fileSize = metadataSize + 50;
 
         writer.Write((uint)metadataSize);
@@ -612,8 +649,9 @@ public class RenderableDetectorTests
         writer.Write((byte)0);
         writer.Write(new byte[3]);
 
+        WriteMetadataPrefix(stream, version, isBigEndian: false);
+
         writer.Write((int)0); // Type count
-        while (stream.Position % 4 != 0) writer.Write((byte)0);
         writer.Write((int)0); // Object count
         while (stream.Position % 4 != 0) writer.Write((byte)0);
         writer.Write((int)0); // Identifier count
@@ -637,9 +675,10 @@ public class RenderableDetectorTests
         using var writer = new BinaryWriter(stream);
 
         int headerSize = version >= 22 ? 28 : 20;
+        int prefixSize = GetMetadataPrefixSize(version);
         int objectCount = 3;
         int objectEntrySize = CalculateObjectEntrySize(version);
-        int metadataSize = headerSize + 4 + (objectCount * objectEntrySize) + 4 + 20;
+        int metadataSize = headerSize + prefixSize + 4 + (objectCount * objectEntrySize) + 4 + 20;
         int fileSize = metadataSize + 300;
 
         writer.Write((uint)metadataSize);
@@ -658,9 +697,10 @@ public class RenderableDetectorTests
         writer.Write((byte)0);
         writer.Write(new byte[3]);
 
+        WriteMetadataPrefix(stream, version, isBigEndian: false);
+
         writer.Write((int)0); // Type tree
 
-        while (stream.Position % 4 != 0) writer.Write((byte)0);
         writer.Write((int)objectCount);
 
         // All Meshes
@@ -728,9 +768,10 @@ public class RenderableDetectorTests
         using var writer = new BinaryWriter(stream);
 
         int headerSize = version >= 22 ? 28 : 20;
+        int prefixSize = GetMetadataPrefixSize(version);
         int objectCount = 2;
         int objectEntrySize = CalculateObjectEntrySize(version);
-        int metadataSize = headerSize + 4 + (objectCount * objectEntrySize) + 4 + 20;
+        int metadataSize = headerSize + prefixSize + 4 + (objectCount * objectEntrySize) + 4 + 20;
         int fileSize = metadataSize + 200;
 
         writer.Write((uint)metadataSize);
@@ -749,8 +790,9 @@ public class RenderableDetectorTests
         writer.Write((byte)0);
         writer.Write(new byte[3]);
 
+        WriteMetadataPrefix(stream, version, isBigEndian: false);
+
         writer.Write((int)0); // Type tree
-        while (stream.Position % 4 != 0) writer.Write((byte)0);
         writer.Write((int)objectCount);
 
         // Mesh

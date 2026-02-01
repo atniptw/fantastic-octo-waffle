@@ -805,12 +805,12 @@ public static class MeshParser
         if (dataSize > 0)
         {
             vertexData.DataSize = reader.ReadBytes((int)dataSize);
-            reader.Align(4);  // CRITICAL: Align after byte array read
         }
         else
         {
             vertexData.DataSize = Array.Empty<byte>();
         }
+        reader.Align(4);  // CRITICAL: Align after byte array read
 
         return vertexData;
     }

@@ -28,6 +28,22 @@
       }
     },
     {
+      "label": "Run Worker (Dev)",
+      "type": "shell",
+      "command": "npm",
+      "args": ["run", "dev"],
+      "options": {
+        "cwd": "${workspaceFolder}/cloudflare-worker"
+      },
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
       "label": "Build (Debug)",
       "type": "shell",
       "command": "dotnet build",

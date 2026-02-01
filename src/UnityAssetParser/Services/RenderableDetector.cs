@@ -119,8 +119,22 @@ public static class RenderableDetector
         // Skip past header
         SkipHeader(endianReader, header.Version);
 
-        // For supported versions (14-30), type tree is always enabled
-        const bool enableTypeTree = true;
+        // Metadata prefix (Unity version string, target platform, EnableTypeTree)
+        if (header.Version >= 7)
+        {
+            endianReader.ReadUtf8NullTerminated();
+        }
+
+        if (header.Version >= 8)
+        {
+            endianReader.ReadUInt32();
+        }
+
+        bool enableTypeTree = true;
+        if (header.Version >= 13)
+        {
+            enableTypeTree = endianReader.ReadBoolean();
+        }
 
         // Step 3: Skip type tree
         SkipTypeTree(endianReader, header.Version, enableTypeTree);

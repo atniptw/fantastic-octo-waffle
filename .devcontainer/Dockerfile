@@ -1,13 +1,14 @@
-FROM mcr.microsoft.com/devcontainers/dotnet:1-9.0
+FROM mcr.microsoft.com/devcontainers/dotnet:1-10.0
 
-# Remove problematic Yarn repository that has expired GPG key
-RUN rm -f /etc/apt/sources.list.d/yarn.list && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
-
-# Ensure vscode user exists and has proper permissions
+# Switch to root for system setup
 USER root
-RUN usermod -s /bin/bash vscode 2>/dev/null || true
 
-# Switch to vscode user
+# Remove problematic Yarn repository before features run (prevents GPG key errors in Python feature)
+RUN rm -f /etc/apt/sources.list.d/yarn.list /etc/apt/sources.list.d/*.save && \
+    apt-get update && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* && \
+    usermod -s /bin/bash vscode 2>/dev/null || true
+
+# Switch back to vscode user
 USER vscode

@@ -22,10 +22,10 @@
   "meshes": [
     {
       "name": "ClownNose\u5c0f\u4e11\u9f3b\u5b50",
-      "vertex_count": 0,
+      "vertex_count": 119,
       "index_count": 540,
-      "has_normals": false,
-      "has_uv0": false,
+      "has_normals": true,
+      "has_uv0": true,
       "object_path": "Object -1301659394590126254"
     }
   ],

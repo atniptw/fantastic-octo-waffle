@@ -184,7 +184,7 @@ public sealed class MeshHelper
         // Handle streaming data from external .resS file
         if (_mesh.StreamData != null && !string.IsNullOrEmpty(_mesh.StreamData.Path))
         {
-            if (_streamingResolver != null && _nodes != null && _dataRegion != null && vertexData != null && vertexData.DataSize == null)
+            if (_streamingResolver != null && _nodes != null && _dataRegion != null && vertexData != null && (vertexData.DataSize == null || vertexData.DataSize.Length == 0))
             {
                 try
                 {

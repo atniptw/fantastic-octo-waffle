@@ -107,9 +107,10 @@ def extract_bundle_snapshot(bundle_path: str) -> dict:
 
 def main():
     """Generate reference snapshots for all real bundles."""
-    
-    fixture_dir = Path("Tests/UnityAssetParser.Tests/Fixtures/RealBundles")
-    output_dir = Path("Tests/UnityAssetParser.Tests/Fixtures/Snapshots")
+
+    repo_root = Path(__file__).resolve().parents[1]
+    fixture_dir = repo_root / "Tests/UnityAssetParser.Tests/Fixtures/RealBundles"
+    output_dir = repo_root / "Tests/UnityAssetParser.Tests/Fixtures/Snapshots"
     output_dir.mkdir(parents=True, exist_ok=True)
     
     bundles = [
