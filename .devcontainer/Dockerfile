@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/devcontainers/dotnet:1-10.0
+FROM mcr.microsoft.com/devcontainers/dotnet:1-9.0
 
 # Remove problematic Yarn repository that has expired GPG key
 RUN rm -f /etc/apt/sources.list.d/yarn.list && \
