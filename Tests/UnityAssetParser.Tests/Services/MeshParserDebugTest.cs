@@ -14,7 +14,7 @@ namespace UnityAssetParser.Tests.Services;
 /// </summary>
 public class MeshParserDebugTest
 {
-    [Fact(Skip = "Fixture bundle data corrupted - bundle name not properly null-terminated")]
+    [Fact]
     public void ParseMeshFromCigarNeck_ShouldExtractMeshData()
     {
         // Load bundle

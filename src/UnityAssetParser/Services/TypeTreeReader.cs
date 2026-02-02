@@ -66,19 +66,14 @@ public sealed class TypeTreeReader
         if (_root == null)
             return new Dictionary<string, object?>();
 
-        Console.WriteLine($"[TYPETREE] ReadObject starting - stream position={_reader.BaseStream.Position}, length={_reader.BaseStream.Length}");
-
         // Read all children of root (skip the root itself)
         var result = new Dictionary<string, object?>();
         foreach (var child in _root.Children)
         {
-            Console.WriteLine($"[TYPETREE] Reading field '{child.Name}' (type={child.Type}) at position={_reader.BaseStream.Position}");
             var value = ReadNode(child);
             result[child.Name] = value;
-            Console.WriteLine($"[TYPETREE] Field '{child.Name}' done, value={(value != null ? value.GetType().Name : "null")}, position={_reader.BaseStream.Position}");
         }
 
-        Console.WriteLine($"[TYPETREE] ReadObject complete - final position={_reader.BaseStream.Position}");
         return result;
     }
 
@@ -94,22 +89,22 @@ public sealed class TypeTreeReader
 
             object? value;
 
-            // Special case: string types are primitive even if they have children (the "Array" child)
+            // Special case: strings are handled directly, not recursively
             if (node.Type == "string")
             {
                 value = ReadAlignedString();
             }
-            // If no children, it's a primitive type
+            // If primitive
             else if (node.IsPrimitive)
             {
                 value = ReadPrimitive(node.Type);
             }
-            // If it's an array
+            // If array
             else if (node.IsArray)
             {
                 value = ReadArray(node);
             }
-            // Otherwise it's a complex object/struct
+            // Otherwise complex struct
             else
             {
                 value = ReadObject(node);
@@ -127,7 +122,6 @@ public sealed class TypeTreeReader
         {
             // Buffer exhausted - likely reading external data or tree structure mismatch
             // Return null for this node and continue parsing
-            Console.WriteLine($"[BUFFER-EXHAUSTED] Cannot read node '{node.Name}' (type={node.Type}) - external data or end of stream");
             return null;
         }
     }
@@ -181,35 +175,61 @@ public sealed class TypeTreeReader
         var result = new List<object?>();
 
         // Array structure (TypeFlags bit 0x01):
-        // Standard structure (2 children):
-        //   children[0]: Size field (reads 4-byte int)
-        //   children[1]: Data template (describes one element)
-        // Extended structure (3+ children) - newer Unity versions:
-        //   children[0]: Size field
+        // The first child is sometimes wrapped in an "Array" node that acts as a container.
+        // Look for the actual data template node (first non-wrapper child that describes elements)
+        // and read the size directly.
+        //
+        // Structure variations:
+        // Standard (older Unity):
+        //   children[0]: Size field (primitive int)
         //   children[1]: Data template
-        //   children[2+]: Alignment/metadata
+        // Wrapper (newer Unity 2022.3):
+        //   children[0]: Array wrapper node (IsArray=True, contains nothing useful)
+        //   children[1]: Data template (element structure)
 
         if (arrayNode.Children.Count < 2)
         {
-            Console.WriteLine($"[ARRAY-ERROR] Array node '{arrayNode.Name}' has {arrayNode.Children.Count} children, expected at least 2");
             return result;
         }
 
-        TypeTreeNode sizeNode = arrayNode.Children[0];
-        TypeTreeNode dataTemplate = arrayNode.Children[1];
-        // If there are more than 2 children, they're usually alignment or metadata we can ignore
+        TypeTreeNode dataTemplate = null;
+        
+        // UnityPy algorithm (from TypeTreeHelper.py):
+        // For vectors, the structure is:
+        //   m_SubMeshes (parent)
+        //   └─ children[0]: Array container with the actual element type
+        //      └─ children[1]: The data type (e.g., SubMesh)
+        // So we need to use children[0].children[1] as the data template
+        
+        if (arrayNode.Children.Count < 1)
+        {
+            return result;
+        }
+
+        var arrayContainer = arrayNode.Children[0];
+
+        if (arrayContainer.Children.Count < 2)
+        {
+            return result;
+        }
+
+        // The data template is at children[0].children[1]
+        dataTemplate = arrayContainer.Children[1];
+
+        if (dataTemplate == null)
+        {
+            return result;
+        }
 
         // Read array size from binary stream
         int size;
         try
         {
             size = _reader.ReadInt32();
-            Console.WriteLine($"[ARRAY-SIZE] Array '{arrayNode.Name}' size={size} (4-byte count), dataTemplate.Type='{dataTemplate.Type}', dataTemplate.ByteSize={dataTemplate.ByteSize}, children={dataTemplate.Children.Count}");
         }
         catch (EndOfStreamException)
         {
             // Can't read even the array size - buffer exhausted, likely external resource
-            Console.WriteLine($"[ARRAY-EXTERNAL] Cannot read size for array '{arrayNode.Name}' - buffer exhausted");
             return result;
         }
 
@@ -275,7 +295,6 @@ public sealed class TypeTreeReader
             {
                 // External data (e.g., VertexData in .resS) - return partial or empty
                 // This is expected for streaming resources; geometry extraction will use StreamingInfo
-                Console.WriteLine($"[ARRAY-EXTERNAL] Array '{arrayNode.Name}' appears to reference external data (size={size}, element type={dataTemplate.Type})");
                 return result;
             }
         }
@@ -297,7 +316,6 @@ public sealed class TypeTreeReader
             catch (EndOfStreamException)
             {
                 // External data - return what we managed to read
-                Console.WriteLine($"[ARRAY-EXTERNAL] Complex array '{arrayNode.Name}' references external data (read {result.Count}/{size} elements)");
                 return result;
             }
         }
@@ -335,6 +353,7 @@ public sealed class TypeTreeReader
         byte[] bytes = _reader.ReadBytes(length);
         _reader.Align();
 
-        return Encoding.UTF8.GetString(bytes);
+        string result = Encoding.UTF8.GetString(bytes);
+        return result;
     }
 }

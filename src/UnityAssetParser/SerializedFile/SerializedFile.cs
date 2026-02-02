@@ -221,7 +221,6 @@ public sealed class SerializedFile
 
         // Step 1: Parse header (determines version and endianness)
         var header = ParseHeader(reader);
-        Console.WriteLine($"DEBUG: SF Header Version={header.Version}, Endian={(header.Endianness == 1 ? "BE" : "LE")}, MetadataSize={header.MetadataSize}, FileSize={header.FileSize}, DataOffset={header.DataOffset}");
 
         // Validate header consistency
         ValidateHeader(header, buffer.Length);
@@ -254,14 +253,12 @@ public sealed class SerializedFile
         if (header.Version >= 7)
         {
             header.UnityVersionString = endianReader.ReadUtf8NullTerminated();
-            Console.WriteLine($"DEBUG: UnityVersion='{header.UnityVersionString}'");
         }
 
         // Read target platform if version >= 8
         if (header.Version >= 8)
         {
             header.TargetPlatform = endianReader.ReadUInt32();
-            Console.WriteLine($"DEBUG: TargetPlatform={header.TargetPlatform}");
         }
 
         // Read EnableTypeTree flag if version >= 13
@@ -270,17 +267,13 @@ public sealed class SerializedFile
         {
             enableTypeTree = endianReader.ReadBoolean();
             header.EnableTypeTree = enableTypeTree;
-            Console.WriteLine($"DEBUG: EnableTypeTree={enableTypeTree}");
         }
 
         // Step 4: Parse type tree
         var typeTree = ParseTypeTree(endianReader, header.Version, enableTypeTree);
-        Console.WriteLine($"DEBUG: After TypeTree parse, position={endianReader.Position}");
 
         // Step 5: Parse object table (do NOT align before reading count)
-        long posBeforeObj = endianReader.Position;
         var objects = ParseObjectTable(endianReader, header.Version);
-        Console.WriteLine($"DEBUG: ObjectTable at pos={posBeforeObj}, count={objects.Count}");
 
         // Step 6: Resolve ClassIds for objects
         ResolveClassIds(objects, typeTree);
@@ -586,9 +579,7 @@ public sealed class SerializedFile
         {
             try
             {
-                Console.WriteLine($"DEBUG: About to parse type {i} at pos={reader.Position}");
                 var type = ParseSerializedType(reader, version, enableTypeTree);
-                Console.WriteLine($"DEBUG: Finished parsing type {i} at pos={reader.Position}");
                 types.Add(type);
             }
             catch (EndOfStreamException ex)
@@ -609,14 +600,10 @@ public sealed class SerializedFile
     /// <param name="isRefType">True if parsing a ref type (for v>=20 ref_types list)</param>
     private static SerializedType ParseSerializedType(EndianBinaryReader reader, uint version, bool enableTypeTree, bool isRefType = false)
     {
-        long startPos = reader.BaseStream.Position;
-        Console.WriteLine($"DEBUG: ParseSerializedType starting at pos={startPos}, isRefType={isRefType}");
-
         var type = new SerializedType
         {
             ClassId = reader.ReadInt32()
         };
-        Console.WriteLine($"DEBUG: ClassId={type.ClassId}");
 
         if (version >= 16)
         {
@@ -665,14 +652,11 @@ public sealed class SerializedFile
                 type.ClassName = reader.ReadUtf8NullTerminated();
                 type.NameSpace = reader.ReadUtf8NullTerminated();
                 type.AssemblyName = reader.ReadUtf8NullTerminated();
-                Console.WriteLine($"DEBUG: RefType metadata: {type.ClassName} ({type.NameSpace}.{type.AssemblyName})");
             }
             else
             {
                 // Regular types: read type dependencies array
-                long depCountPos = reader.BaseStream.Position;
                 int depCount = reader.ReadInt32();
-                Console.WriteLine($"DEBUG: TypeDependencies at pos={depCountPos}, count={depCount}");
                 if (depCount > 0)
                 {
                     var deps = new int[depCount];
@@ -682,7 +666,6 @@ public sealed class SerializedFile
                     }
                     type.TypeDependencies = deps;
                 }
-                Console.WriteLine($"DEBUG: After TypeDependencies, pos={reader.BaseStream.Position}");
             }
         }
 
@@ -694,9 +677,6 @@ public sealed class SerializedFile
         // CRITICAL: TypeTree has TWO formats depending on version (UnityPy: SerializedFile.py#L134-135)
         // - Legacy format (v < 10): Text-based null-terminated strings, completely different struct
         // - Blob format (v >= 12 or v == 10): Binary struct with string offsets (packed array)
-
-        long startPos = reader.Position;
-        Console.WriteLine($"DEBUG: ParseTypeTreeNodes at pos={startPos}, version={version}");
 
         // Determine which format to use
         bool usesBlobFormat = version >= 12 || version == 10;
@@ -722,8 +702,6 @@ public sealed class SerializedFile
         int nodeCount = reader.ReadInt32();
         int stringBufferSize = reader.ReadInt32();
 
-        Console.WriteLine($"DEBUG: ParseTypeTreeNodesBlob at pos={startPos}, nodeCount={nodeCount}, stringBufSize={stringBufferSize}");
-
         // Handle empty node lists - but still need to consume the data if present
         if (nodeCount == 0)
         {
@@ -732,7 +710,6 @@ public sealed class SerializedFile
             if (stringBufferSize > 0)
             {
                 reader.ReadBytes(stringBufferSize);
-                Console.WriteLine($"DEBUG: Skipped {stringBufferSize} bytes of empty string buffer");
             }
             return new List<TypeTreeNode>();
         }
@@ -744,16 +721,10 @@ public sealed class SerializedFile
 
         // Read all node structs
         int expectedNodeDataSize = nodeStructSize * nodeCount;
-        Console.WriteLine($"DEBUG: About to read {expectedNodeDataSize} bytes of node data (nodeStructSize={nodeStructSize}, nodeCount={nodeCount})");
         var nodeData = reader.ReadBytes(expectedNodeDataSize);
-        Console.WriteLine($"DEBUG: Actually read {nodeData.Length} bytes of node data");
 
         // Read string buffer
-        Console.WriteLine($"DEBUG: About to read {stringBufferSize} bytes of string buffer");
         var stringBuffer = reader.ReadBytes(stringBufferSize);
-        Console.WriteLine($"DEBUG: Actually read {stringBuffer.Length} bytes of string buffer");
-
-        Console.WriteLine($"DEBUG: After reading TypeTree blob, pos={reader.Position}");
 
         // Parse node structs into TypeTreeNode objects
         var nodes = new List<TypeTreeNode>(nodeCount);
@@ -886,12 +857,9 @@ public sealed class SerializedFile
                 if ((int)reader.BaseStream.Position == startNodePos)
                     break;
             }
-
-            Console.WriteLine($"DEBUG: ParseTypeTreeNodesLegacy read {nodes.Count} nodes (v{version})");
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            Console.WriteLine($"DEBUG: Error parsing legacy TypeTree nodes: {ex.Message}");
             // Return what we got so far
         }
 
@@ -940,7 +908,6 @@ public sealed class SerializedFile
     private static List<LocalSerializedObjectIdentifier> ParseScriptTypes(EndianBinaryReader reader, uint version)
     {
         int scriptCount = reader.ReadInt32();
-        Console.WriteLine($"DEBUG: Parsing {scriptCount} script types (v{version})");
 
         var scriptTypes = new List<LocalSerializedObjectIdentifier>(scriptCount);
         for (int i = 0; i < scriptCount; i++)
@@ -975,12 +942,10 @@ public sealed class SerializedFile
     private static List<SerializedType> ParseRefTypes(EndianBinaryReader reader, uint version, bool enableTypeTree)
     {
         int refTypeCount = reader.ReadInt32();
-        Console.WriteLine($"DEBUG: Parsing {refTypeCount} ref types (v{version}) at pos={reader.Position}");
 
         // Sanity check - refTypeCount should be reasonable
         if (refTypeCount < 0 || refTypeCount > 100000)
         {
-            Console.WriteLine($"DEBUG: WARNING - RefTypeCount {refTypeCount} seems invalid, treating as 0");
             return new List<SerializedType>();
         }
 
@@ -1002,7 +967,6 @@ public sealed class SerializedFile
         if (version >= 7 && version < 14)
         {
             int bigIdEnabled = reader.ReadInt32();
-            Console.WriteLine($"DEBUG: BigIdEnabled={bigIdEnabled} (v{version})");
         }
 
         int objectCount = reader.ReadInt32();
@@ -1033,10 +997,6 @@ public sealed class SerializedFile
 
             // TypeId
             obj.TypeId = reader.ReadInt32();
-            if (i < 3)
-            {
-                Console.WriteLine($"DEBUG: Object[{i}] TypeId={obj.TypeId}, PathId={obj.PathId}, ByteStart={obj.ByteStart}, ByteSize={obj.ByteSize}");
-            }
 
             // NOTE: For version >= 14, there are NO additional fields after TypeId.
             // The fields below are for OLDER versions only, and our parser only supports v9+
@@ -1072,7 +1032,6 @@ public sealed class SerializedFile
                 // treat TypeId as ClassId directly (fallback for hash-based lookup)
                 // This assumes TypeId might already BE a ClassId in some cases
                 obj.ClassId = obj.TypeId;
-                Console.WriteLine($"DEBUG: Resolved TypeId={obj.TypeId} as ClassId (no index match, using directly)");
             }
             else
             {
@@ -1169,11 +1128,6 @@ public sealed class SerializedFile
         // A child has level = parent.level + 1
         for (int i = 0; i < flatNodes.Count; i++)
         {
-            if (i % 500 == 0 && i > 0)
-            {
-                Console.WriteLine($"[BuildTypeTree] Processed {i}/{flatNodes.Count} nodes...");
-            }
-
             var parentNode = flatNodes[i];
             int parentLevel = parentNode.Level;
             int childLevel = parentLevel + 1;
