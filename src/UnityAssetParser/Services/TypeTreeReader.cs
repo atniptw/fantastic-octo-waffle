@@ -180,46 +180,60 @@ public sealed class TypeTreeReader
         var result = new List<object?>();
 
         // Array structure (TypeFlags bit 0x01):
-        // The first child is sometimes wrapped in an "Array" node that acts as a container.
-        // Look for the actual data template node (first non-wrapper child that describes elements)
-        // and read the size directly.
+        // The first child is usually an "Array" wrapper node.
+        // The array size is read from the binary stream, not from TypeTree.
+        // The data template describes the element structure.
         //
         // Structure variations:
         // Standard (older Unity):
-        //   children[0]: Size field (primitive int)
-        //   children[1]: Data template
+        //   children[0]: "Array" wrapper → children[1]: Data template
         // Wrapper (newer Unity 2022.3):
-        //   children[0]: Array wrapper node (IsArray=True, contains nothing useful)
-        //   children[1]: Data template (element structure)
+        //   children[0]: "Array" wrapper → children[0]: Data template
+        // Direct (some versions):
+        //   children[1]: Data template directly
 
-        if (arrayNode.Children.Count < 2)
-        {
-            return result;
-        }
-
-        TypeTreeNode dataTemplate = null;
-        
-        // UnityPy algorithm (from TypeTreeHelper.py):
-        // For vectors, the structure is:
-        //   m_SubMeshes (parent)
-        //   └─ children[0]: Array container with the actual element type
-        //      └─ children[1]: The data type (e.g., SubMesh)
-        // So we need to use children[0].children[1] as the data template
-        
         if (arrayNode.Children.Count < 1)
         {
             return result;
         }
 
+        TypeTreeNode? dataTemplate = null;
+        
+        // UnityPy algorithm (from TypeTreeHelper.py):
+        // For vectors, the structure is:
+        //   m_SubMeshes (parent)
+        //   └─ children[0]: Array container (type="Array")
+        //      └─ children[0]: Size (int) - OPTIONAL, size is read from binary stream
+        //      └─ children[1]: The data template (e.g., SubMesh)
+        //
+        // Two cases:
+        // 1. arrayNode.Children[0] is "Array" wrapper with 2+ children: use children[1] as template
+        // 2. arrayNode.Children[0] is "Array" wrapper with 1 child: use children[0] as template
+        // 3. arrayNode.Children[1] exists and is not "size": use it directly
+        
         var arrayContainer = arrayNode.Children[0];
 
-        if (arrayContainer.Children.Count < 2)
+        // Determine data template based on array container structure
+        if (arrayContainer.Type == "Array" && arrayContainer.Children.Count >= 2)
         {
+            // Case 1: Standard structure with size + data template
+            dataTemplate = arrayContainer.Children[1];
+        }
+        else if (arrayContainer.Type == "Array" && arrayContainer.Children.Count == 1)
+        {
+            // Case 2: Only data template, no explicit size field
+            dataTemplate = arrayContainer.Children[0];
+        }
+        else if (arrayNode.Children.Count >= 2)
+        {
+            // Case 3: Fallback - second child might be the template directly
+            dataTemplate = arrayNode.Children[1];
+        }
+        else
+        {
+            // Cannot determine structure - return empty
             return result;
         }
-
-        // The data template is at children[0].children[1]
-        dataTemplate = arrayContainer.Children[1];
 
         if (dataTemplate == null)
         {
