@@ -631,15 +631,17 @@ public sealed class SerializedFile
         }
 
         // Read type tree nodes if enabled (lines 135-142)
+        // AssetStudio keeps nodes as flat list - no tree building during parse
         if (enableTypeTree)
         {
             var nodes = ParseTypeTreeNodes(reader, version);
             type.Nodes = nodes;
 
-            // Build hierarchical tree from flat list (skip if nodes is empty)
+            // Store root node reference (first node) without building tree hierarchy
+            // Tree hierarchy will be built lazily by TypeTreeReader when needed
             if (nodes.Count > 0)
             {
-                type.TreeRoot = BuildTypeTree(nodes);
+                type.TreeRoot = nodes[0];
             }
         }
 
@@ -683,13 +685,13 @@ public sealed class SerializedFile
 
         if (usesBlobFormat)
         {
-            return ParseTypeTreeNodesBlob(reader, version, startPos);
+            return ParseTypeTreeNodesBlob(reader, version);
         }
         else
         {
             // Legacy format for v < 10 (but v == 10 uses blob)
             // This handles v0-9 (very old Unity versions)
-            return ParseTypeTreeNodesLegacy(reader, version, startPos);
+            return ParseTypeTreeNodesLegacy(reader, version);
         }
     }
 
@@ -697,7 +699,7 @@ public sealed class SerializedFile
     /// Parses blob format TypeTree (v >= 12 or v == 10).
     /// Binary struct array with string offset pool.
     /// </summary>
-    private static List<TypeTreeNode> ParseTypeTreeNodesBlob(EndianBinaryReader reader, uint version, long startPos)
+    private static List<TypeTreeNode> ParseTypeTreeNodesBlob(EndianBinaryReader reader, uint version)
     {
         int nodeCount = reader.ReadInt32();
         int stringBufferSize = reader.ReadInt32();
@@ -777,7 +779,7 @@ public sealed class SerializedFile
     /// Text-based format with null-terminated strings and different field order.
     /// Port of UnityPy: TypeTreeNode.py#L248-306 (parse method for legacy format).
     /// </summary>
-    private static List<TypeTreeNode> ParseTypeTreeNodesLegacy(EndianBinaryReader reader, uint version, long startPos)
+    private static List<TypeTreeNode> ParseTypeTreeNodesLegacy(EndianBinaryReader reader, uint version)
     {
         var nodes = new List<TypeTreeNode>();
 

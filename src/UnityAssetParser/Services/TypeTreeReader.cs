@@ -22,7 +22,7 @@ public sealed class TypeTreeReader
 
     /// <summary>
     /// Creates a TypeTreeReader from a flat list (for backwards compatibility).
-    /// Converts flat list to tree structure.
+    /// Converts flat list to tree structure once, following AssetStudio approach.
     /// </summary>
     public static TypeTreeReader CreateFromFlatList(EndianBinaryReader reader, IReadOnlyList<TypeTreeNode> nodes)
     {
@@ -32,23 +32,28 @@ public sealed class TypeTreeReader
         {
             root = nodes[0];
 
-            // Rebuild children for each node (in case it wasn't done during parsing)
-            for (int i = 0; i < nodes.Count; i++)
+            // Build tree hierarchy if not already built
+            // Check if root already has children to avoid duplicate building
+            if (root.Children.Count == 0)
             {
-                var parentNode = nodes[i];
-                int parentLevel = parentNode.Level;
-                int childLevel = parentLevel + 1;
-
-                for (int j = i + 1; j < nodes.Count; j++)
+                // Build children for each node based on level (AssetStudio approach)
+                for (int i = 0; i < nodes.Count; i++)
                 {
-                    var potentialChild = nodes[j];
+                    var parentNode = nodes[i];
+                    int parentLevel = parentNode.Level;
+                    int childLevel = parentLevel + 1;
 
-                    if (potentialChild.Level <= parentLevel)
-                        break;
-
-                    if (potentialChild.Level == childLevel)
+                    for (int j = i + 1; j < nodes.Count; j++)
                     {
-                        parentNode.Children.Add(potentialChild);
+                        var potentialChild = nodes[j];
+
+                        if (potentialChild.Level <= parentLevel)
+                            break;
+
+                        if (potentialChild.Level == childLevel)
+                        {
+                            parentNode.Children.Add(potentialChild);
+                        }
                     }
                 }
             }
