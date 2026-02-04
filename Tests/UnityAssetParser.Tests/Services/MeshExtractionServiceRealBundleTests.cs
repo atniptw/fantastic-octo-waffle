@@ -105,18 +105,22 @@ public class MeshExtractionServiceRealBundleTests
         Assert.Equal(220 * 3, cigarMesh.Positions.Length); // 220 vertices * 3 floats each
         Assert.NotNull(cigarMesh.Indices);
         
-        // TODO: Validate index count - current mismatch suggests IndexBuffer parsing issue
+        // TODO: Validate exact index count - current mismatch suggests IndexBuffer parsing issue
         // Expected: 936 (from UnityPy m_IndexBuffer length)
         // Actual: 468 (half of expected)
         // This suggests either:
         //   1. IndexBuffer is being read as UInt16 when it should be bytes
         //   2. Triangle extraction logic is deduplicating indices
         //   3. UnityPy count includes padding/alignment bytes
-        // For now, skip this assertion until IndexBuffer parsing is verified
-        // Assert.Equal(936, cigarMesh.Indices.Length);
+        // For now, validate weaker invariants until exact count is resolved:
+        Assert.NotEmpty(cigarMesh.Indices); // Indices must be present
         
         Assert.NotNull(cigarMesh.Groups);
         Assert.Equal(3, cigarMesh.Groups.Count); // 3 submeshes
+        
+        // Validate that indices align with submesh groups
+        var totalGroupIndices = cigarMesh.Groups.Sum(g => g.Count);
+        Assert.Equal(totalGroupIndices, cigarMesh.Indices.Length); // Sum of group counts must match index count
     }
 
     [Fact(Skip = "TypeTree parsing incomplete: mesh data fields empty (no positions/normals/submeshes). Investigating TypeTreeReader traversal logic.")]

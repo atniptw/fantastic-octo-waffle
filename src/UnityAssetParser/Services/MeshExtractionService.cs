@@ -142,6 +142,11 @@ public sealed class MeshExtractionService
         BundleFile bundle,
         ReadOnlyMemory<byte>? resSData)
     {
+        // NOTE: resSData is currently unused here. External .resS loading is handled
+        // via bundle.Nodes / bundle.DataRegion in MeshHelper. We keep this parameter
+        // for API compatibility with existing call sites and the UnityPy port.
+        _ = resSData;
+        
         // Read object data
         var objectData = serializedFile.ReadObjectData(meshObj);
 
