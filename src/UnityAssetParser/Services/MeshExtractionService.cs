@@ -115,7 +115,7 @@ public sealed class MeshExtractionService
         {
             try
             {
-                var meshDto = ExtractMeshGeometry(serializedFile, meshObj, resSData);
+                var meshDto = ExtractMeshGeometry(serializedFile, meshObj, bundle, resSData);
                 if (meshDto != null)
                 {
                     results.Add(meshDto);
@@ -139,8 +139,14 @@ public sealed class MeshExtractionService
     private MeshGeometryDto? ExtractMeshGeometry(
         SerializedFile.SerializedFile serializedFile,
         ObjectInfo meshObj,
+        BundleFile bundle,
         ReadOnlyMemory<byte>? resSData)
     {
+        // NOTE: resSData is currently unused here. External .resS loading is handled
+        // via bundle.Nodes / bundle.DataRegion in MeshHelper. We keep this parameter
+        // for API compatibility with existing call sites and the UnityPy port.
+        _ = resSData;
+        
         // Read object data
         var objectData = serializedFile.ReadObjectData(meshObj);
 
@@ -194,7 +200,13 @@ public sealed class MeshExtractionService
         Console.WriteLine($"DEBUG: MeshParser returned mesh: Name='{mesh.Name}', SubMeshes={mesh.SubMeshes?.Length ?? 0}");
 
         // Use MeshHelper to extract geometry
-        var helper = new MeshHelper(mesh, version, isLittleEndian: !isBigEndian);
+        // Pass bundle nodes and data region for StreamingInfo resolution
+        var helper = new MeshHelper(
+            mesh,
+            version,
+            isLittleEndian: !isBigEndian,
+            nodes: bundle.Nodes,
+            dataRegion: bundle.DataRegion);
 
         try
         {
