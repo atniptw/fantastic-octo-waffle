@@ -235,6 +235,7 @@ public sealed class TypeTreeReader
             return result;
         }
 
+        // Defensive null check (should never be null after above logic, but kept for safety)
         if (dataTemplate == null)
         {
             return result;
