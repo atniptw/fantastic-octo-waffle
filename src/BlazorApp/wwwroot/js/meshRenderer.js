@@ -12,6 +12,7 @@
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 // Lighting constants
 const AMBIENT_LIGHT_INTENSITY = 0.6;
@@ -105,6 +106,110 @@ function startAnimationLoop() {
 }
 
 /**
+ * Load GLB binary data into the viewer using Three.js GLTFLoader.
+ * @param {Uint8Array|number[]} glbData - GLB binary data
+ * @param {object} [materialOpts] - Material options to apply after loading
+ * @param {string|number} [materialOpts.color] - Material color override
+ * @param {boolean} [materialOpts.wireframe] - Wireframe mode
+ * @param {number} [materialOpts.metalness] - Metalness
+ * @param {number} [materialOpts.roughness] - Roughness
+ * @returns {Promise<string>} Mesh ID for future operations
+ * @throws {Error} If renderer not initialized or GLB loading fails
+ */
+export async function loadGLB(glbData, materialOpts = {}) {
+    validateRendererInitialized();
+    
+    // Convert to Uint8Array if needed
+    const uint8Array = glbData instanceof Uint8Array 
+        ? glbData 
+        : new Uint8Array(glbData);
+    
+    // Create blob URL from GLB data
+    const blob = new Blob([uint8Array], { type: 'application/octet-stream' });
+    const url = URL.createObjectURL(blob);
+    
+    try {
+        const loader = new GLTFLoader();
+        const gltf = await new Promise((resolve, reject) => {
+            loader.load(
+                url,
+                (gltf) => resolve(gltf),
+                undefined, // onProgress
+                (error) => reject(new Error(`GLB load failed: ${error.message}`))
+            );
+        });
+        
+        // Apply material overrides if specified
+        if (Object.keys(materialOpts).length > 0) {
+            gltf.scene.traverse((child) => {
+                if (child.isMesh && child.material) {
+                    applyMaterialOptions(child.material, materialOpts);
+                }
+            });
+        }
+        
+        scene.add(gltf.scene);
+        
+        // Center camera on the loaded model
+        centerCameraOnMesh(gltf.scene);
+        
+        const meshId = `gltf-${nextMeshId++}`;
+        meshes.set(meshId, gltf.scene);
+        
+        return meshId;
+    } finally {
+        // Clean up blob URL
+        URL.revokeObjectURL(url);
+    }
+}
+
+/**
+ * Validate a material color option before applying it.
+ * Accepts string or number; rejects null, undefined, and empty strings.
+ * @param {string|number|null|undefined} color
+ * @returns {boolean}
+ */
+function isValidMaterialColorOption(color) {
+    if (color === null || color === undefined) {
+        return false;
+    }
+
+    if (typeof color === 'string') {
+        // Reject empty or whitespace-only strings; let THREE.Color validate others.
+        return color.trim().length > 0;
+    }
+
+    if (typeof color === 'number') {
+        // Basic numeric validation: finite and within typical [0, 0xffffff] range.
+        return Number.isFinite(color) && color >= 0 && color <= 0xffffff;
+    }
+
+    // Any other type is invalid.
+    return false;
+}
+
+/**
+ * Apply material options to a Three.js material.
+ * @param {THREE.Material} material - Material to modify
+ * @param {object} opts - Material options
+ */
+function applyMaterialOptions(material, opts) {
+    if (opts.color !== undefined && isValidMaterialColorOption(opts.color)) {
+        material.color = new THREE.Color(opts.color);
+    }
+    if (opts.wireframe !== undefined) {
+        material.wireframe = opts.wireframe;
+    }
+    if (opts.metalness !== undefined && 'metalness' in material) {
+        material.metalness = opts.metalness;
+    }
+    if (opts.roughness !== undefined && 'roughness' in material) {
+        material.roughness = opts.roughness;
+    }
+    material.needsUpdate = true;
+}
+
+/**
  * Load mesh geometry into the viewer and display it.
  * @param {object} geometry - Geometry data
  * @param {Float32Array} geometry.positions - Vertex positions (XYZ)
@@ -125,26 +230,10 @@ export function loadMesh(geometry, groups = null, materialOpts = {}) {
     validateGeometry(geometry);
 
     const bufferGeometry = createBufferGeometry(geometry, groups);
-    
-    console.log('DEBUG: BufferGeometry created', {
-        vertexCount: bufferGeometry.attributes.position.count,
-        indexCount: bufferGeometry.index.count,
-        hasNormals: !!bufferGeometry.attributes.normal,
-        groups: bufferGeometry.groups
-    });
-    
     const material = createMaterial(materialOpts);
     const mesh = new THREE.Mesh(bufferGeometry, material);
     
-    console.log('DEBUG: Mesh created', {
-        visible: mesh.visible,
-        materialType: material.type,
-        materialColor: material.color
-    });
-    
     scene.add(mesh);
-    console.log('DEBUG: Mesh added to scene, scene.children.length =', scene.children.length);
-    
     centerCameraOnMesh(mesh);
 
     const meshId = `mesh-${nextMeshId++}`;
@@ -194,13 +283,6 @@ function validateGeometry(geometry) {
  * @returns {THREE.BufferGeometry} Created geometry
  */
 function createBufferGeometry(geometry, groups) {
-    console.log('DEBUG: createBufferGeometry called', {
-        positionsLength: geometry.positions?.length,
-        indicesLength: geometry.indices?.length,
-        normalsLength: geometry.normals?.length,
-        groupsLength: groups?.length
-    });
-
     const bufferGeometry = new THREE.BufferGeometry();
     
     // Convert arrays to typed arrays (Blazor sends plain arrays)
@@ -212,11 +294,9 @@ function createBufferGeometry(geometry, groups) {
         ? geometry.indices 
         : new Uint32Array(geometry.indices);
     
-    console.log('DEBUG: Setting position attribute', positions.length, 'values');
     bufferGeometry.setAttribute('position',
         new THREE.BufferAttribute(positions, 3));
     
-    console.log('DEBUG: Setting index', indices.length, 'values');
     bufferGeometry.setIndex(
         new THREE.BufferAttribute(indices, 1));
 
@@ -309,13 +389,6 @@ function centerCameraOnMesh(mesh) {
         maxDim = Math.max(size.x, size.y, size.z);
     }
 
-    console.log('DEBUG: Mesh bounding box', {
-        min: box.min,
-        max: box.max,
-        center: center,
-        size: size
-    });
-
     // Set controls target to mesh center
     controls.target.copy(center);
 
@@ -340,13 +413,6 @@ function centerCameraOnMesh(mesh) {
         y: center.y + cameraZ * 0.5,
         z: center.z + cameraZ
     };
-
-    console.log('DEBUG: Camera positioning', {
-        maxDim: maxDim,
-        cameraZ: cameraZ,
-        newPosition: newCameraPos,
-        lookingAt: center
-    });
 
     camera.position.set(newCameraPos.x, newCameraPos.y, newCameraPos.z);
     camera.lookAt(center);
@@ -483,6 +549,7 @@ export function resize(width, height) {
 window.meshRenderer = {
     init,
     loadMesh,
+    loadGLB,
     updateMaterial,
     clear,
     clearMesh,

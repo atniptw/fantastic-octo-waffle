@@ -117,6 +117,38 @@ public class ViewerService : IViewerService
     }
 
     /// <inheritdoc/>
+    public async Task<string> ShowGlbAsync(byte[] glbData, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(glbData);
+        ct.ThrowIfCancellationRequested();
+
+        if (!_isInitialized)
+        {
+            throw new InvalidOperationException("Viewer not initialized. Call InitializeAsync first.");
+        }
+
+        if (glbData.Length == 0)
+        {
+            throw new ArgumentException("GLB data cannot be empty", nameof(glbData));
+        }
+
+        // Default material options
+        var materialOpts = new
+        {
+            color = 0x888888,
+            wireframe = false,
+            metalness = 0.5,
+            roughness = 0.5
+        };
+
+        // Call meshRenderer.loadGLB(glbData, materialOpts)
+        var meshId = await _jsRuntime.InvokeAsync<string>(
+            "meshRenderer.loadGLB", ct, glbData, materialOpts);
+
+        return meshId;
+    }
+
+    /// <inheritdoc/>
     public async Task UpdateMaterialAsync(string meshId, string? color = null, bool? wireframe = null, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(meshId))

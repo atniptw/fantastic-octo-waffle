@@ -28,7 +28,7 @@ public class GltfExporterTests
     /// </summary>
     private static UnityMesh CreateSimpleTriangleMesh()
     {
-        var mesh = new Mesh
+        var mesh = new UnityMesh
         {
             Name = "TestTriangle",
             Vertices = new[]
@@ -45,9 +45,9 @@ public class GltfExporterTests
             },
             UV = new[]
             {
-                new Vector2f { X = 0, Y = 0 },
-                new Vector2f { X = 1, Y = 0 },
-                new Vector2f { X = 0, Y = 1 }
+                new Vector2f { U = 0, V = 0 },
+                new Vector2f { U = 1, V = 0 },
+                new Vector2f { U = 0, V = 1 }
             }
         };
 
@@ -59,7 +59,7 @@ public class GltfExporterTests
     /// </summary>
     private static UnityMesh CreateMeshWithoutNormals()
     {
-        var mesh = new Mesh
+        var mesh = new UnityMesh
         {
             Name = "NoNormals",
             Vertices = new[]
@@ -83,7 +83,7 @@ public class GltfExporterTests
     {
         // Arrange
         var mesh = CreateSimpleTriangleMesh();
-        var meshes = new List<Mesh> { mesh };
+        var meshes = new List<UnityMesh> { mesh };
 
         // Act
         var model = _exporter.MeshesToGltf(meshes);
@@ -152,10 +152,11 @@ public class GltfExporterTests
         // Assert
         var gltfMesh = model.LogicalMeshes[0];
         var primitive = gltfMesh.Primitives[0];
-        var positions = primitive.VertexAccessor("POSITION");
-
-        Assert.NotNull(positions);
-        Assert.Equal(3, positions.Count); // 3 vertices in triangle
+        
+        // Check that position accessor exists
+        Assert.NotNull(primitive.GetVertexAccessor("POSITION"));
+        var positionAccessor = primitive.GetVertexAccessor("POSITION");
+        Assert.Equal(3, positionAccessor.Count); // 3 vertices in triangle
     }
 
     [Fact]
@@ -171,10 +172,11 @@ public class GltfExporterTests
         // Assert
         var gltfMesh = model.LogicalMeshes[0];
         var primitive = gltfMesh.Primitives[0];
-        var normals = primitive.VertexAccessor("NORMAL");
-
-        Assert.NotNull(normals);
-        Assert.Equal(3, normals.Count); // Same as vertex count
+        
+        // Check that normal accessor exists
+        Assert.NotNull(primitive.GetVertexAccessor("NORMAL"));
+        var normalAccessor = primitive.GetVertexAccessor("NORMAL");
+        Assert.Equal(3, normalAccessor.Count); // Same as vertex count
     }
 
     [Fact]
@@ -190,10 +192,11 @@ public class GltfExporterTests
         // Assert
         var gltfMesh = model.LogicalMeshes[0];
         var primitive = gltfMesh.Primitives[0];
-        var uvs = primitive.VertexAccessor("TEXCOORD_0");
-
-        Assert.NotNull(uvs);
-        Assert.Equal(3, uvs.Count); // Same as vertex count
+        
+        // Check that UV accessor exists
+        Assert.NotNull(primitive.GetVertexAccessor("TEXCOORD_0"));
+        var uvAccessor = primitive.GetVertexAccessor("TEXCOORD_0");
+        Assert.Equal(3, uvAccessor.Count); // Same as vertex count
     }
 
     #endregion
@@ -225,7 +228,7 @@ public class GltfExporterTests
     public void MeshesToGltf_MeshWithNoVertices_ThrowsInvalidOperationException()
     {
         // Arrange
-        var mesh = new Mesh
+        var mesh = new UnityMesh
         {
             Name = "EmptyMesh",
             Vertices = Array.Empty<Vector3f>() // No vertices
@@ -271,7 +274,7 @@ public class GltfExporterTests
     {
         // Arrange
         var mesh = CreateSimpleTriangleMesh();
-        var meshes = new List<Mesh> { mesh };
+        var meshes = new List<UnityMesh> { mesh };
 
         // Act
         var glb1 = _exporter.MeshesToGlb(meshes);
@@ -298,15 +301,15 @@ public class GltfExporterTests
 
         // Assert
         var primitive = model.LogicalMeshes[0].Primitives[0];
-        Assert.NotNull(primitive.VertexAccessor("POSITION"));
-        Assert.Null(primitive.VertexAccessor("NORMAL")); // Should not have normals
+        Assert.NotNull(primitive.GetVertexAccessor("POSITION"));
+        Assert.Null(primitive.GetVertexAccessor("NORMAL")); // Should not have normals
     }
 
     [Fact]
     public void MeshesToGltf_MeshWithoutUVs_SkipsUVAccessor()
     {
         // Arrange
-        var mesh = new Mesh
+        var mesh = new UnityMesh
         {
             Name = "NoUVs",
             Vertices = new[]
@@ -324,8 +327,8 @@ public class GltfExporterTests
 
         // Assert
         var primitive = model.LogicalMeshes[0].Primitives[0];
-        Assert.NotNull(primitive.VertexAccessor("POSITION"));
-        Assert.Null(primitive.VertexAccessor("TEXCOORD_0")); // Should not have UVs
+        Assert.NotNull(primitive.GetVertexAccessor("POSITION"));
+        Assert.Null(primitive.GetVertexAccessor("TEXCOORD_0")); // Should not have UVs
     }
 
     #endregion
