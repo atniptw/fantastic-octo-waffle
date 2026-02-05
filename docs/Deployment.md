@@ -173,7 +173,7 @@ npx wrangler tail
 **Option 1: Use CDN (Recommended)**
 ```html
 <script type="module">
-  import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+  import * as THREE from 'https://cdn.jsdelivr.net/npm/three@latest/build/three.module.js';
 </script>
 ```
 
