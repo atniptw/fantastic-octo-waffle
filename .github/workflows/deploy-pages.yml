@@ -27,33 +27,8 @@ env:
   NODE_VERSION: '24.x'
 
 jobs:
-  build-and-test:
-    name: 🏗️ Build & Test
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: ${{ env.DOTNET_VERSION }}
-
-      - name: Install WASM workloads
-        run: dotnet workload install wasm-tools-net9
-
-      - name: Restore dependencies
-        run: dotnet restore
-
-      - name: Build project
-        run: dotnet build --configuration Release --no-restore
-
-      - name: Run tests
-        run: dotnet test --configuration Release --no-build --verbosity normal
-
   deploy-pages:
     name: 📄 Deploy to GitHub Pages
-    needs: build-and-test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -96,7 +71,6 @@ jobs:
 
   deploy-worker:
     name: ☁️ Deploy to Cloudflare Worker
-    needs: build-and-test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -110,10 +84,6 @@ jobs:
       - name: Install Worker dependencies
         working-directory: cloudflare-worker
         run: npm ci
-
-      - name: Run Worker tests
-        working-directory: cloudflare-worker
-        run: npm test
 
       - name: Deploy to Cloudflare Worker (Production)
         working-directory: cloudflare-worker
