@@ -49,21 +49,28 @@ jobs:
         run: dotnet build --configuration Release --no-restore
 
       - name: Publish Blazor WASM
-        run: dotnet publish src/BlazorApp/BlazorApp.csproj -c Release -o dist
+        run: dotnet publish src/BlazorApp/BlazorApp.csproj -c Release
 
+      - name: Prepare GitHub Pages deployment
+        run: |
+          # The project publishes to dist-Release/wwwroot by default
+          # Move it to dist/ for consistent deployment
+          mkdir -p dist
+          cp -r dist-Release/wwwroot/* dist/
+          
       - name: Add .nojekyll file
-        run: touch dist/wwwroot/.nojekyll
+        run: touch dist/.nojekyll
 
       - name: Configure base path for GitHub Pages
         run: |
           # Update base href in index.html to match repository name
-          sed -i 's|<base href="/" />|<base href="/fantastic-octo-waffle/" />|g' dist/wwwroot/index.html
+          sed -i 's|<base href="/" />|<base href="/fantastic-octo-waffle/" />|g' dist/index.html
           echo "✅ Updated base href for GitHub Pages"
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: dist/wwwroot
+          path: dist
 
       - name: Deploy to GitHub Pages
         id: deployment
