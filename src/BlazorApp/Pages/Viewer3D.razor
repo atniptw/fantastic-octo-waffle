@@ -5,6 +5,7 @@
 @inject IAssetRenderer AssetRenderer
 @inject IViewerService ViewerService
 @inject NavigationManager NavigationManager
+@inject ILogger<Viewer3D> Logger
 @implements IAsyncDisposable
 
 <PageTitle>3D Viewer - @FileName</PageTitle>
@@ -123,8 +124,9 @@
             }
             catch (Exception ex)
             {
-                // Fallback to old JSON geometry method if GLB export fails
-                _loadingMessage = "GLB export failed, falling back to JSON geometry...";
+                // Log GLB export failure and fallback to JSON geometry method
+                Logger.LogWarning(ex, "GLB export failed for {FileName}, falling back to JSON geometry", decodedFileName);
+                _loadingMessage = $"GLB export failed ({ex.Message}), falling back to JSON geometry...";
                 StateHasChanged();
                 
                 _geometry = await AssetRenderer.RenderAsync(fileItem, state.ZipBytes, default);

@@ -452,15 +452,15 @@ public class AssetRenderer : IAssetRenderer
         var version = ParseUnityVersion(serializedFile.Header.UnityVersionString);
         var isBigEndian = serializedFile.Header.Endianness != 0;
 
-        // Try to load external resource data (Node 1 usually contains .resS data)
-        byte[]? externalResourceData = null;
+        // Try to load external resource data (Node 1 usually contains .resS vertex buffer data)
+        byte[]? externalVertexBufferData = null;
         if (bundle.Nodes.Count > 1)
         {
             try
             {
                 var node1 = bundle.Nodes[1];
                 var node1Data = bundle.ExtractNode(node1);
-                externalResourceData = node1Data.ToArray();
+                externalVertexBufferData = node1Data.ToArray();
             }
             catch
             {
@@ -478,10 +478,10 @@ public class AssetRenderer : IAssetRenderer
             if (mesh != null)
             {
                 // Resolve external vertex buffer if present
-                if (externalResourceData != null && mesh.VertexData != null &&
+                if (externalVertexBufferData != null && mesh.VertexData != null &&
                     (mesh.VertexData.DataSize == null || mesh.VertexData.DataSize.Length == 0))
                 {
-                    var resolved = ResolveVertexDataBuffer(mesh, externalResourceData);
+                    var resolved = ResolveVertexDataBuffer(mesh, externalVertexBufferData);
                     if (resolved != null && resolved.Length > 0)
                     {
                         mesh.VertexData.DataSize = resolved;
@@ -492,57 +492,67 @@ public class AssetRenderer : IAssetRenderer
                 var meshHelper = new MeshHelper(mesh, version, !isBigEndian);
                 meshHelper.Process();
                 
-                // Update mesh with extracted data
-                if (meshHelper.Positions != null && meshHelper.Positions.Length > 0)
-                {
-                    // Convert float array to Vector3f array
-                    var positions = new Vector3f[meshHelper.Positions.Length / 3];
-                    for (int i = 0; i < positions.Length; i++)
-                    {
-                        positions[i] = new Vector3f 
-                        { 
-                            X = meshHelper.Positions[i * 3], 
-                            Y = meshHelper.Positions[i * 3 + 1], 
-                            Z = meshHelper.Positions[i * 3 + 2] 
-                        };
-                    }
-                    mesh.Vertices = positions;
-                }
-                
-                if (meshHelper.Normals != null && meshHelper.Normals.Length > 0)
-                {
-                    var normals = new Vector3f[meshHelper.Normals.Length / 3];
-                    for (int i = 0; i < normals.Length; i++)
-                    {
-                        normals[i] = new Vector3f 
-                        { 
-                            X = meshHelper.Normals[i * 3], 
-                            Y = meshHelper.Normals[i * 3 + 1], 
-                            Z = meshHelper.Normals[i * 3 + 2] 
-                        };
-                    }
-                    mesh.Normals = normals;
-                }
-                
-                if (meshHelper.UVs != null && meshHelper.UVs.Length > 0)
-                {
-                    var uvs = new Vector2f[meshHelper.UVs.Length / 2];
-                    for (int i = 0; i < uvs.Length; i++)
-                    {
-                        uvs[i] = new Vector2f 
-                        { 
-                            U = meshHelper.UVs[i * 2], 
-                            V = meshHelper.UVs[i * 2 + 1] 
-                        };
-                    }
-                    mesh.UV = uvs;
-                }
+                // Populate mesh attributes from extracted data
+                PopulateMeshAttributesFromHelper(mesh, meshHelper);
                 
                 meshes.Add(mesh);
             }
         }
 
         return meshes;
+    }
+
+    /// <summary>
+    /// Populates mesh vertex attributes (positions, normals, UVs) from MeshHelper extracted data.
+    /// </summary>
+    private static void PopulateMeshAttributesFromHelper(UnityAssetParser.Classes.Mesh mesh, MeshHelper meshHelper)
+    {
+        // Convert positions
+        if (meshHelper.Positions != null && meshHelper.Positions.Length > 0)
+        {
+            var positions = new Vector3f[meshHelper.Positions.Length / 3];
+            for (int i = 0; i < positions.Length; i++)
+            {
+                positions[i] = new Vector3f 
+                { 
+                    X = meshHelper.Positions[i * 3], 
+                    Y = meshHelper.Positions[i * 3 + 1], 
+                    Z = meshHelper.Positions[i * 3 + 2] 
+                };
+            }
+            mesh.Vertices = positions;
+        }
+        
+        // Convert normals
+        if (meshHelper.Normals != null && meshHelper.Normals.Length > 0)
+        {
+            var normals = new Vector3f[meshHelper.Normals.Length / 3];
+            for (int i = 0; i < normals.Length; i++)
+            {
+                normals[i] = new Vector3f 
+                { 
+                    X = meshHelper.Normals[i * 3], 
+                    Y = meshHelper.Normals[i * 3 + 1], 
+                    Z = meshHelper.Normals[i * 3 + 2] 
+                };
+            }
+            mesh.Normals = normals;
+        }
+        
+        // Convert UVs
+        if (meshHelper.UVs != null && meshHelper.UVs.Length > 0)
+        {
+            var uvs = new Vector2f[meshHelper.UVs.Length / 2];
+            for (int i = 0; i < uvs.Length; i++)
+            {
+                uvs[i] = new Vector2f 
+                { 
+                    U = meshHelper.UVs[i * 2], 
+                    V = meshHelper.UVs[i * 2 + 1] 
+                };
+            }
+            mesh.UV = uvs;
+        }
     }
 
     /// <summary>
@@ -573,50 +583,8 @@ public class AssetRenderer : IAssetRenderer
                 var meshHelper = new MeshHelper(mesh, version, !isBigEndian);
                 meshHelper.Process();
                 
-                // Update mesh with extracted data (same as UnityFS)
-                if (meshHelper.Positions != null && meshHelper.Positions.Length > 0)
-                {
-                    var positions = new Vector3f[meshHelper.Positions.Length / 3];
-                    for (int i = 0; i < positions.Length; i++)
-                    {
-                        positions[i] = new Vector3f 
-                        { 
-                            X = meshHelper.Positions[i * 3], 
-                            Y = meshHelper.Positions[i * 3 + 1], 
-                            Z = meshHelper.Positions[i * 3 + 2] 
-                        };
-                    }
-                    mesh.Vertices = positions;
-                }
-                
-                if (meshHelper.Normals != null && meshHelper.Normals.Length > 0)
-                {
-                    var normals = new Vector3f[meshHelper.Normals.Length / 3];
-                    for (int i = 0; i < normals.Length; i++)
-                    {
-                        normals[i] = new Vector3f 
-                        { 
-                            X = meshHelper.Normals[i * 3], 
-                            Y = meshHelper.Normals[i * 3 + 1], 
-                            Z = meshHelper.Normals[i * 3 + 2] 
-                        };
-                    }
-                    mesh.Normals = normals;
-                }
-                
-                if (meshHelper.UVs != null && meshHelper.UVs.Length > 0)
-                {
-                    var uvs = new Vector2f[meshHelper.UVs.Length / 2];
-                    for (int i = 0; i < uvs.Length; i++)
-                    {
-                        uvs[i] = new Vector2f 
-                        { 
-                            U = meshHelper.UVs[i * 2], 
-                            V = meshHelper.UVs[i * 2 + 1] 
-                        };
-                    }
-                    mesh.UV = uvs;
-                }
+                // Populate mesh attributes from extracted data
+                PopulateMeshAttributesFromHelper(mesh, meshHelper);
                 
                 meshes.Add(mesh);
             }
