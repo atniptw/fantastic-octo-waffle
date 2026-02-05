@@ -57,10 +57,16 @@ export function initializeLazyLoading() {
 
 export function observeNewImages(observer) {
     if (observer && 'IntersectionObserver' in window) {
-        const lazyImages = document.querySelectorAll('img[data-src]:not(.lazy-loading):not(.lazy-loaded):not(.lazy-error)');
-        lazyImages.forEach(img => {
-            img.classList.add('lazy-loading');
-            observer.observe(img);
+        // Efficiently find only new images that haven't been processed yet
+        const allLazyImages = document.querySelectorAll('img[data-src]');
+        allLazyImages.forEach(img => {
+            // Only observe if image hasn't been processed (no state class)
+            if (!img.classList.contains('lazy-loading') && 
+                !img.classList.contains('lazy-loaded') && 
+                !img.classList.contains('lazy-error')) {
+                img.classList.add('lazy-loading');
+                observer.observe(img);
+            }
         });
     }
 }

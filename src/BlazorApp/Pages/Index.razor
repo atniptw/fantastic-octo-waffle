@@ -81,6 +81,7 @@
 @code {
     private const int InitialBatchSize = 24; // First batch (4 rows of 6)
     private const int LoadMoreBatchSize = 18; // Subsequent batches (3 rows of 6)
+    private const string LazyLoadModulePath = "./js/lazyLoad.js";
     
     private List<ThunderstorePackage>? _packages;
     private List<ThunderstorePackage> _displayedPackages = new();
@@ -105,7 +106,7 @@
             try
             {
                 // Initialize lazy loading module
-                _lazyLoadModule = await JSRuntime.InvokeAsync<IJSObjectReference>("import", "./js/lazyLoad.js");
+                _lazyLoadModule = await JSRuntime.InvokeAsync<IJSObjectReference>("import", LazyLoadModulePath);
                 _imageObserver = await _lazyLoadModule.InvokeAsync<IJSObjectReference>("initializeLazyLoading");
             }
             catch (Exception)
