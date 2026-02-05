@@ -49,5 +49,6 @@ builder.Services.AddScoped<IAssetScanner, AssetScanner>();
 builder.Services.AddScoped<IAssetRenderer, AssetRenderer>();
 builder.Services.AddScoped<IViewerService, ViewerService>();
 builder.Services.AddScoped<IModDetailStateService, ModDetailStateService>();
+builder.Services.AddScoped<IGltfExportService, GltfExportService>();
 
 await builder.Build().RunAsync();

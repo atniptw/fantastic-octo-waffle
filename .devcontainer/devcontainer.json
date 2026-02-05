@@ -28,7 +28,8 @@
         "formulahendry.dotnet-test-explorer",
         "firsttimersonly.first-timers-only",
         "ms-vscode.theme-solarized-dark",
-        "ms-vscode-remote.remote-containers"
+        "ms-vscode-remote.remote-containers",
+        "ms-dotnettools.csdevkit"
       ],
       "settings": {
         "dotnet.defaultSolutionOrFolder": "${workspaceFolder}/fantastic-octo-waffle.sln",
