@@ -62,6 +62,8 @@ The `src/BlazorApp/BlazorApp.csproj` file contains deployment-specific settings:
 </PropertyGroup>
 ```
 
+**Note**: The automated deployment workflow (`.github/workflows/deploy-pages.yml`) overrides the default `PublishDir` by using the `-o dist` flag, publishing to the `dist/` directory instead of `../../dist-Release/`.
+
 #### GitHub Pages Setup
 
 In your GitHub repository settings:
@@ -170,19 +172,22 @@ npx wrangler tail
 
 ### Three.js Library
 
-**Option 1: Use CDN (Recommended)**
-```html
-<script type="module">
-  import * as THREE from 'https://cdn.jsdelivr.net/npm/three@latest/build/three.module.js';
-</script>
-```
-
-**Option 2: Bundle with app**
+**Option 1: Bundle with app (Recommended for security)**
 ```bash
 cd src/BlazorApp/wwwroot/js
 npm install three
 # Import in your JS modules
 ```
+
+**Option 2: Use CDN with pinned version**
+```html
+<script type="module">
+  <!-- Pin to a specific version for security and stability -->
+  import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js';
+</script>
+```
+
+**Security Note**: Avoid using `@latest` from CDNs in production as it introduces supply-chain risks. The code behind mutable CDN URLs can change without your control. Prefer self-hosting (Option 1) or pinning to a specific vetted version (Option 2) with Subresource Integrity (SRI) where applicable.
 
 ### Cache-Busting Strategy
 
