@@ -53,53 +53,47 @@ jobs:
 
       - name: Prepare GitHub Pages deployment
         run: |
-          # Debug: Check actual publish output structure
-          echo "=== Contents of dist-Release/ ==="
-          ls -la dist-Release/ || echo "dist-Release not found"
-          echo ""
-          echo "=== Contents of dist-Release/wwwroot/ ==="
-          ls -la dist-Release/wwwroot/ || echo "dist-Release/wwwroot not found"
-          echo ""
-          
-          # The project publishes to dist-Release/ and the wwwroot folder of the published app
-          # Copy the entire dist-Release directory to dist for GitHub Pages
+          # The .csproj has StaticWebAssetBasePath=/fantastic-octo-waffle, which creates a subdirectory
+          # Blazor puts everything in dist-Release/wwwroot/fantastic-octo-waffle/
+          # Copy directly to dist for GitHub Pages serving from root
           mkdir -p dist
-          if [ -d "dist-Release/wwwroot" ]; then
+          
+          if [ -d "dist-Release/wwwroot/fantastic-octo-waffle" ]; then
+            echo "✅ Found static assets in dist-Release/wwwroot/fantastic-octo-waffle/"
+            cp -r dist-Release/wwwroot/fantastic-octo-waffle/* dist/
+          elif [ -d "dist-Release/wwwroot" ]; then
+            echo "ℹ️  No base-path subdirectory, copying entire wwwroot"
             cp -r dist-Release/wwwroot/* dist/
-            echo "✅ Copied from dist-Release/wwwroot/"
-          elif [ -d "dist-Release" ]; then
-            # If wwwroot doesn't exist, check for index.html directly in dist-Release
-            if [ -f "dist-Release/index.html" ]; then
-              cp -r dist-Release/* dist/
-              echo "✅ Copied from dist-Release/"
-            else
-              echo "❌ Could not find index.html in expected locations"
-              exit 1
-            fi
           else
-            echo "❌ dist-Release directory not found"
+            echo "❌ Could not find published files"
+            ls -la dist-Release/ || true
             exit 1
           fi
           
-          echo ""
-          echo "=== Contents of dist/ ==="
-          ls -la dist/
+          # Verify index.html was copied successfully
+          if [ ! -f "dist/index.html" ]; then
+            echo "❌ Failed to copy index.html"
+            echo "Current dist/ contents:"
+            ls -la dist/ || true
+            exit 1
+          fi
+          echo "✅ Successfully prepared GitHub Pages deployment"
           
       - name: Add .nojekyll file
         run: touch dist/.nojekyll
 
       - name: Configure base path for GitHub Pages
         run: |
-          # Verify index.html exists before attempting to modify it
-          if [ ! -f "dist/index.html" ]; then
-            echo "❌ dist/index.html not found!"
-            ls -la dist/
-            exit 1
-          fi
-          
-          # Update base href in index.html to match repository name
+          # Update base href from / to /fantastic-octo-waffle/ for GitHub Pages
           sed -i 's|<base href="/" />|<base href="/fantastic-octo-waffle/" />|g' dist/index.html
-          echo "✅ Updated base href for GitHub Pages"
+          
+          # Verify the change was made
+          if grep -q '<base href="/fantastic-octo-waffle/"' dist/index.html; then
+            echo "✅ Successfully updated base href for GitHub Pages"
+          else
+            echo "⚠️  Base href update may not have worked, checking current value:"
+            grep '<base href=' dist/index.html || echo "  (No base href element found)"
+          fi
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
