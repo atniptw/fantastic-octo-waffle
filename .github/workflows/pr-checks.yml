@@ -57,7 +57,7 @@ jobs:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
       - name: Install WASM workloads
-        run: dotnet workload install wasm-tools
+        run: dotnet workload install wasm-tools-net9
         working-directory: src/BlazorApp
 
       - name: Build Blazor Release
@@ -86,7 +86,7 @@ jobs:
 
       - name: Build Blazor Release (Base)
         run: |
-          dotnet workload install wasm-tools
+          dotnet workload install wasm-tools-net9
           dotnet publish -c Release -o ../../dist-base
         working-directory: base-branch/src/BlazorApp
         continue-on-error: true
@@ -157,7 +157,7 @@ jobs:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
       - name: Install WASM workloads
-        run: dotnet workload install wasm-tools
+        run: dotnet workload install wasm-tools-net9
         working-directory: src/BlazorApp
 
       - name: Build with Roslyn Analyzers
@@ -202,7 +202,7 @@ jobs:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
       - name: Install WASM workloads
-        run: dotnet workload install wasm-tools
+        run: dotnet workload install wasm-tools-net9
         working-directory: src/BlazorApp
 
       - name: Restore dependencies
@@ -258,7 +258,7 @@ jobs:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
       - name: Install WASM workloads
-        run: dotnet workload install wasm-tools
+        run: dotnet workload install wasm-tools-net9
         working-directory: src/BlazorApp
 
       - name: Restore Blazor app dependencies
@@ -365,7 +365,7 @@ jobs:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
       - name: Install WASM workloads
-        run: dotnet workload install wasm-tools
+        run: dotnet workload install wasm-tools-net9
         working-directory: src/BlazorApp
 
       - name: Restore NuGet packages
@@ -449,7 +449,7 @@ jobs:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
       - name: Install WASM workloads
-        run: dotnet workload install wasm-tools
+        run: dotnet workload install wasm-tools-net9
         working-directory: src/BlazorApp
 
       - name: Build with unused code warnings
