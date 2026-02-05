@@ -36,7 +36,7 @@
     else
     {
         <div class="row mod-card-grid">
-            @foreach (var package in _packages)
+            @foreach (var package in _displayedPackages)
             {
                 var latestVersion = package.LatestVersion;
                 if (latestVersion == null) continue;
@@ -51,20 +51,37 @@
                             <h5 class="card-title">@package.Name</h5>
                             <p class="card-text text-muted">by @package.Owner</p>
                             <p class="card-text"><small>@latestVersion.Description</small></p>
-                            <p class="card-text"><small>Version: @latestVersion.VersionNumber</small></p>
+                            <p class="card-text"><small">Version: @latestVersion.VersionNumber</small></p>
                             <a href="mod/@package.Owner/@package.Name" class="btn btn-primary">View Details</a>
                         </div>
                     </div>
                 </div>
             }
         </div>
+        
+        @if (_hasMorePackages)
+        {
+            <div class="text-center my-4">
+                <button class="btn btn-outline-primary" @onclick="LoadMorePackages">
+                    Load More (@_remainingCount more mods)
+                </button>
+            </div>
+        }
     }
 </div>
 
 @code {
+    private const int InitialBatchSize = 24; // First batch (4 rows of 6)
+    private const int LoadMoreBatchSize = 18; // Subsequent batches (3 rows of 6)
+    
     private List<ThunderstorePackage>? _packages;
+    private List<ThunderstorePackage> _displayedPackages = new();
+    private int _currentIndex = 0;
     private bool _loading = true;
     private string? _error;
+    
+    private bool _hasMorePackages => _packages != null && _currentIndex < _packages.Count;
+    private int _remainingCount => _packages != null ? _packages.Count - _currentIndex : 0;
 
     protected override async Task OnInitializedAsync()
     {
@@ -85,6 +102,9 @@
                 .Where(p => p.Categories.Contains("Cosmetics") && !p.IsDeprecated)
                 .OrderByDescending(p => p.DateUpdated)
                 .ToList();
+            
+            // Load initial batch
+            LoadMorePackages();
         }
         catch (HttpRequestException ex)
         {
@@ -115,5 +135,16 @@
         {
             _loading = false;
         }
+    }
+    
+    private void LoadMorePackages()
+    {
+        if (_packages == null) return;
+        
+        var batchSize = _currentIndex == 0 ? InitialBatchSize : LoadMoreBatchSize;
+        var batch = _packages.Skip(_currentIndex).Take(batchSize).ToList();
+        
+        _displayedPackages.AddRange(batch);
+        _currentIndex += batch.Count;
     }
 }
