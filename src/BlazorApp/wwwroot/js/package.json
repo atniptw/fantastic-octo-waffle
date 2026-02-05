@@ -11,7 +11,7 @@
   },
   "devDependencies": {
     "eslint": "^9.0.0",
-    "eslint-plugin-sonarjs": "^0.23.0",
+    "eslint-plugin-sonarjs": "^2.0.0",
     "prettier": "^3.1.1"
   }
 }
