@@ -218,13 +218,11 @@ public sealed class ThunderstoreIntegrationE2ETests
         try
         {
             var fixtureJson = await File.ReadAllTextAsync(FixturePath);
-            var routeHandled = false;
 
             await page.RouteAsync("**/api/packages", async route =>
             {
                 // Delay response significantly to reliably capture loading state
                 await Task.Delay(3000);
-                routeHandled = true;
                 await route.FulfillAsync(new()
                 {
                     Status = 200,

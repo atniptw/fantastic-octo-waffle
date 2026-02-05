@@ -29,7 +29,8 @@
         "firsttimersonly.first-timers-only",
         "ms-vscode.theme-solarized-dark",
         "ms-vscode-remote.remote-containers",
-        "ms-dotnettools.csdevkit"
+        "ms-dotnettools.csdevkit",
+        "GitHub.vscode-github-actions"
       ],
       "settings": {
         "dotnet.defaultSolutionOrFolder": "${workspaceFolder}/fantastic-octo-waffle.sln",

@@ -304,13 +304,13 @@ public static class VertexDataExtractor
 
         // Find position channel (typically Stream=0, dimension bits indicate 3 components)
         // Note: Dimension field uses low 4 bits, so we need to mask it
-        var positionChannel = Array.Find(mesh.VertexData.Channels,
+        var positionChannel = Array.Find(mesh.VertexData?.Channels ?? Array.Empty<ChannelInfo>(),
             ch => ch.Stream == 0 && (ch.Dimension & 0xF) == 3 && ch.Format == 0);
 
-        if (positionChannel == null)
+        if (positionChannel == null || mesh.VertexData == null)
         {
             Console.WriteLine($"DEBUG: ParseVertexDataFromChannels - No position channel found");
-            foreach (var ch in mesh.VertexData.Channels)
+            foreach (var ch in mesh.VertexData?.Channels ?? Array.Empty<ChannelInfo>())
             {
                 Console.WriteLine($"DEBUG: Channel: stream={ch.Stream}, offset={ch.Offset}, format={ch.Format}, dimension={ch.Dimension} (masked={(ch.Dimension & 0xF)})");
             }

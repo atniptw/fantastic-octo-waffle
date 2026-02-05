@@ -224,7 +224,7 @@ public sealed class MeshHelper
         }
 
         // Read vertex data from channels/streams (Unity 3.5+)
-        if (CompareVersion(_version, (3, 5, 0, 0)) >= 0)
+        if (CompareVersion(_version, (3, 5, 0, 0)) >= 0 && vertexData != null)
         {
             ReadVertexData(channels, streams, vertexData);
         }

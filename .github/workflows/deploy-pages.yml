@@ -48,7 +48,7 @@ jobs:
         run: dotnet build --configuration Release --no-restore
 
       - name: Publish Blazor WASM
-        run: dotnet publish src/BlazorApp/BlazorApp.csproj -c Release -o dist --no-build
+        run: dotnet publish src/BlazorApp/BlazorApp.csproj -c Release -o dist
 
       - name: Add .nojekyll file
         run: touch dist/wwwroot/.nojekyll

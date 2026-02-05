@@ -107,15 +107,15 @@ public class GltfExporter
         // Select appropriate vertex format and build mesh
         if (hasNormals && hasUVs)
         {
-            return BuildMeshWithNormalsAndUVs(unityMesh.Name ?? "Mesh", vertices, normals, uvs, indices, material);
+            return BuildMeshWithNormalsAndUVs(unityMesh.Name ?? "Mesh", vertices, normals!, uvs!, indices, material);
         }
         else if (hasNormals)
         {
-            return BuildMeshWithNormals(unityMesh.Name ?? "Mesh", vertices, normals, indices, material);
+            return BuildMeshWithNormals(unityMesh.Name ?? "Mesh", vertices, normals!, indices, material);
         }
         else if (hasUVs)
         {
-            return BuildMeshWithUVs(unityMesh.Name ?? "Mesh", vertices, uvs, indices, material);
+            return BuildMeshWithUVs(unityMesh.Name ?? "Mesh", vertices, uvs!, indices, material);
         }
         else
         {
