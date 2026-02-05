@@ -2,6 +2,9 @@
 @using BlazorApp.Models
 @using BlazorApp.Services
 @inject IThunderstoreService ThunderstoreService
+@inject IJSRuntime JSRuntime
+@implements IAsyncDisposable
+
 <PageTitle>R.E.P.O. Mod Browser</PageTitle>
 
 <div class="container mt-4">
@@ -45,7 +48,12 @@
                     <div class="card mod-card">
                         @if (package.Icon != null)
                         {
-                            <img src="@package.Icon" class="card-img-top" alt="@package.Name icon" />
+                            <img data-src="@package.Icon" 
+                                 class="card-img-top lazy-loading" 
+                                 alt="@package.Name icon"
+                                 width="256"
+                                 height="256"
+                                 loading="lazy" />
                         }
                         <div class="card-body">
                             <h5 class="card-title">@package.Name</h5>
@@ -79,6 +87,8 @@
     private int _currentIndex = 0;
     private bool _loading = true;
     private string? _error;
+    private IJSObjectReference? _lazyLoadModule;
+    private IJSObjectReference? _imageObserver;
     
     private bool _hasMorePackages => _packages != null && _currentIndex < _packages.Count;
     private int _remainingCount => _packages != null ? _packages.Count - _currentIndex : 0;
@@ -86,6 +96,35 @@
     protected override async Task OnInitializedAsync()
     {
         await LoadPackagesAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                // Initialize lazy loading module
+                _lazyLoadModule = await JSRuntime.InvokeAsync<IJSObjectReference>("import", "./js/lazyLoad.js");
+                _imageObserver = await _lazyLoadModule.InvokeAsync<IJSObjectReference>("initializeLazyLoading");
+            }
+            catch (Exception)
+            {
+                // Lazy loading initialization failed, images will load normally
+            }
+        }
+        else if (_lazyLoadModule != null && _imageObserver != null)
+        {
+            try
+            {
+                // Observe newly added images after each render
+                await _lazyLoadModule.InvokeVoidAsync("observeNewImages", _imageObserver);
+            }
+            catch (Exception)
+            {
+                // Ignore observer errors
+            }
+        }
     }
 
     private async Task LoadPackagesAsync()
@@ -146,5 +185,32 @@
         
         _displayedPackages.AddRange(batch);
         _currentIndex += batch.Count;
+    }
+    
+    public async ValueTask DisposeAsync()
+    {
+        if (_imageObserver != null)
+        {
+            try
+            {
+                await _imageObserver.DisposeAsync();
+            }
+            catch (Exception)
+            {
+                // Ignore disposal errors
+            }
+        }
+        
+        if (_lazyLoadModule != null)
+        {
+            try
+            {
+                await _lazyLoadModule.DisposeAsync();
+            }
+            catch (Exception)
+            {
+                // Ignore disposal errors
+            }
+        }
     }
 }
