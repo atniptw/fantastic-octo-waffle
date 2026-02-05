@@ -23,6 +23,16 @@ public interface IViewerService
     Task<string> ShowAsync(ThreeJsGeometry geometry, CancellationToken ct = default);
     
     /// <summary>
+    /// Load GLB binary data into the viewer using Three.js GLTFLoader.
+    /// More efficient than raw geometry for complex meshes with materials.
+    /// </summary>
+    /// <param name="glbData">GLB binary data.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Mesh handle/ID for future updates.</returns>
+    /// <exception cref="InvalidOperationException">Viewer not initialized or GLB load failed.</exception>
+    Task<string> ShowGlbAsync(byte[] glbData, CancellationToken ct = default);
+    
+    /// <summary>
     /// Update material properties of a displayed mesh.
     /// </summary>
     /// <param name="meshId">Mesh handle from ShowAsync.</param>

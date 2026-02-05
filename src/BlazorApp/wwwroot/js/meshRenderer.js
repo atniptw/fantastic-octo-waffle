@@ -12,6 +12,7 @@
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 // Lighting constants
 const AMBIENT_LIGHT_INTENSITY = 0.6;
@@ -102,6 +103,96 @@ function startAnimationLoop() {
         renderer.render(scene, camera);
     }
     animate();
+}
+
+/**
+ * Load GLB binary data into the viewer using Three.js GLTFLoader.
+ * @param {Uint8Array|number[]} glbData - GLB binary data
+ * @param {object} [materialOpts] - Material options to apply after loading
+ * @param {string|number} [materialOpts.color] - Material color override
+ * @param {boolean} [materialOpts.wireframe] - Wireframe mode
+ * @param {number} [materialOpts.metalness] - Metalness
+ * @param {number} [materialOpts.roughness] - Roughness
+ * @returns {Promise<string>} Mesh ID for future operations
+ * @throws {Error} If renderer not initialized or GLB loading fails
+ */
+export async function loadGLB(glbData, materialOpts = {}) {
+    validateRendererInitialized();
+    
+    // Convert to Uint8Array if needed
+    const uint8Array = glbData instanceof Uint8Array 
+        ? glbData 
+        : new Uint8Array(glbData);
+    
+    console.log('DEBUG: loadGLB called', {
+        dataLength: uint8Array.length,
+        firstBytes: Array.from(uint8Array.slice(0, 4))
+    });
+    
+    // Create blob URL from GLB data
+    const blob = new Blob([uint8Array], { type: 'application/octet-stream' });
+    const url = URL.createObjectURL(blob);
+    
+    try {
+        const loader = new GLTFLoader();
+        const gltf = await new Promise((resolve, reject) => {
+            loader.load(
+                url,
+                (gltf) => resolve(gltf),
+                undefined, // onProgress
+                (error) => reject(new Error(`GLB load failed: ${error.message}`))
+            );
+        });
+        
+        console.log('DEBUG: GLTF loaded', {
+            scenes: gltf.scenes.length,
+            meshes: gltf.scene.children.length
+        });
+        
+        // Apply material overrides if specified
+        if (Object.keys(materialOpts).length > 0) {
+            gltf.scene.traverse((child) => {
+                if (child.isMesh && child.material) {
+                    applyMaterialOptions(child.material, materialOpts);
+                }
+            });
+        }
+        
+        scene.add(gltf.scene);
+        console.log('DEBUG: GLTF scene added, scene.children.length =', scene.children.length);
+        
+        // Center camera on the loaded model
+        centerCameraOnMesh(gltf.scene);
+        
+        const meshId = `gltf-${nextMeshId++}`;
+        meshes.set(meshId, gltf.scene);
+        
+        return meshId;
+    } finally {
+        // Clean up blob URL
+        URL.revokeObjectURL(url);
+    }
+}
+
+/**
+ * Apply material options to a Three.js material.
+ * @param {THREE.Material} material - Material to modify
+ * @param {object} opts - Material options
+ */
+function applyMaterialOptions(material, opts) {
+    if (opts.color !== undefined) {
+        material.color = new THREE.Color(opts.color);
+    }
+    if (opts.wireframe !== undefined) {
+        material.wireframe = opts.wireframe;
+    }
+    if (opts.metalness !== undefined && 'metalness' in material) {
+        material.metalness = opts.metalness;
+    }
+    if (opts.roughness !== undefined && 'roughness' in material) {
+        material.roughness = opts.roughness;
+    }
+    material.needsUpdate = true;
 }
 
 /**
@@ -483,6 +574,7 @@ export function resize(width, height) {
 window.meshRenderer = {
     init,
     loadMesh,
+    loadGLB,
     updateMaterial,
     clear,
     clearMesh,

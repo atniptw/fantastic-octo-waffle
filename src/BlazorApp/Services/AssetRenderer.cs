@@ -354,4 +354,275 @@ public class AssetRenderer : IAssetRenderer
         }
     }
 
+    /// <inheritdoc/>
+    public async Task<byte[]> RenderAsGlbAsync(FileIndexItem file, byte[] zipBytes, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(file);
+        ArgumentNullException.ThrowIfNull(zipBytes);
+        ct.ThrowIfCancellationRequested();
+
+        await Task.CompletedTask;
+
+        if (!file.Renderable)
+        {
+            throw new InvalidOperationException($"File '{file.FileName}' is not marked as renderable.");
+        }
+
+        // Extract file from ZIP (same logic as RenderAsync)
+        byte[] fileBytes;
+        using (var ms = new MemoryStream(zipBytes))
+        using (var archive = new ZipArchive(ms, ZipArchiveMode.Read))
+        {
+            var entry = archive.Entries.FirstOrDefault(e => 
+                e.Name.Equals(file.FileName, StringComparison.OrdinalIgnoreCase) ||
+                e.FullName.Equals(file.FileName, StringComparison.OrdinalIgnoreCase));
+            
+            if (entry == null)
+            {
+                throw new InvalidDataException($"File '{file.FileName}' not found in ZIP archive.");
+            }
+
+            using var entryStream = entry.Open();
+            fileBytes = new byte[entry.Length];
+            int totalRead = 0;
+            int bytesRead;
+            while (totalRead < fileBytes.Length && 
+                   (bytesRead = await entryStream.ReadAsync(fileBytes.AsMemory(totalRead), ct)) > 0)
+            {
+                totalRead += bytesRead;
+            }
+        }
+
+        // Parse based on file type and extract meshes
+        List<UnityAssetParser.Classes.Mesh> meshes;
+        
+        if (file.Type == FileType.UnityFS)
+        {
+            meshes = ParseUnityFSBundleToMeshes(fileBytes);
+        }
+        else if (file.Type == FileType.SerializedFile)
+        {
+            meshes = ParseSerializedFileToMeshes(fileBytes);
+        }
+        else
+        {
+            throw new InvalidDataException($"Unsupported file type: {file.Type}");
+        }
+
+        // Export meshes to GLB using GltfExporter
+        var exporter = new UnityAssetParser.Export.GltfExporter();
+        var glbData = exporter.MeshesToGlb(meshes);
+        
+        return glbData;
+    }
+
+    /// <summary>
+    /// Parses a UnityFS bundle and extracts Mesh objects.
+    /// </summary>
+    private List<UnityAssetParser.Classes.Mesh> ParseUnityFSBundleToMeshes(byte[] bundleBytes)
+    {
+        using var ms = new MemoryStream(bundleBytes);
+        var parseResult = BundleFile.TryParse(ms);
+
+        if (!parseResult.Success || parseResult.Bundle == null)
+        {
+            throw new InvalidDataException(
+                $"Failed to parse UnityFS bundle: {string.Join(", ", parseResult.Errors)}");
+        }
+
+        var bundle = parseResult.Bundle;
+
+        if (bundle.Nodes.Count == 0)
+        {
+            throw new InvalidDataException("UnityFS bundle contains no nodes.");
+        }
+
+        var node0 = bundle.Nodes[0];
+        var node0Data = bundle.ExtractNode(node0);
+        var serializedFile = UnityAssetParser.SerializedFile.SerializedFile.Parse(node0Data.Span);
+
+        // Find all Mesh objects (ClassID 43)
+        var meshObjects = serializedFile.GetObjectsByClassId(43).ToList();
+
+        if (meshObjects.Count == 0)
+        {
+            throw new InvalidDataException("No Mesh objects found in bundle.");
+        }
+
+        var version = ParseUnityVersion(serializedFile.Header.UnityVersionString);
+        var isBigEndian = serializedFile.Header.Endianness != 0;
+
+        // Try to load external resource data (Node 1 usually contains .resS data)
+        byte[]? externalResourceData = null;
+        if (bundle.Nodes.Count > 1)
+        {
+            try
+            {
+                var node1 = bundle.Nodes[1];
+                var node1Data = bundle.ExtractNode(node1);
+                externalResourceData = node1Data.ToArray();
+            }
+            catch
+            {
+                // Continue without external data
+            }
+        }
+
+        // Parse all mesh objects
+        var meshes = new List<UnityAssetParser.Classes.Mesh>();
+        foreach (var meshObj in meshObjects)
+        {
+            var meshData = serializedFile.ReadObjectData(meshObj);
+            var mesh = MeshParser.Parse(meshData.Span, version, isBigEndian);
+            
+            if (mesh != null)
+            {
+                // Resolve external vertex buffer if present
+                if (externalResourceData != null && mesh.VertexData != null &&
+                    (mesh.VertexData.DataSize == null || mesh.VertexData.DataSize.Length == 0))
+                {
+                    var resolved = ResolveVertexDataBuffer(mesh, externalResourceData);
+                    if (resolved != null && resolved.Length > 0)
+                    {
+                        mesh.VertexData.DataSize = resolved;
+                    }
+                }
+                
+                // Extract vertex attributes using MeshHelper
+                var meshHelper = new MeshHelper(mesh, version, !isBigEndian);
+                meshHelper.Process();
+                
+                // Update mesh with extracted data
+                if (meshHelper.Positions != null && meshHelper.Positions.Length > 0)
+                {
+                    // Convert float array to Vector3f array
+                    var positions = new Vector3f[meshHelper.Positions.Length / 3];
+                    for (int i = 0; i < positions.Length; i++)
+                    {
+                        positions[i] = new Vector3f 
+                        { 
+                            X = meshHelper.Positions[i * 3], 
+                            Y = meshHelper.Positions[i * 3 + 1], 
+                            Z = meshHelper.Positions[i * 3 + 2] 
+                        };
+                    }
+                    mesh.Vertices = positions;
+                }
+                
+                if (meshHelper.Normals != null && meshHelper.Normals.Length > 0)
+                {
+                    var normals = new Vector3f[meshHelper.Normals.Length / 3];
+                    for (int i = 0; i < normals.Length; i++)
+                    {
+                        normals[i] = new Vector3f 
+                        { 
+                            X = meshHelper.Normals[i * 3], 
+                            Y = meshHelper.Normals[i * 3 + 1], 
+                            Z = meshHelper.Normals[i * 3 + 2] 
+                        };
+                    }
+                    mesh.Normals = normals;
+                }
+                
+                if (meshHelper.UVs != null && meshHelper.UVs.Length > 0)
+                {
+                    var uvs = new Vector2f[meshHelper.UVs.Length / 2];
+                    for (int i = 0; i < uvs.Length; i++)
+                    {
+                        uvs[i] = new Vector2f 
+                        { 
+                            U = meshHelper.UVs[i * 2], 
+                            V = meshHelper.UVs[i * 2 + 1] 
+                        };
+                    }
+                    mesh.UV = uvs;
+                }
+                
+                meshes.Add(mesh);
+            }
+        }
+
+        return meshes;
+    }
+
+    /// <summary>
+    /// Parses a SerializedFile and extracts Mesh objects.
+    /// </summary>
+    private List<UnityAssetParser.Classes.Mesh> ParseSerializedFileToMeshes(byte[] serializedFileBytes)
+    {
+        var serializedFile = UnityAssetParser.SerializedFile.SerializedFile.Parse(serializedFileBytes);
+        var meshObjects = serializedFile.GetObjectsByClassId(43).ToList();
+
+        if (meshObjects.Count == 0)
+        {
+            throw new InvalidDataException("No Mesh objects found in SerializedFile.");
+        }
+
+        var version = ParseUnityVersion(serializedFile.Header.UnityVersionString);
+        var isBigEndian = serializedFile.Header.Endianness != 0;
+
+        var meshes = new List<UnityAssetParser.Classes.Mesh>();
+        foreach (var meshObj in meshObjects)
+        {
+            var meshData = serializedFile.ReadObjectData(meshObj);
+            var mesh = MeshParser.Parse(meshData.Span, version, isBigEndian);
+            
+            if (mesh != null)
+            {
+                // Extract vertex attributes using MeshHelper
+                var meshHelper = new MeshHelper(mesh, version, !isBigEndian);
+                meshHelper.Process();
+                
+                // Update mesh with extracted data (same as UnityFS)
+                if (meshHelper.Positions != null && meshHelper.Positions.Length > 0)
+                {
+                    var positions = new Vector3f[meshHelper.Positions.Length / 3];
+                    for (int i = 0; i < positions.Length; i++)
+                    {
+                        positions[i] = new Vector3f 
+                        { 
+                            X = meshHelper.Positions[i * 3], 
+                            Y = meshHelper.Positions[i * 3 + 1], 
+                            Z = meshHelper.Positions[i * 3 + 2] 
+                        };
+                    }
+                    mesh.Vertices = positions;
+                }
+                
+                if (meshHelper.Normals != null && meshHelper.Normals.Length > 0)
+                {
+                    var normals = new Vector3f[meshHelper.Normals.Length / 3];
+                    for (int i = 0; i < normals.Length; i++)
+                    {
+                        normals[i] = new Vector3f 
+                        { 
+                            X = meshHelper.Normals[i * 3], 
+                            Y = meshHelper.Normals[i * 3 + 1], 
+                            Z = meshHelper.Normals[i * 3 + 2] 
+                        };
+                    }
+                    mesh.Normals = normals;
+                }
+                
+                if (meshHelper.UVs != null && meshHelper.UVs.Length > 0)
+                {
+                    var uvs = new Vector2f[meshHelper.UVs.Length / 2];
+                    for (int i = 0; i < uvs.Length; i++)
+                    {
+                        uvs[i] = new Vector2f 
+                        { 
+                            U = meshHelper.UVs[i * 2], 
+                            V = meshHelper.UVs[i * 2 + 1] 
+                        };
+                    }
+                    mesh.UV = uvs;
+                }
+                
+                meshes.Add(mesh);
+            }
+        }
+
+        return meshes;
+    }
+
 }

@@ -112,11 +112,30 @@
                 return;
             }
 
-            // Step 3: Parse and extract geometry
-            _loadingMessage = "Parsing 3D model...";
+            // Step 3: Parse and export as GLB (preferred method)
+            _loadingMessage = "Parsing 3D model and exporting to GLB...";
             StateHasChanged();
             
-            _geometry = await AssetRenderer.RenderAsync(fileItem, state.ZipBytes, default);
+            byte[] glbData;
+            try
+            {
+                glbData = await AssetRenderer.RenderAsGlbAsync(fileItem, state.ZipBytes, default);
+            }
+            catch (Exception ex)
+            {
+                // Fallback to old JSON geometry method if GLB export fails
+                _loadingMessage = "GLB export failed, falling back to JSON geometry...";
+                StateHasChanged();
+                
+                _geometry = await AssetRenderer.RenderAsync(fileItem, state.ZipBytes, default);
+                _loading = false;
+                StateHasChanged();
+                
+                await Task.Delay(100);
+                await ViewerService.InitializeAsync("threeJsCanvas");
+                _meshId = await ViewerService.ShowAsync(_geometry);
+                return;
+            }
 
             // Step 4: Mark loading complete and render canvas
             _loading = false;
@@ -128,8 +147,12 @@
             // Step 5: Initialize Three.js viewer
             await ViewerService.InitializeAsync("threeJsCanvas");
 
-            // Step 6: Load mesh into viewer
-            _meshId = await ViewerService.ShowAsync(_geometry);
+            // Step 6: Load GLB into viewer
+            _loadingMessage = "Loading GLB into viewer...";
+            _meshId = await ViewerService.ShowGlbAsync(glbData);
+            
+            // Extract vertex/triangle count from GLB for display (optional)
+            // For now, we skip this as it would require parsing GLB again
         }
         catch (NotImplementedException ex)
         {
