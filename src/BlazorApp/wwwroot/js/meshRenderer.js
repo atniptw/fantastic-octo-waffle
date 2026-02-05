@@ -124,11 +124,6 @@ export async function loadGLB(glbData, materialOpts = {}) {
         ? glbData 
         : new Uint8Array(glbData);
     
-    console.log('DEBUG: loadGLB called', {
-        dataLength: uint8Array.length,
-        firstBytes: Array.from(uint8Array.slice(0, 4))
-    });
-    
     // Create blob URL from GLB data
     const blob = new Blob([uint8Array], { type: 'application/octet-stream' });
     const url = URL.createObjectURL(blob);
@@ -144,11 +139,6 @@ export async function loadGLB(glbData, materialOpts = {}) {
             );
         });
         
-        console.log('DEBUG: GLTF loaded', {
-            scenes: gltf.scenes.length,
-            meshes: gltf.scene.children.length
-        });
-        
         // Apply material overrides if specified
         if (Object.keys(materialOpts).length > 0) {
             gltf.scene.traverse((child) => {
@@ -159,7 +149,6 @@ export async function loadGLB(glbData, materialOpts = {}) {
         }
         
         scene.add(gltf.scene);
-        console.log('DEBUG: GLTF scene added, scene.children.length =', scene.children.length);
         
         // Center camera on the loaded model
         centerCameraOnMesh(gltf.scene);
@@ -175,12 +164,37 @@ export async function loadGLB(glbData, materialOpts = {}) {
 }
 
 /**
+ * Validate a material color option before applying it.
+ * Accepts string or number; rejects null, undefined, and empty strings.
+ * @param {string|number|null|undefined} color
+ * @returns {boolean}
+ */
+function isValidMaterialColorOption(color) {
+    if (color === null || color === undefined) {
+        return false;
+    }
+
+    if (typeof color === 'string') {
+        // Reject empty or whitespace-only strings; let THREE.Color validate others.
+        return color.trim().length > 0;
+    }
+
+    if (typeof color === 'number') {
+        // Basic numeric validation: finite and within typical [0, 0xffffff] range.
+        return Number.isFinite(color) && color >= 0 && color <= 0xffffff;
+    }
+
+    // Any other type is invalid.
+    return false;
+}
+
+/**
  * Apply material options to a Three.js material.
  * @param {THREE.Material} material - Material to modify
  * @param {object} opts - Material options
  */
 function applyMaterialOptions(material, opts) {
-    if (opts.color !== undefined) {
+    if (opts.color !== undefined && isValidMaterialColorOption(opts.color)) {
         material.color = new THREE.Color(opts.color);
     }
     if (opts.wireframe !== undefined) {
@@ -216,26 +230,10 @@ export function loadMesh(geometry, groups = null, materialOpts = {}) {
     validateGeometry(geometry);
 
     const bufferGeometry = createBufferGeometry(geometry, groups);
-    
-    console.log('DEBUG: BufferGeometry created', {
-        vertexCount: bufferGeometry.attributes.position.count,
-        indexCount: bufferGeometry.index.count,
-        hasNormals: !!bufferGeometry.attributes.normal,
-        groups: bufferGeometry.groups
-    });
-    
     const material = createMaterial(materialOpts);
     const mesh = new THREE.Mesh(bufferGeometry, material);
     
-    console.log('DEBUG: Mesh created', {
-        visible: mesh.visible,
-        materialType: material.type,
-        materialColor: material.color
-    });
-    
     scene.add(mesh);
-    console.log('DEBUG: Mesh added to scene, scene.children.length =', scene.children.length);
-    
     centerCameraOnMesh(mesh);
 
     const meshId = `mesh-${nextMeshId++}`;
@@ -285,13 +283,6 @@ function validateGeometry(geometry) {
  * @returns {THREE.BufferGeometry} Created geometry
  */
 function createBufferGeometry(geometry, groups) {
-    console.log('DEBUG: createBufferGeometry called', {
-        positionsLength: geometry.positions?.length,
-        indicesLength: geometry.indices?.length,
-        normalsLength: geometry.normals?.length,
-        groupsLength: groups?.length
-    });
-
     const bufferGeometry = new THREE.BufferGeometry();
     
     // Convert arrays to typed arrays (Blazor sends plain arrays)
@@ -303,11 +294,9 @@ function createBufferGeometry(geometry, groups) {
         ? geometry.indices 
         : new Uint32Array(geometry.indices);
     
-    console.log('DEBUG: Setting position attribute', positions.length, 'values');
     bufferGeometry.setAttribute('position',
         new THREE.BufferAttribute(positions, 3));
     
-    console.log('DEBUG: Setting index', indices.length, 'values');
     bufferGeometry.setIndex(
         new THREE.BufferAttribute(indices, 1));
 
@@ -400,13 +389,6 @@ function centerCameraOnMesh(mesh) {
         maxDim = Math.max(size.x, size.y, size.z);
     }
 
-    console.log('DEBUG: Mesh bounding box', {
-        min: box.min,
-        max: box.max,
-        center: center,
-        size: size
-    });
-
     // Set controls target to mesh center
     controls.target.copy(center);
 
@@ -431,13 +413,6 @@ function centerCameraOnMesh(mesh) {
         y: center.y + cameraZ * 0.5,
         z: center.z + cameraZ
     };
-
-    console.log('DEBUG: Camera positioning', {
-        maxDim: maxDim,
-        cameraZ: cameraZ,
-        newPosition: newCameraPos,
-        lookingAt: center
-    });
 
     camera.position.set(newCameraPos.x, newCameraPos.y, newCameraPos.z);
     camera.lookAt(center);

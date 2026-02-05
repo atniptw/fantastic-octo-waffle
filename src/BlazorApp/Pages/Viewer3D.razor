@@ -126,7 +126,7 @@
             {
                 // Log GLB export failure and fallback to JSON geometry method
                 Logger.LogWarning(ex, "GLB export failed for {FileName}, falling back to JSON geometry", decodedFileName);
-                _loadingMessage = $"GLB export failed ({ex.Message}), falling back to JSON geometry...";
+                _loadingMessage = "GLB export failed, falling back to JSON geometry...";
                 StateHasChanged();
                 
                 _geometry = await AssetRenderer.RenderAsync(fileItem, state.ZipBytes, default);
@@ -153,8 +153,15 @@
             _loadingMessage = "Loading GLB into viewer...";
             _meshId = await ViewerService.ShowGlbAsync(glbData);
             
-            // Extract vertex/triangle count from GLB for display (optional)
-            // For now, we skip this as it would require parsing GLB again
+            // Ensure geometry metadata object is initialized so UI can display basic info
+            // (Note: For GLB path, we don't parse the binary to extract counts, so UI will show placeholder)
+            _geometry ??= new ThreeJsGeometry
+            {
+                Positions = Array.Empty<float>(),
+                Indices = Array.Empty<uint>(),
+                VertexCount = 0,
+                TriangleCount = 0
+            };
         }
         catch (NotImplementedException ex)
         {

@@ -5,6 +5,7 @@ using UnityAssetParser.SerializedFile;
 using UnityAssetParser.Services;
 using UnityAssetParser.Classes;
 using UnityAssetParser.Helpers;
+using UnityAssetParser.Export;
 
 namespace BlazorApp.Services;
 
@@ -361,8 +362,6 @@ public class AssetRenderer : IAssetRenderer
         ArgumentNullException.ThrowIfNull(zipBytes);
         ct.ThrowIfCancellationRequested();
 
-        await Task.CompletedTask;
-
         if (!file.Renderable)
         {
             throw new InvalidOperationException($"File '{file.FileName}' is not marked as renderable.");
@@ -410,7 +409,7 @@ public class AssetRenderer : IAssetRenderer
         }
 
         // Export meshes to GLB using GltfExporter
-        var exporter = new UnityAssetParser.Export.GltfExporter();
+        var exporter = new GltfExporter();
         var glbData = exporter.MeshesToGlb(meshes);
         
         return glbData;
@@ -452,15 +451,15 @@ public class AssetRenderer : IAssetRenderer
         var version = ParseUnityVersion(serializedFile.Header.UnityVersionString);
         var isBigEndian = serializedFile.Header.Endianness != 0;
 
-        // Try to load external resource data (Node 1 usually contains .resS vertex buffer data)
-        byte[]? externalVertexBufferData = null;
+        // Try to load external resource data (Node 1 usually contains .resS data)
+        byte[]? externalResourceData = null;
         if (bundle.Nodes.Count > 1)
         {
             try
             {
                 var node1 = bundle.Nodes[1];
                 var node1Data = bundle.ExtractNode(node1);
-                externalVertexBufferData = node1Data.ToArray();
+                externalResourceData = node1Data.ToArray();
             }
             catch
             {
@@ -469,8 +468,7 @@ public class AssetRenderer : IAssetRenderer
         }
 
         // Parse all mesh objects
-        var meshes = new List<UnityAssetParser.Classes.Mesh>();
-        foreach (var meshObj in meshObjects)
+        var meshes = meshObjects.Select(meshObj =>
         {
             var meshData = serializedFile.ReadObjectData(meshObj);
             var mesh = MeshParser.Parse(meshData.Span, version, isBigEndian);
@@ -478,10 +476,10 @@ public class AssetRenderer : IAssetRenderer
             if (mesh != null)
             {
                 // Resolve external vertex buffer if present
-                if (externalVertexBufferData != null && mesh.VertexData != null &&
+                if (externalResourceData != null && mesh.VertexData != null &&
                     (mesh.VertexData.DataSize == null || mesh.VertexData.DataSize.Length == 0))
                 {
-                    var resolved = ResolveVertexDataBuffer(mesh, externalVertexBufferData);
+                    var resolved = ResolveVertexDataBuffer(mesh, externalResourceData);
                     if (resolved != null && resolved.Length > 0)
                     {
                         mesh.VertexData.DataSize = resolved;
@@ -494,10 +492,10 @@ public class AssetRenderer : IAssetRenderer
                 
                 // Populate mesh attributes from extracted data
                 PopulateMeshAttributesFromHelper(mesh, meshHelper);
-                
-                meshes.Add(mesh);
             }
-        }
+            
+            return mesh;
+        }).Where(mesh => mesh != null).Cast<UnityAssetParser.Classes.Mesh>().ToList();
 
         return meshes;
     }
@@ -553,6 +551,35 @@ public class AssetRenderer : IAssetRenderer
             }
             mesh.UV = uvs;
         }
+        
+        // Populate index buffer if missing, using indices from MeshHelper.
+        // This ensures GLTF export does not fall back to incorrect sequential indices.
+        if ((mesh.IndexBuffer == null || mesh.IndexBuffer.Length == 0) &&
+            meshHelper.Indices != null && meshHelper.Indices.Length > 0)
+        {
+            // Convert uint[] indices to byte[] format
+            // Determine format: use 32-bit if any index exceeds UInt16.MaxValue
+            bool use32Bit = meshHelper.Indices.Any(idx => idx > ushort.MaxValue);
+            
+            if (use32Bit)
+            {
+                mesh.IndexFormat = 1; // UInt32
+                mesh.IndexBuffer = new byte[meshHelper.Indices.Length * 4];
+                for (int i = 0; i < meshHelper.Indices.Length; i++)
+                {
+                    BitConverter.GetBytes(meshHelper.Indices[i]).CopyTo(mesh.IndexBuffer, i * 4);
+                }
+            }
+            else
+            {
+                mesh.IndexFormat = 0; // UInt16
+                mesh.IndexBuffer = new byte[meshHelper.Indices.Length * 2];
+                for (int i = 0; i < meshHelper.Indices.Length; i++)
+                {
+                    BitConverter.GetBytes((ushort)meshHelper.Indices[i]).CopyTo(mesh.IndexBuffer, i * 2);
+                }
+            }
+        }
     }
 
     /// <summary>
@@ -571,8 +598,7 @@ public class AssetRenderer : IAssetRenderer
         var version = ParseUnityVersion(serializedFile.Header.UnityVersionString);
         var isBigEndian = serializedFile.Header.Endianness != 0;
 
-        var meshes = new List<UnityAssetParser.Classes.Mesh>();
-        foreach (var meshObj in meshObjects)
+        var meshes = meshObjects.Select(meshObj =>
         {
             var meshData = serializedFile.ReadObjectData(meshObj);
             var mesh = MeshParser.Parse(meshData.Span, version, isBigEndian);
@@ -585,10 +611,10 @@ public class AssetRenderer : IAssetRenderer
                 
                 // Populate mesh attributes from extracted data
                 PopulateMeshAttributesFromHelper(mesh, meshHelper);
-                
-                meshes.Add(mesh);
             }
-        }
+            
+            return mesh;
+        }).Where(mesh => mesh != null).Cast<UnityAssetParser.Classes.Mesh>().ToList();
 
         return meshes;
     }
