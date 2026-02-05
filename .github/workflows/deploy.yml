@@ -53,16 +53,50 @@ jobs:
 
       - name: Prepare GitHub Pages deployment
         run: |
-          # The project publishes to dist-Release/wwwroot by default
-          # Move it to dist/ for consistent deployment
+          # Debug: Check actual publish output structure
+          echo "=== Contents of dist-Release/ ==="
+          ls -la dist-Release/ || echo "dist-Release not found"
+          echo ""
+          echo "=== Contents of dist-Release/wwwroot/ ==="
+          ls -la dist-Release/wwwroot/ || echo "dist-Release/wwwroot not found"
+          echo ""
+          
+          # The project publishes to dist-Release/ and the wwwroot folder of the published app
+          # Copy the entire dist-Release directory to dist for GitHub Pages
           mkdir -p dist
-          cp -r dist-Release/wwwroot/* dist/
+          if [ -d "dist-Release/wwwroot" ]; then
+            cp -r dist-Release/wwwroot/* dist/
+            echo "✅ Copied from dist-Release/wwwroot/"
+          elif [ -d "dist-Release" ]; then
+            # If wwwroot doesn't exist, check for index.html directly in dist-Release
+            if [ -f "dist-Release/index.html" ]; then
+              cp -r dist-Release/* dist/
+              echo "✅ Copied from dist-Release/"
+            else
+              echo "❌ Could not find index.html in expected locations"
+              exit 1
+            fi
+          else
+            echo "❌ dist-Release directory not found"
+            exit 1
+          fi
+          
+          echo ""
+          echo "=== Contents of dist/ ==="
+          ls -la dist/
           
       - name: Add .nojekyll file
         run: touch dist/.nojekyll
 
       - name: Configure base path for GitHub Pages
         run: |
+          # Verify index.html exists before attempting to modify it
+          if [ ! -f "dist/index.html" ]; then
+            echo "❌ dist/index.html not found!"
+            ls -la dist/
+            exit 1
+          fi
+          
           # Update base href in index.html to match repository name
           sed -i 's|<base href="/" />|<base href="/fantastic-octo-waffle/" />|g' dist/index.html
           echo "✅ Updated base href for GitHub Pages"
