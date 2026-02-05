@@ -174,7 +174,6 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Check JavaScript Complexity (ESLint)
-        continue-on-error: true
         run: |
           cd src/BlazorApp/wwwroot/js
           if [ -f "package.json" ]; then
@@ -302,9 +301,9 @@ jobs:
             echo "- Bundle parsing → Three.js render pipeline" >> $GITHUB_STEP_SUMMARY
             echo "- Thunderstore API client with mock responses" >> $GITHUB_STEP_SUMMARY
             echo "- Mesh geometry extraction and validation" >> $GITHUB_STEP_SUMMARY
+            exit 1
           fi
         working-directory: src/BlazorApp
-        continue-on-error: true
 
   # Secondary: Linting & Formatting
   linting-formatting:
