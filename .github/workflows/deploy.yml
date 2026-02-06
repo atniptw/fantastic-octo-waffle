@@ -120,6 +120,10 @@ jobs:
         working-directory: cloudflare-worker
         run: npm ci
 
+      - name: Wrangler whoami
+        working-directory: cloudflare-worker
+        run: npx wrangler whoami
+
       - name: Deploy to Cloudflare Worker (Production)
         working-directory: cloudflare-worker
         env:
