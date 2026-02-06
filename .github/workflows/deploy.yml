@@ -95,6 +95,9 @@ jobs:
             grep '<base href=' dist/index.html || echo "  (No base href element found)"
           fi
 
+          # Remove precompressed index variants to avoid stale base href
+          rm -f dist/index.html.br dist/index.html.gz
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
