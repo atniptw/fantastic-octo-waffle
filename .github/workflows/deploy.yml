@@ -111,6 +111,10 @@ jobs:
             echo "✅ Created blazor.webassembly.js alias"
           fi
 
+          # Stamp build info for troubleshooting
+          build_time=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          echo "{\"sha\":\"${GITHUB_SHA}\",\"builtAt\":\"${build_time}\"}" > dist/build-info.json
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:

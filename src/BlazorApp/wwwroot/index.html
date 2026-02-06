@@ -26,6 +26,9 @@
         <a href="." class="reload">Reload</a>
         <span class="dismiss">🗙</span>
     </div>
+    <div id="build-info" style="position: fixed; right: 0.5rem; bottom: 0.5rem; padding: 0.25rem 0.5rem; font-size: 0.75rem; background: rgba(0,0,0,0.6); color: #fff; border-radius: 4px; z-index: 1001; font-family: monospace;">
+        build: loading
+    </div>
     <!-- Three.js v0.170.0 loaded from CDN (cdn.jsdelivr.net)
          Production deployments should consider:
          - Local hosting of Three.js for reliability
@@ -53,6 +56,22 @@
                 window.history.replaceState({}, "", newPath);
             }
         })();
+    </script>
+    <script>
+        fetch('build-info.json')
+            .then(function (r) { return r.json(); })
+            .then(function (info) {
+                var el = document.getElementById('build-info');
+                if (el && info) {
+                    el.textContent = 'build: ' + (info.sha || 'unknown') + ' @ ' + (info.builtAt || 'unknown');
+                }
+            })
+            .catch(function () {
+                var el = document.getElementById('build-info');
+                if (el) {
+                    el.textContent = 'build: unknown';
+                }
+            });
     </script>
     <script type="module" src="js/cacheStorage.js"></script>
     <script type="module" src="js/lazyLoad.js"></script>

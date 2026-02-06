@@ -255,10 +255,9 @@
                                     <td>
                                         @if (item.Renderable)
                                         {
-                                            <button class="btn btn-sm btn-primary" 
-                                                    @onclick="() => NavigateToViewer(item.FileName)">
+                                            <a class="btn btn-sm btn-primary" href="@GetViewerUrl(item.FileName)">
                                                 Preview
-                                            </button>
+                                            </a>
                                         }
                                         else
                                         {
@@ -276,9 +275,6 @@
 </div>
 
 @code {
-    [Inject]
-    public NavigationManager Nav { get; set; } = default!;
-
     private static readonly ILogger<ModDetail> Logger = NullLogger<ModDetail>.Instance;
 
     [Parameter]
@@ -426,10 +422,10 @@
         _cts?.Cancel();
     }
 
-    private void NavigateToViewer(string filename)
+    private string GetViewerUrl(string filename)
     {
         var encodedFilename = Uri.EscapeDataString(filename);
-        Nav.NavigateTo($"/viewer/{Namespace}/{Name}/{encodedFilename}");
+        return $"/viewer/{Namespace}/{Name}/{encodedFilename}";
     }
 
     private string FormatFileSize(long bytes)
