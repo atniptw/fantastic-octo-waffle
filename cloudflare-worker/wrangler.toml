@@ -9,8 +9,6 @@ workers_dev = true
 
 [env.production]
 # Production environment configuration
-route = "api.repo-mod-viewer.workers.dev/*"
-zone_id = "..."  # Set via CLOUDFLARE_ZONE_ID secret (optional, for custom domain)
 [env.production.vars]
 ALLOWED_ORIGIN = "https://atniptw.github.io"
 ENVIRONMENT = "production"
