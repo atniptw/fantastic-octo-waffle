@@ -2,6 +2,7 @@
 @using BlazorApp.Models
 @using BlazorApp.Services
 @using Microsoft.Extensions.Logging
+@using Microsoft.Extensions.Logging.Abstractions
 @inject IThunderstoreService ThunderstoreService
 @inject IZipDownloader ZipDownloader
 @inject IZipIndexer ZipIndexer
@@ -276,8 +277,7 @@
 </div>
 
 @code {
-    [Inject]
-    public ILogger<ModDetail> Logger { get; set; } = default!;
+    private static readonly ILogger<ModDetail> Logger = NullLogger<ModDetail>.Instance;
 
     [Parameter]
     public string Namespace { get; set; } = string.Empty;
