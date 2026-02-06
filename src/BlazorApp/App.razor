@@ -1,3 +1,5 @@
+@inject NavigationManager Nav
+
 <Router AppAssembly="@typeof(App).Assembly">
     <Found Context="routeData">
         <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)"/>
@@ -6,5 +8,8 @@
     <NotFound>
         <PageTitle>Not found</PageTitle>
         <p role="alert">Sorry, there's nothing at this address.</p>
+        <p class="text-muted">Base: @Nav.BaseUri</p>
+        <p class="text-muted">Uri: @Nav.Uri</p>
+        <p class="text-muted">Relative: @Nav.ToBaseRelativePath(Nav.Uri)</p>
     </NotFound>
 </Router>
