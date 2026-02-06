@@ -39,6 +39,21 @@
             }
         }
     </script>
+    <script>
+        (function () {
+            var params = new URLSearchParams(window.location.search);
+            var path = params.get("path");
+            if (path) {
+                params.delete("path");
+                var newPath = decodeURIComponent(path);
+                var newSearch = params.toString();
+                if (newSearch) {
+                    newPath += (newPath.indexOf("?") === -1 ? "?" : "&") + newSearch;
+                }
+                window.history.replaceState({}, "", newPath);
+            }
+        })();
+    </script>
     <script type="module" src="js/cacheStorage.js"></script>
     <script type="module" src="js/lazyLoad.js"></script>
     <script type="module" src="js/meshRenderer.js"></script>
