@@ -4,4 +4,7 @@ namespace BlazorApp.Layout;
 
 public partial class MainLayout : LayoutComponentBase
 {
+	public MainLayout()
+	{
+	}
 }
