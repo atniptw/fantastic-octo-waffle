@@ -3,10 +3,6 @@
 @using BlazorApp.Services
 @using Microsoft.Extensions.Logging
 @using Microsoft.Extensions.Logging.Abstractions
-@inject IThunderstoreService ThunderstoreService
-@inject IZipDownloader ZipDownloader
-@inject IZipIndexer ZipIndexer
-@inject IModDetailStateService StateService
 @implements IAsyncDisposable
 
 <PageTitle>@(_package?.Name ?? Name) - R.E.P.O. Mod Browser</PageTitle>
@@ -277,6 +273,11 @@
 @code {
     private static readonly ILogger<ModDetail> Logger = NullLogger<ModDetail>.Instance;
 
+    private IThunderstoreService _thunderstoreService = default!;
+    private IZipDownloader _zipDownloader = default!;
+    private IZipIndexer _zipIndexer = default!;
+    private IModDetailStateService _stateService = default!;
+
     [Parameter]
     public string Namespace { get; set; } = string.Empty;
     
@@ -297,10 +298,17 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // Resolve services explicitly to avoid DI property injection issues in AOT builds.
+        var services = ServiceLocator.Provider ?? throw new InvalidOperationException("Service provider not initialized");
+        _thunderstoreService = services.GetRequiredService<IThunderstoreService>();
+        _zipDownloader = services.GetRequiredService<IZipDownloader>();
+        _zipIndexer = services.GetRequiredService<IZipIndexer>();
+        _stateService = services.GetRequiredService<IModDetailStateService>();
+
         // Fetch package metadata (uses cached data if available)
         try
         {
-            _package = await ThunderstoreService.GetPackageByNameAsync(Namespace, Name);
+            _package = await _thunderstoreService.GetPackageByNameAsync(Namespace, Name);
             
             if (_package == null)
             {
@@ -343,7 +351,7 @@
             // Future improvement: Consider IndexedDB storage or streaming extraction per-file.
             
             // Step 1: Download ZIP (streaming and collection)
-            var downloadStream = ZipDownloader.StreamZipAsync(_package.LatestVersion, _cts.Token);
+            var downloadStream = _zipDownloader.StreamZipAsync(_package.LatestVersion, _cts.Token);
             
             _state = DownloadState.Processing;
             StateHasChanged();
@@ -372,7 +380,7 @@
             }
             
             _fileIndex = new List<FileIndexItem>();
-            await foreach (var item in ZipIndexer.IndexAsync(BytesToStream(), _cts.Token))
+            await foreach (var item in _zipIndexer.IndexAsync(BytesToStream(), _cts.Token))
             {
                 _fileIndex.Add(item);
             }
@@ -388,7 +396,7 @@
             }
 
             // Step 3: Store for Viewer3D (including ZIP bytes)
-            await StateService.SetCurrentModAsync(ModId, _fileIndex, _package, zipBytes);
+            await _stateService.SetCurrentModAsync(ModId, _fileIndex, _package, zipBytes);
             
             // Step 4: Ready
             _state = DownloadState.Ready;

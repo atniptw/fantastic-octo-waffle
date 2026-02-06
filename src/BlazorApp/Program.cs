@@ -52,4 +52,6 @@ builder.Services.AddScoped<IModDetailStateService, ModDetailStateService>();
 builder.Services.AddScoped<IGltfExportService, GltfExportService>();
 builder.Services.AddScoped<ICacheStorageService, CacheStorageService>();
 
-await builder.Build().RunAsync();
+var host = builder.Build();
+ServiceLocator.Provider = host.Services;
+await host.RunAsync();
