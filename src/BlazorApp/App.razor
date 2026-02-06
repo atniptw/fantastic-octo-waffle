@@ -7,9 +7,13 @@
     </Found>
     <NotFound>
         <PageTitle>Not found</PageTitle>
-        <p role="alert">Sorry, there's nothing at this address.</p>
-        <p class="text-muted">Base: @Nav.BaseUri</p>
-        <p class="text-muted">Uri: @Nav.Uri</p>
-        <p class="text-muted">Relative: @Nav.ToBaseRelativePath(Nav.Uri)</p>
+        @if (string.IsNullOrEmpty(Nav.ToBaseRelativePath(Nav.Uri)))
+        {
+            <RedirectToHome />
+        }
+        else
+        {
+            <p role="alert">Sorry, there's nothing at this address.</p>
+        }
     </NotFound>
 </Router>
