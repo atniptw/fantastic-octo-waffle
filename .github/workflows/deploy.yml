@@ -98,6 +98,19 @@ jobs:
           # Remove precompressed index variants to avoid stale base href
           rm -f dist/index.html.br dist/index.html.gz
 
+          # Ensure blazor.webassembly.js exists for GitHub Pages
+          if ls dist/_framework/blazor.webassembly.*.js >/dev/null 2>&1; then
+            hashed_js=$(ls dist/_framework/blazor.webassembly.*.js | head -n 1)
+            cp "$hashed_js" dist/_framework/blazor.webassembly.js
+            if [ -f "${hashed_js}.br" ]; then
+              cp "${hashed_js}.br" dist/_framework/blazor.webassembly.js.br
+            fi
+            if [ -f "${hashed_js}.gz" ]; then
+              cp "${hashed_js}.gz" dist/_framework/blazor.webassembly.js.gz
+            fi
+            echo "✅ Created blazor.webassembly.js alias"
+          fi
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
