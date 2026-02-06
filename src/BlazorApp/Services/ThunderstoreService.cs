@@ -55,7 +55,9 @@ public sealed class ThunderstoreService : IThunderstoreService
             // Fetch from API
             var response = await _httpClient.GetAsync("/api/packages", cancellationToken);
             response.EnsureSuccessStatusCode();
-            var packages = await response.Content.ReadFromJsonAsync<List<ThunderstorePackage>>(cancellationToken) ?? new List<ThunderstorePackage>();
+            var packages = await response.Content.ReadFromJsonAsync(
+                ThunderstoreJsonContext.Default.ListThunderstorePackage,
+                cancellationToken) ?? new List<ThunderstorePackage>();
             
             // Update cache
             _cachedPackages = packages;
