@@ -7,7 +7,6 @@
 @inject IZipDownloader ZipDownloader
 @inject IZipIndexer ZipIndexer
 @inject IModDetailStateService StateService
-@inject NavigationManager NavigationManager
 @implements IAsyncDisposable
 
 <PageTitle>@(_package?.Name ?? Name) - R.E.P.O. Mod Browser</PageTitle>
@@ -277,6 +276,9 @@
 </div>
 
 @code {
+    [Inject]
+    public NavigationManager Nav { get; set; } = default!;
+
     private static readonly ILogger<ModDetail> Logger = NullLogger<ModDetail>.Instance;
 
     [Parameter]
@@ -427,7 +429,7 @@
     private void NavigateToViewer(string filename)
     {
         var encodedFilename = Uri.EscapeDataString(filename);
-        NavigationManager.NavigateTo($"/viewer/{Namespace}/{Name}/{encodedFilename}");
+        Nav.NavigateTo($"/viewer/{Namespace}/{Name}/{encodedFilename}");
     }
 
     private string FormatFileSize(long bytes)
