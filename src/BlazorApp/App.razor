@@ -1,3 +1,5 @@
+@using BlazorApp.Layout
+@using BlazorApp.Pages
 @inject NavigationManager Nav
 
 <Router AppAssembly="@typeof(App).Assembly">
@@ -9,7 +11,9 @@
         <PageTitle>Not found</PageTitle>
         @if (string.IsNullOrEmpty(Nav.ToBaseRelativePath(Nav.Uri)))
         {
-            <RedirectToHome />
+            <LayoutView Layout="@typeof(MainLayout)">
+                <Index />
+            </LayoutView>
         }
         else
         {
