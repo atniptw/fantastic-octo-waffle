@@ -1,7 +1,6 @@
 name = "repo-mod-viewer-api"
 main = "worker.js"
 compatibility_date = "2026-01-01"
-account_id = "..."  # Set via CLOUDFLARE_ACCOUNT_ID secret
 workers_dev = true
 
 [env.dev]
