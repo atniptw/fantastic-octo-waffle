@@ -31,10 +31,10 @@ public interface IAssetRenderer
     /// <returns>GLB binary data ready for Three.js GLTFLoader.</returns>
     /// <exception cref="InvalidDataException">Corrupt asset or parsing error.</exception>
     /// <exception cref="InvalidOperationException">File is not renderable.</exception>
-    Task<byte[]> RenderAsGlbAsync(FileIndexItem file, byte[] zipBytes, CancellationToken ct = default);
+    Task<GlbExportResult> RenderAsGlbAsync(FileIndexItem file, byte[] zipBytes, CancellationToken ct = default);
 
     /// <summary>
     /// Renders GLB directly from a bundle file byte array (e.g., .hhh).
     /// </summary>
-    Task<byte[]> RenderAsGlbFromBundleAsync(FileIndexItem file, byte[] bundleBytes, CancellationToken ct = default);
+    Task<GlbExportResult> RenderAsGlbFromBundleAsync(FileIndexItem file, byte[] bundleBytes, CancellationToken ct = default);
 }

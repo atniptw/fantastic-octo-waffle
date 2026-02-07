@@ -3,7 +3,9 @@ using SharpGLTF.Geometry;
 using SharpGLTF.Geometry.VertexTypes;
 using SharpGLTF.Materials;
 using SharpGLTF.Schema2;
+using SharpGLTF.Scenes;
 using UnityAssetParser.Classes;
+using UnityAssetParser.Helpers;
 
 namespace UnityAssetParser.Export;
 
@@ -46,10 +48,7 @@ public class GltfExporter
         }
 
         // Create default material
-        var material = new MaterialBuilder("default")
-            .WithDoubleSide(true)
-            .WithMetallicRoughnessShader()
-            .WithMetallicRoughness(0.0f, 1.0f); // Non-metallic, full roughness
+        var material = CreateMaterialBuilder(null);
 
         // Convert each Unity mesh to MeshBuilder
         var meshBuilders = new List<IMeshBuilder<MaterialBuilder>>();
@@ -61,18 +60,105 @@ public class GltfExporter
                 continue;
             }
 
-            var meshBuilder = ConvertUnityMesh(mesh, material);
-            meshBuilders.Add(meshBuilder);
+            foreach (var meshBuilder in ConvertUnityMesh(mesh, new List<MaterialBuilder> { material }))
+            {
+                meshBuilders.Add(meshBuilder);
+            }
         }
 
         // Create glTF model from MeshBuilders
-        var model = ModelRoot.CreateModel();
         if (meshBuilders.Count > 0)
         {
-            model.CreateMeshes(meshBuilders.ToArray());
+            var scene = new SceneBuilder("Scene");
+            foreach (var meshBuilder in meshBuilders)
+            {
+                scene.AddRigidMesh(meshBuilder, Matrix4x4.Identity);
+            }
+
+            return scene.ToGltf2();
         }
 
-        return model;
+        return ModelRoot.CreateModel();
+    }
+
+    /// <summary>
+    /// Converts meshes to glTF with a single shared material override.
+    /// </summary>
+    public ModelRoot MeshesToGltf(List<UnityMesh> meshes, MaterialInfo? materialInfo)
+    {
+        if (meshes == null)
+        {
+            throw new ArgumentNullException(nameof(meshes));
+        }
+
+        var material = CreateMaterialBuilder(materialInfo);
+        var meshBuilders = new List<IMeshBuilder<MaterialBuilder>>();
+
+        foreach (var mesh in meshes)
+        {
+            if (mesh == null)
+            {
+                continue;
+            }
+
+            foreach (var meshBuilder in ConvertUnityMesh(mesh, new List<MaterialBuilder> { material }))
+            {
+                meshBuilders.Add(meshBuilder);
+            }
+        }
+
+        if (meshBuilders.Count > 0)
+        {
+            var scene = new SceneBuilder("Scene");
+            foreach (var meshBuilder in meshBuilders)
+            {
+                scene.AddRigidMesh(meshBuilder, Matrix4x4.Identity);
+            }
+
+            return scene.ToGltf2();
+        }
+
+        return ModelRoot.CreateModel();
+    }
+
+    /// <summary>
+    /// Converts meshes to glTF using a material list (submesh mapping by index).
+    /// </summary>
+    public ModelRoot MeshesToGltf(List<UnityMesh> meshes, IReadOnlyList<MaterialInfo>? materials)
+    {
+        if (meshes == null)
+        {
+            throw new ArgumentNullException(nameof(meshes));
+        }
+
+        var materialBuilders = CreateMaterialBuilders(materials);
+        var meshBuilders = new List<IMeshBuilder<MaterialBuilder>>();
+
+        foreach (var mesh in meshes)
+        {
+            if (mesh == null)
+            {
+                continue;
+            }
+
+            foreach (var meshBuilder in ConvertUnityMesh(mesh, materialBuilders))
+            {
+                meshBuilders.Add(meshBuilder);
+            }
+        }
+
+        if (meshBuilders.Count > 0)
+        {
+            var scene = new SceneBuilder("Scene");
+            foreach (var meshBuilder in meshBuilders)
+            {
+                scene.AddRigidMesh(meshBuilder, Matrix4x4.Identity);
+            }
+
+            return scene.ToGltf2();
+        }
+
+        return ModelRoot.CreateModel();
     }
 
     /// <summary>
@@ -87,7 +173,7 @@ public class GltfExporter
     /// <param name="unityMesh">Source Unity Mesh</param>
     /// <param name="material">Material to assign to primitives</param>
     /// <returns>MeshBuilder ready for glTF export</returns>
-    private IMeshBuilder<MaterialBuilder> ConvertUnityMesh(UnityMesh unityMesh, MaterialBuilder material)
+    private IEnumerable<IMeshBuilder<MaterialBuilder>> ConvertUnityMesh(UnityMesh unityMesh, IReadOnlyList<MaterialBuilder> materials)
     {
         // Validate mesh has required vertex data
         if (unityMesh.Vertices == null || unityMesh.Vertices.Length == 0)
@@ -99,28 +185,46 @@ public class GltfExporter
         var vertices = unityMesh.Vertices;
         var normals = unityMesh.Normals;
         var uvs = unityMesh.UV;
+        var colors = unityMesh.Colors;
         var indices = ExtractIndices(unityMesh);
+        bool use32Bit = unityMesh.IndexFormat == 1 || (unityMesh.IndexFormat == null && unityMesh.Use16BitIndices == false);
 
         bool hasNormals = normals != null && normals.Length == vertices.Length;
         bool hasUVs = uvs != null && uvs.Length == vertices.Length;
+        bool hasColors = colors != null && colors.Length == vertices.Length;
 
-        // Select appropriate vertex format and build mesh
-        if (hasNormals && hasUVs)
+        if (unityMesh.SubMeshes != null &&
+            unityMesh.SubMeshes.Length > 0 &&
+            materials.Count >= unityMesh.SubMeshes.Length)
         {
-            return BuildMeshWithNormalsAndUVs(unityMesh.Name ?? "Mesh", vertices, normals!, uvs!, indices, material);
+            var builders = new List<IMeshBuilder<MaterialBuilder>>();
+            for (int i = 0; i < unityMesh.SubMeshes.Length; i++)
+            {
+                var submesh = unityMesh.SubMeshes[i];
+                var material = materials[i];
+                var subIndices = SliceIndices(indices, submesh, use32Bit);
+                var name = $"{unityMesh.Name ?? "Mesh"}_Sub{i}";
+
+                builders.Add(BuildMeshWithAvailableAttributes(
+                    name, vertices, normals, uvs, colors, subIndices, material, hasNormals, hasUVs, hasColors));
+            }
+            return builders;
         }
-        else if (hasNormals)
+
+        return new[]
         {
-            return BuildMeshWithNormals(unityMesh.Name ?? "Mesh", vertices, normals!, indices, material);
-        }
-        else if (hasUVs)
-        {
-            return BuildMeshWithUVs(unityMesh.Name ?? "Mesh", vertices, uvs!, indices, material);
-        }
-        else
-        {
-            return BuildMeshPositionsOnly(unityMesh.Name ?? "Mesh", vertices, indices, material);
-        }
+            BuildMeshWithAvailableAttributes(
+                unityMesh.Name ?? "Mesh",
+                vertices,
+                normals,
+                uvs,
+                colors,
+                indices,
+                materials.Count > 0 ? materials[0] : CreateMaterialBuilder(null),
+                hasNormals,
+                hasUVs,
+                hasColors)
+        };
     }
 
     /// <summary>
@@ -160,7 +264,7 @@ public class GltfExporter
                     throw new InvalidOperationException(
                         $"Index buffer length {buffer.Length} is not a multiple of 2 for UInt16 indices (IndexFormat=0)");
                 }
-                
+
                 var uint16Count = buffer.Length / 2;
                 var result = new int[uint16Count];
                 for (int i = 0; i < uint16Count; i++)
@@ -177,7 +281,7 @@ public class GltfExporter
                     throw new InvalidOperationException(
                         $"Index buffer length {buffer.Length} is not a multiple of 4 for UInt32 indices (IndexFormat=1)");
                 }
-                
+
                 var uint32Count = buffer.Length / 4;
                 var result = new int[uint32Count];
                 for (int i = 0; i < uint32Count; i++)
@@ -398,4 +502,271 @@ public class GltfExporter
         var model = MeshesToGltf(meshes);
         return ExportToGlb(model);
     }
+
+    /// <summary>
+    /// Convenience method: Meshes → glTF → GLB with a shared material override.
+    /// </summary>
+    public byte[] MeshesToGlb(List<UnityMesh> meshes, MaterialInfo? materialInfo)
+    {
+        var model = MeshesToGltf(meshes, materialInfo);
+        return ExportToGlb(model);
+    }
+
+    /// <summary>
+    /// Convenience method: Meshes → glTF → GLB with a material list.
+    /// </summary>
+    public byte[] MeshesToGlb(List<UnityMesh> meshes, IReadOnlyList<MaterialInfo>? materials)
+    {
+        var model = MeshesToGltf(meshes, materials);
+        return ExportToGlb(model);
+    }
+
+    private static MaterialBuilder CreateMaterialBuilder(MaterialInfo? materialInfo)
+    {
+        var name = materialInfo?.Name ?? "default";
+        var material = new MaterialBuilder(name)
+            .WithDoubleSide(true)
+            .WithMetallicRoughnessShader()
+            .WithMetallicRoughness(0.0f, 1.0f);
+
+        if (materialInfo != null)
+        {
+            material.WithChannelParam(KnownChannel.BaseColor, materialInfo.BaseColor);
+
+            if (materialInfo.BaseColorTexture != null &&
+                materialInfo.BaseColorTexture.Rgba32.Length > 0)
+            {
+                var pngBytes = PngWriter.EncodeRgba32(
+                    materialInfo.BaseColorTexture.Width,
+                    materialInfo.BaseColorTexture.Height,
+                    materialInfo.BaseColorTexture.Rgba32);
+
+                var image = ImageBuilder.From(pngBytes, "image/png");
+                material.WithChannelImage(KnownChannel.BaseColor, image);
+            }
+        }
+
+        return material;
+    }
+
+    private static IReadOnlyList<MaterialBuilder> CreateMaterialBuilders(IReadOnlyList<MaterialInfo>? materials)
+    {
+        if (materials == null || materials.Count == 0)
+        {
+            return new List<MaterialBuilder> { CreateMaterialBuilder(null) };
+        }
+
+        var list = new List<MaterialBuilder>();
+        foreach (var material in materials)
+        {
+            list.Add(CreateMaterialBuilder(material));
+        }
+        return list;
+    }
+
+    private static int[] SliceIndices(int[] indices, SubMesh submesh, bool use32Bit)
+    {
+        if (indices.Length == 0)
+        {
+            return indices;
+        }
+
+        int bytesPerIndex = use32Bit ? 4 : 2;
+        int start = (int)(submesh.FirstByte / (uint)bytesPerIndex);
+        int count = (int)submesh.IndexCount;
+        if (start < 0 || start >= indices.Length || count <= 0)
+        {
+            return Array.Empty<int>();
+        }
+
+        int maxCount = Math.Min(count, indices.Length - start);
+        var slice = new int[maxCount];
+        int baseVertex = (int)submesh.BaseVertex;
+        for (int i = 0; i < maxCount; i++)
+        {
+            slice[i] = indices[start + i] + baseVertex;
+        }
+
+        return slice;
+    }
+
+    private IMeshBuilder<MaterialBuilder> BuildMeshWithAvailableAttributes(
+        string name,
+        Vector3f[] positions,
+        Vector3f[]? normals,
+        Vector2f[]? uvs,
+        ColorRGBA[]? colors,
+        int[] indices,
+        MaterialBuilder material,
+        bool hasNormals,
+        bool hasUVs,
+        bool hasColors)
+    {
+        if (hasNormals && hasUVs && hasColors && normals != null && uvs != null && colors != null)
+        {
+            return BuildMeshWithNormalsUVsAndColors(name, positions, normals, uvs, colors, indices, material);
+        }
+        else if (hasNormals && hasUVs && normals != null && uvs != null)
+        {
+            return BuildMeshWithNormalsAndUVs(name, positions, normals, uvs, indices, material);
+        }
+        else if (hasNormals && hasColors && normals != null && colors != null)
+        {
+            return BuildMeshWithNormalsAndColors(name, positions, normals, colors, indices, material);
+        }
+        else if (hasNormals && normals != null)
+        {
+            return BuildMeshWithNormals(name, positions, normals, indices, material);
+        }
+        else if (hasUVs && hasColors && uvs != null && colors != null)
+        {
+            return BuildMeshWithUVsAndColors(name, positions, uvs, colors, indices, material);
+        }
+        else if (hasUVs && uvs != null)
+        {
+            return BuildMeshWithUVs(name, positions, uvs, indices, material);
+        }
+        else if (hasColors && colors != null)
+        {
+            return BuildMeshWithColors(name, positions, colors, indices, material);
+        }
+
+        return BuildMeshPositionsOnly(name, positions, indices, material);
+    }
+
+    private IMeshBuilder<MaterialBuilder> BuildMeshWithNormalsUVsAndColors(
+        string name,
+        Vector3f[] positions,
+        Vector3f[] normals,
+        Vector2f[] uvs,
+        ColorRGBA[] colors,
+        int[] indices,
+        MaterialBuilder material)
+    {
+        var mesh = new MeshBuilder<VertexPositionNormal, VertexColor1Texture1, VertexEmpty>(name);
+        var prim = mesh.UsePrimitive(material);
+
+        for (int i = 0; i < indices.Length; i += 3)
+        {
+            int i0 = indices[i];
+            int i1 = indices[i + 1];
+            int i2 = indices[i + 2];
+
+            var v0 = new VertexBuilder<VertexPositionNormal, VertexColor1Texture1, VertexEmpty>(
+                new VertexPositionNormal(ToVector3(positions[i0]), ToVector3(normals[i0])),
+                new VertexColor1Texture1(ToVector4(colors[i0]), ToVector2(uvs[i0])));
+            var v1 = new VertexBuilder<VertexPositionNormal, VertexColor1Texture1, VertexEmpty>(
+                new VertexPositionNormal(ToVector3(positions[i1]), ToVector3(normals[i1])),
+                new VertexColor1Texture1(ToVector4(colors[i1]), ToVector2(uvs[i1])));
+            var v2 = new VertexBuilder<VertexPositionNormal, VertexColor1Texture1, VertexEmpty>(
+                new VertexPositionNormal(ToVector3(positions[i2]), ToVector3(normals[i2])),
+                new VertexColor1Texture1(ToVector4(colors[i2]), ToVector2(uvs[i2])));
+
+            prim.AddTriangle(v0, v1, v2);
+        }
+
+        return mesh;
+    }
+
+    private IMeshBuilder<MaterialBuilder> BuildMeshWithNormalsAndColors(
+        string name,
+        Vector3f[] positions,
+        Vector3f[] normals,
+        ColorRGBA[] colors,
+        int[] indices,
+        MaterialBuilder material)
+    {
+        var mesh = new MeshBuilder<VertexPositionNormal, VertexColor1, VertexEmpty>(name);
+        var prim = mesh.UsePrimitive(material);
+
+        for (int i = 0; i < indices.Length; i += 3)
+        {
+            int i0 = indices[i];
+            int i1 = indices[i + 1];
+            int i2 = indices[i + 2];
+
+            var v0 = new VertexBuilder<VertexPositionNormal, VertexColor1, VertexEmpty>(
+                new VertexPositionNormal(ToVector3(positions[i0]), ToVector3(normals[i0])),
+                new VertexColor1(ToVector4(colors[i0])));
+            var v1 = new VertexBuilder<VertexPositionNormal, VertexColor1, VertexEmpty>(
+                new VertexPositionNormal(ToVector3(positions[i1]), ToVector3(normals[i1])),
+                new VertexColor1(ToVector4(colors[i1])));
+            var v2 = new VertexBuilder<VertexPositionNormal, VertexColor1, VertexEmpty>(
+                new VertexPositionNormal(ToVector3(positions[i2]), ToVector3(normals[i2])),
+                new VertexColor1(ToVector4(colors[i2])));
+
+            prim.AddTriangle(v0, v1, v2);
+        }
+
+        return mesh;
+    }
+
+    private IMeshBuilder<MaterialBuilder> BuildMeshWithUVsAndColors(
+        string name,
+        Vector3f[] positions,
+        Vector2f[] uvs,
+        ColorRGBA[] colors,
+        int[] indices,
+        MaterialBuilder material)
+    {
+        var mesh = new MeshBuilder<VertexPosition, VertexColor1Texture1, VertexEmpty>(name);
+        var prim = mesh.UsePrimitive(material);
+
+        for (int i = 0; i < indices.Length; i += 3)
+        {
+            int i0 = indices[i];
+            int i1 = indices[i + 1];
+            int i2 = indices[i + 2];
+
+            var v0 = new VertexBuilder<VertexPosition, VertexColor1Texture1, VertexEmpty>(
+                new VertexPosition(ToVector3(positions[i0])),
+                new VertexColor1Texture1(ToVector4(colors[i0]), ToVector2(uvs[i0])));
+            var v1 = new VertexBuilder<VertexPosition, VertexColor1Texture1, VertexEmpty>(
+                new VertexPosition(ToVector3(positions[i1])),
+                new VertexColor1Texture1(ToVector4(colors[i1]), ToVector2(uvs[i1])));
+            var v2 = new VertexBuilder<VertexPosition, VertexColor1Texture1, VertexEmpty>(
+                new VertexPosition(ToVector3(positions[i2])),
+                new VertexColor1Texture1(ToVector4(colors[i2]), ToVector2(uvs[i2])));
+
+            prim.AddTriangle(v0, v1, v2);
+        }
+
+        return mesh;
+    }
+
+    private IMeshBuilder<MaterialBuilder> BuildMeshWithColors(
+        string name,
+        Vector3f[] positions,
+        ColorRGBA[] colors,
+        int[] indices,
+        MaterialBuilder material)
+    {
+        var mesh = new MeshBuilder<VertexPosition, VertexColor1, VertexEmpty>(name);
+        var prim = mesh.UsePrimitive(material);
+
+        for (int i = 0; i < indices.Length; i += 3)
+        {
+            int i0 = indices[i];
+            int i1 = indices[i + 1];
+            int i2 = indices[i + 2];
+
+            var v0 = new VertexBuilder<VertexPosition, VertexColor1, VertexEmpty>(
+                new VertexPosition(ToVector3(positions[i0])),
+                new VertexColor1(ToVector4(colors[i0])));
+            var v1 = new VertexBuilder<VertexPosition, VertexColor1, VertexEmpty>(
+                new VertexPosition(ToVector3(positions[i1])),
+                new VertexColor1(ToVector4(colors[i1])));
+            var v2 = new VertexBuilder<VertexPosition, VertexColor1, VertexEmpty>(
+                new VertexPosition(ToVector3(positions[i2])),
+                new VertexColor1(ToVector4(colors[i2])));
+
+            prim.AddTriangle(v0, v1, v2);
+        }
+
+        return mesh;
+    }
+
+    private static Vector3 ToVector3(Vector3f v) => new(v.X, v.Y, v.Z);
+    private static Vector2 ToVector2(Vector2f v) => new(v.U, v.V);
+    private static Vector4 ToVector4(ColorRGBA c) => new(c.R, c.G, c.B, c.A);
 }

@@ -31,7 +31,7 @@ public sealed class MeshExtractionService
             bundle = BundleFile.Parse(bundleStream);
         }
 
-        // Step 2: Find and parse SerializedFile (Node 0)
+        // Step 2: Find and parse SerializedFile (not all bundles store it as Node 0)
         Console.WriteLine($"DEBUG: Bundle has {bundle.Nodes.Count} nodes");
         for (int i = 0; i < bundle.Nodes.Count; i++)
         {
@@ -44,30 +44,21 @@ public sealed class MeshExtractionService
             throw new InvalidOperationException("Bundle has no nodes");
         }
 
-        var node0 = bundle.Nodes[0];
-        var serializedFileData = bundle.ExtractNode(node0);
-
-        SerializedFile.SerializedFile serializedFile;
-        try
+        if (!TryFindSerializedFile(bundle, out var serializedFile, out var serializedNode, out var serializedError))
         {
-            serializedFile = SerializedFile.SerializedFile.Parse(serializedFileData.Span);
-        }
-        catch (Exception ex)
-        {
-            throw new InvalidOperationException($"Failed to parse SerializedFile from Node 0: {ex.Message}", ex);
+            throw new InvalidOperationException($"Failed to locate a SerializedFile node: {serializedError}");
         }
 
-        // Step 3: Find .resS resource node (Node 1) if present
+        Console.WriteLine($"DEBUG: Using SerializedFile node: Path='{serializedNode.Path}', Size={serializedNode.Size}");
+
+        // Step 3: Find .resS resource node if present (for MeshParser compatibility)
         ReadOnlyMemory<byte>? resSData = null;
-        if (bundle.Nodes.Count > 1)
+        var resourceNode = bundle.Nodes.FirstOrDefault(n =>
+            n.Path.EndsWith(".resS", StringComparison.OrdinalIgnoreCase) ||
+            n.Path.EndsWith(".resource", StringComparison.OrdinalIgnoreCase));
+        if (!string.IsNullOrEmpty(resourceNode.Path))
         {
-            var node1 = bundle.Nodes[1];
-            // Check if this is a .resS resource file
-            if (node1.Path.EndsWith(".resS", StringComparison.OrdinalIgnoreCase) ||
-                node1.Path.EndsWith(".resource", StringComparison.OrdinalIgnoreCase))
-            {
-                resSData = bundle.ExtractNode(node1);
-            }
+            resSData = bundle.ExtractNode(resourceNode);
         }
 
         // Step 4: Find all Mesh objects (ClassID 43)
@@ -133,6 +124,78 @@ public sealed class MeshExtractionService
         return results;
     }
 
+    private static bool TryFindSerializedFile(
+        BundleFile bundle,
+        out SerializedFile.SerializedFile serializedFile,
+        out NodeInfo serializedNode,
+        out string? error)
+    {
+        serializedFile = null!;
+        serializedNode = default;
+        error = null;
+
+        if (bundle.Nodes.Count == 0)
+        {
+            error = "Bundle has no nodes";
+            return false;
+        }
+
+        // Prefer non-resource nodes first
+        var candidates = bundle.Nodes
+            .Where(n => !IsResourceNode(n.Path))
+            .ToList();
+
+        if (candidates.Count == 0)
+        {
+            candidates = bundle.Nodes.ToList();
+        }
+
+        var matches = new List<(NodeInfo Node, SerializedFile.SerializedFile File, int MeshCount, int ObjectCount)>();
+
+        foreach (var node in candidates)
+        {
+            try
+            {
+                var nodeData = bundle.ExtractNode(node);
+                if (SerializedFile.SerializedFile.TryParse(nodeData.Span, out var parsed, out _))
+                {
+                    var meshCount = parsed!.Objects.Count(o => o.ClassId == RenderableDetector.RenderableClassIds.Mesh);
+                    matches.Add((node, parsed!, meshCount, parsed!.Objects.Count));
+                }
+            }
+            catch
+            {
+                // Ignore nodes that can't be parsed as SerializedFile
+            }
+        }
+
+        if (matches.Count == 0)
+        {
+            error = "No nodes could be parsed as a SerializedFile";
+            return false;
+        }
+
+        var best = matches
+            .OrderByDescending(m => m.MeshCount)
+            .ThenByDescending(m => m.ObjectCount)
+            .First();
+
+        serializedFile = best.File;
+        serializedNode = best.Node;
+        return true;
+    }
+
+    private static bool IsResourceNode(string? path)
+    {
+        if (string.IsNullOrEmpty(path))
+        {
+            return false;
+        }
+
+        return path.EndsWith(".resS", StringComparison.OrdinalIgnoreCase) ||
+               path.EndsWith(".resource", StringComparison.OrdinalIgnoreCase);
+    }
+
     /// <summary>
     /// Extracts geometry from a single Mesh object.
     /// </summary>
@@ -161,7 +224,7 @@ public sealed class MeshExtractionService
         // Parse Mesh object using TypeTree (dynamic field order per Unity version)
         // TypeTree encodes the actual field sequence for this version, so we use it rather than hardcoding
         Console.WriteLine($"DEBUG: ExtractMeshGeometry - objectData.Length={objectData.Length}, meshObj.ByteSize={meshObj.ByteSize}");
-        
+
         // CRITICAL: Ensure objectData matches ByteSize from ObjectInfo
         // Unity object data should be exactly ByteSize bytes as specified in the object table
         if (objectData.Length != meshObj.ByteSize)
@@ -173,16 +236,16 @@ public sealed class MeshExtractionService
         Mesh? mesh;
         try
         {
-            // TypeTree-driven parsing is the only supported approach.
-            // TypeTree provides version-specific field ordering.
             if (typeTreeNodes == null || typeTreeNodes.Count == 0)
             {
-                Console.WriteLine($"DEBUG: No TypeTree available for Mesh object, skipping");
-                return null;
+                Console.WriteLine($"DEBUG: No TypeTree available for Mesh object, falling back to legacy parser");
+                mesh = MeshParser.Parse(objectData.Span, version, isBigEndian, resSData);
             }
-
-            Console.WriteLine($"DEBUG: Using TypeTree parsing ({typeTreeNodes.Count} nodes)");
-            mesh = MeshParser.ParseWithTypeTree(objectData.Span, typeTreeNodes, version, isBigEndian, resSData);
+            else
+            {
+                Console.WriteLine($"DEBUG: Using TypeTree parsing ({typeTreeNodes.Count} nodes)");
+                mesh = MeshParser.ParseWithTypeTree(objectData.Span, typeTreeNodes, version, isBigEndian, resSData);
+            }
         }
         catch (Exception ex)
         {

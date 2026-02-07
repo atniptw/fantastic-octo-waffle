@@ -121,53 +121,51 @@
             _loadingMessage = "Parsing 3D model and exporting to GLB...";
             StateHasChanged();
             
-            byte[] glbData;
+            GlbExportResult glbResult;
             try
             {
                 var bundleBytes = await ZipCacheService.GetFileBytesAsync(state.ZipCacheKey, fileItem.FileName, default);
-                glbData = await AssetRenderer.RenderAsGlbFromBundleAsync(fileItem, bundleBytes, default);
+                glbResult = await AssetRenderer.RenderAsGlbFromBundleAsync(fileItem, bundleBytes, default);
             }
             catch (Exception ex)
             {
-                // Log GLB export failure and fallback to JSON geometry method
-                Logger.LogWarning(ex, "GLB export failed for {FileName}, falling back to JSON geometry", decodedFileName);
-                _loadingMessage = "GLB export failed, falling back to JSON geometry...";
-                StateHasChanged();
-
-                var bundleBytes = await ZipCacheService.GetFileBytesAsync(state.ZipCacheKey, fileItem.FileName, default);
-                _geometry = await AssetRenderer.RenderFromBundleAsync(fileItem, bundleBytes, default);
+                Logger.LogWarning(ex, "GLB export failed for {FileName}", decodedFileName);
+                _error = $"Failed to export GLB: {ex.Message}";
                 _loading = false;
-                StateHasChanged();
-                
-                await Task.Delay(100);
-                await ViewerService.InitializeAsync("threeJsCanvas");
-                _meshId = await ViewerService.ShowAsync(_geometry);
                 return;
             }
 
             // Step 4: Mark loading complete and render canvas
             _loading = false;
             StateHasChanged();
-            
+
             // Wait for Blazor to render the canvas element
             await Task.Delay(100);
 
-            // Step 5: Initialize Three.js viewer
+            // Step 5: Initialize Three.js viewer (once)
             await ViewerService.InitializeAsync("threeJsCanvas");
 
-            // Step 6: Load GLB into viewer
-            _loadingMessage = "Loading GLB into viewer...";
-            _meshId = await ViewerService.ShowGlbAsync(glbData);
-            
-            // Ensure geometry metadata object is initialized so UI can display basic info
-            // (Note: For GLB path, we don't parse the binary to extract counts, so UI will show placeholder)
-            _geometry ??= new ThreeJsGeometry
+            try
             {
-                Positions = Array.Empty<float>(),
-                Indices = Array.Empty<uint>(),
-                VertexCount = 0,
-                TriangleCount = 0
-            };
+                // Step 6: Load GLB into viewer
+                _loadingMessage = "Loading GLB into viewer...";
+                _meshId = await ViewerService.ShowGlbAsync(glbResult.GlbBytes);
+
+                // Ensure geometry metadata object is initialized so UI can display basic info
+                _geometry ??= new ThreeJsGeometry
+                {
+                    Positions = Array.Empty<float>(),
+                    Indices = Array.Empty<uint>(),
+                    VertexCount = glbResult.VertexCount,
+                    TriangleCount = glbResult.TriangleCount
+                };
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "GLB viewer load failed for {FileName}", decodedFileName);
+                _error = $"Failed to load GLB in viewer: {ex.Message}";
+                _loading = false;
+            }
         }
         catch (NotImplementedException ex)
         {
