@@ -5,28 +5,28 @@ using BlazorApp.Services;
 using BlazorApp.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
-using System.Runtime.CompilerServices;
 
 namespace BlazorApp.Tests.Pages;
 
 public class ModDetailPageTests : Bunit.TestContext
 {
     private readonly Mock<IThunderstoreService> _mockThunderstoreService;
-    private readonly Mock<IZipDownloader> _mockZipDownloader;
-    private readonly Mock<IZipIndexer> _mockZipIndexer;
+    private readonly Mock<IZipCacheService> _mockZipCacheService;
     private readonly Mock<IModDetailStateService> _mockStateService;
 
     public ModDetailPageTests()
     {
         _mockThunderstoreService = new Mock<IThunderstoreService>();
-        _mockZipDownloader = new Mock<IZipDownloader>();
-        _mockZipIndexer = new Mock<IZipIndexer>();
+        _mockZipCacheService = new Mock<IZipCacheService>();
         _mockStateService = new Mock<IModDetailStateService>();
+
+        _mockStateService
+            .Setup(s => s.SetCurrentModAsync(It.IsAny<string>(), It.IsAny<List<FileIndexItem>>(), It.IsAny<ThunderstorePackage>(), It.IsAny<string>()))
+            .Returns(Task.CompletedTask);
 
         // Register mocked services
         Services.AddScoped(_ => _mockThunderstoreService.Object);
-        Services.AddScoped(_ => _mockZipDownloader.Object);
-        Services.AddScoped(_ => _mockZipIndexer.Object);
+        Services.AddScoped(_ => _mockZipCacheService.Object);
         Services.AddScoped(_ => _mockStateService.Object);
     }
 
@@ -165,13 +165,13 @@ public class ModDetailPageTests : Bunit.TestContext
             .Setup(s => s.GetPackagesAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<ThunderstorePackage> { testPackage });
 
-        _mockZipDownloader
-            .Setup(d => d.StreamZipAsync(It.IsAny<PackageVersion>(), It.IsAny<CancellationToken>()))
-            .Returns(EmptyAsyncEnumerable());
+        _mockZipCacheService
+            .Setup(s => s.CacheZipAsync(It.IsAny<PackageVersion>(), It.IsAny<string>(), It.IsAny<Action<long, long>>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
 
-        _mockZipIndexer
-            .Setup(i => i.IndexAsync(It.IsAny<IAsyncEnumerable<byte[]>>(), It.IsAny<CancellationToken>()))
-            .Returns(EmptyFileIndexEnumerable());
+        _mockZipCacheService
+            .Setup(s => s.ListHhhFilesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<FileIndexItem>());
 
         // Act
         var cut = Render<ModDetail>(parameters => parameters
@@ -199,14 +199,13 @@ public class ModDetailPageTests : Bunit.TestContext
             .Setup(s => s.GetPackagesAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<ThunderstorePackage> { testPackage });
 
-        _mockZipDownloader
-            .Setup(d => d.StreamZipAsync(It.IsAny<PackageVersion>(), It.IsAny<CancellationToken>()))
-            .Returns(EmptyAsyncEnumerable());
+        _mockZipCacheService
+            .Setup(s => s.CacheZipAsync(It.IsAny<PackageVersion>(), It.IsAny<string>(), It.IsAny<Action<long, long>>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
 
-        var fileIndex = CreateFileIndexWithNonRenderableFiles();
-        _mockZipIndexer
-            .Setup(i => i.IndexAsync(It.IsAny<IAsyncEnumerable<byte[]>>(), It.IsAny<CancellationToken>()))
-            .Returns(fileIndex);
+        _mockZipCacheService
+            .Setup(s => s.ListHhhFilesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(CreateFileIndexWithNonRenderableFiles());
 
         // Act
         var cut = Render<ModDetail>(parameters => parameters
@@ -234,14 +233,13 @@ public class ModDetailPageTests : Bunit.TestContext
             .Setup(s => s.GetPackagesAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<ThunderstorePackage> { testPackage });
 
-        _mockZipDownloader
-            .Setup(d => d.StreamZipAsync(It.IsAny<PackageVersion>(), It.IsAny<CancellationToken>()))
-            .Returns(EmptyAsyncEnumerable());
+        _mockZipCacheService
+            .Setup(s => s.CacheZipAsync(It.IsAny<PackageVersion>(), It.IsAny<string>(), It.IsAny<Action<long, long>>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
 
-        var fileIndex = CreateFileIndexWithRenderableFiles();
-        _mockZipIndexer
-            .Setup(i => i.IndexAsync(It.IsAny<IAsyncEnumerable<byte[]>>(), It.IsAny<CancellationToken>()))
-            .Returns(fileIndex);
+        _mockZipCacheService
+            .Setup(s => s.ListHhhFilesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(CreateFileIndexWithRenderableFiles());
 
         // Act
         var cut = Render<ModDetail>(parameters => parameters
@@ -272,14 +270,13 @@ public class ModDetailPageTests : Bunit.TestContext
             .Setup(s => s.GetPackagesAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<ThunderstorePackage> { testPackage });
 
-        _mockZipDownloader
-            .Setup(d => d.StreamZipAsync(It.IsAny<PackageVersion>(), It.IsAny<CancellationToken>()))
-            .Returns(EmptyAsyncEnumerable());
+        _mockZipCacheService
+            .Setup(s => s.CacheZipAsync(It.IsAny<PackageVersion>(), It.IsAny<string>(), It.IsAny<Action<long, long>>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
 
-        var fileIndex = CreateMixedFileIndex();
-        _mockZipIndexer
-            .Setup(i => i.IndexAsync(It.IsAny<IAsyncEnumerable<byte[]>>(), It.IsAny<CancellationToken>()))
-            .Returns(fileIndex);
+        _mockZipCacheService
+            .Setup(s => s.ListHhhFilesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(CreateMixedFileIndex());
 
         // Act
         var cut = Render<ModDetail>(parameters => parameters
@@ -296,7 +293,7 @@ public class ModDetailPageTests : Bunit.TestContext
         // Assert
         var highlightedRows = cut.FindAll("tr.table-light");
         Assert.NotEmpty(highlightedRows);
-        
+
         var mutedRows = cut.FindAll("tr.text-muted");
         Assert.NotEmpty(mutedRows);
     }
@@ -347,36 +344,30 @@ public class ModDetailPageTests : Bunit.TestContext
         };
     }
 
-    private static async IAsyncEnumerable<byte[]> EmptyAsyncEnumerable()
+    private static List<FileIndexItem> CreateFileIndexWithNonRenderableFiles()
     {
-        await Task.CompletedTask;
-        yield break;
+        return new List<FileIndexItem>
+        {
+            new("readme.txt", 100, FileType.Unknown, false),
+            new("manifest.json", 200, FileType.Unknown, false)
+        };
     }
 
-    private static async IAsyncEnumerable<FileIndexItem> EmptyFileIndexEnumerable()
+    private static List<FileIndexItem> CreateFileIndexWithRenderableFiles()
     {
-        await Task.CompletedTask;
-        yield break;
+        return new List<FileIndexItem>
+        {
+            new("test.hhh", 1024, FileType.UnityFS, true)
+        };
     }
 
-    private static async IAsyncEnumerable<FileIndexItem> CreateFileIndexWithNonRenderableFiles()
+    private static List<FileIndexItem> CreateMixedFileIndex()
     {
-        await Task.CompletedTask;
-        yield return new FileIndexItem("readme.txt", 100, FileType.Unknown, false);
-        yield return new FileIndexItem("manifest.json", 200, FileType.Unknown, false);
-    }
-
-    private static async IAsyncEnumerable<FileIndexItem> CreateFileIndexWithRenderableFiles()
-    {
-        await Task.CompletedTask;
-        yield return new FileIndexItem("test.hhh", 1024, FileType.UnityFS, true);
-    }
-
-    private static async IAsyncEnumerable<FileIndexItem> CreateMixedFileIndex()
-    {
-        await Task.CompletedTask;
-        yield return new FileIndexItem("test.hhh", 1024, FileType.UnityFS, true);
-        yield return new FileIndexItem("readme.txt", 100, FileType.Unknown, false);
-        yield return new FileIndexItem("model2.hhh", 2048, FileType.UnityFS, true);
+        return new List<FileIndexItem>
+        {
+            new("test.hhh", 1024, FileType.UnityFS, true),
+            new("readme.txt", 100, FileType.Unknown, false),
+            new("model2.hhh", 2048, FileType.UnityFS, true)
+        };
     }
 }

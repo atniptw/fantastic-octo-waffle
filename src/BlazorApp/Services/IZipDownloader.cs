@@ -10,14 +10,14 @@ public interface IZipDownloader : IAsyncDisposable, IDisposable
     /// </summary>
     /// <exception cref="HttpRequestException">Network error or 404.</exception>
     Task<DownloadMeta?> GetMetaAsync(PackageVersion version, CancellationToken ct = default);
-    
+
     /// <summary>
     /// Stream ZIP file in chunks (recommended 64KB-256KB per chunk).
     /// </summary>
     /// <exception cref="HttpRequestException">Network error.</exception>
     /// <exception cref="OperationCanceledException">Download cancelled.</exception>
     IAsyncEnumerable<byte[]> StreamZipAsync(
-        PackageVersion version, 
+        PackageVersion version,
         CancellationToken ct = default);
 
     /// <summary>
@@ -34,7 +34,7 @@ public interface IZipDownloader : IAsyncDisposable, IDisposable
     /// <exception cref="IOException">Disk full during write</exception>
     /// <exception cref="OperationCanceledException">Download cancelled</exception>
     Task<string> DownloadAsync(
-        Uri url, 
+        Uri url,
         Action<long, long>? onProgress = null,
         CancellationToken cancellationToken = default
     );

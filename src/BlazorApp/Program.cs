@@ -45,6 +45,7 @@ builder.Services.AddScoped(sp => sp.GetRequiredService<IHttpClientFactory>().Cre
 
 // Register service interfaces with implementations
 builder.Services.AddScoped<IZipIndexer, ZipIndexer>();
+builder.Services.AddScoped<IZipCacheService, ZipCacheService>();
 builder.Services.AddScoped<IAssetScanner, AssetScanner>();
 builder.Services.AddScoped<IAssetRenderer, AssetRenderer>();
 builder.Services.AddScoped<IViewerService, ViewerService>();

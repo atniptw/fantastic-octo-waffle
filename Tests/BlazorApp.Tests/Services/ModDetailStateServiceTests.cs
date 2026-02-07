@@ -26,7 +26,7 @@ public class ModDetailStateServiceTests
         };
 
         // Act
-        await service.SetCurrentModAsync(modId, fileIndex, metadata, Array.Empty<byte>());
+        await service.SetCurrentModAsync(modId, fileIndex, metadata, "cache-key");
         var state = await service.GetCurrentModAsync();
 
         // Assert
@@ -34,6 +34,7 @@ public class ModDetailStateServiceTests
         Assert.Equal(modId, state.ModId);
         Assert.Equal(fileIndex.Count, state.FileIndex.Count);
         Assert.Equal(metadata.Name, state.Metadata.Name);
+        Assert.Equal("cache-key", state.ZipCacheKey);
     }
 
     [Fact]
@@ -65,7 +66,7 @@ public class ModDetailStateServiceTests
             Versions = new List<PackageVersion>()
         };
 
-        await service.SetCurrentModAsync(modId, fileIndex, metadata, Array.Empty<byte>());
+        await service.SetCurrentModAsync(modId, fileIndex, metadata, "cache-key");
 
         // Act
         await service.ClearAsync();
@@ -92,7 +93,7 @@ public class ModDetailStateServiceTests
 
         // Act & Assert
         await Assert.ThrowsAsync<ArgumentNullException>(
-            () => service.SetCurrentModAsync(null!, fileIndex, metadata, Array.Empty<byte>())
+            () => service.SetCurrentModAsync(null!, fileIndex, metadata, "cache-key")
         );
     }
 
@@ -113,7 +114,7 @@ public class ModDetailStateServiceTests
 
         // Act & Assert
         await Assert.ThrowsAsync<ArgumentNullException>(
-            () => service.SetCurrentModAsync(modId, null!, metadata, Array.Empty<byte>())
+            () => service.SetCurrentModAsync(modId, null!, metadata, "cache-key")
         );
     }
 
@@ -127,7 +128,7 @@ public class ModDetailStateServiceTests
 
         // Act & Assert
         await Assert.ThrowsAsync<ArgumentNullException>(
-            () => service.SetCurrentModAsync(modId, fileIndex, null!, Array.Empty<byte>())
+            () => service.SetCurrentModAsync(modId, fileIndex, null!, "cache-key")
         );
     }
 
@@ -157,8 +158,8 @@ public class ModDetailStateServiceTests
         };
 
         // Act
-        await service.SetCurrentModAsync(modId1, fileIndex, metadata1, Array.Empty<byte>());
-        await service.SetCurrentModAsync(modId2, fileIndex, metadata2, Array.Empty<byte>());
+        await service.SetCurrentModAsync(modId1, fileIndex, metadata1, "cache-key-1");
+        await service.SetCurrentModAsync(modId2, fileIndex, metadata2, "cache-key-2");
         var state = await service.GetCurrentModAsync();
 
         // Assert
@@ -185,7 +186,7 @@ public class ModDetailStateServiceTests
         var beforeTime = DateTime.UtcNow;
 
         // Act
-        await service.SetCurrentModAsync(modId, fileIndex, metadata, Array.Empty<byte>());
+        await service.SetCurrentModAsync(modId, fileIndex, metadata, "cache-key");
         var state = await service.GetCurrentModAsync();
         var afterTime = DateTime.UtcNow;
 

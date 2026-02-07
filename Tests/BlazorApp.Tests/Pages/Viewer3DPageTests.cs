@@ -13,16 +13,19 @@ public class Viewer3DPageTests : Bunit.TestContext
     private readonly Mock<IModDetailStateService> _stateServiceMock;
     private readonly Mock<IAssetRenderer> _assetRendererMock;
     private readonly Mock<IViewerService> _viewerServiceMock;
+    private readonly Mock<IZipCacheService> _zipCacheServiceMock;
 
     public Viewer3DPageTests()
     {
         _stateServiceMock = new Mock<IModDetailStateService>();
         _assetRendererMock = new Mock<IAssetRenderer>();
         _viewerServiceMock = new Mock<IViewerService>();
+        _zipCacheServiceMock = new Mock<IZipCacheService>();
 
         Services.AddSingleton(_stateServiceMock.Object);
         Services.AddSingleton(_assetRendererMock.Object);
         Services.AddSingleton(_viewerServiceMock.Object);
+        Services.AddSingleton(_zipCacheServiceMock.Object);
     }
 
     [Fact]
@@ -30,7 +33,7 @@ public class Viewer3DPageTests : Bunit.TestContext
     {
         // Arrange
         _stateServiceMock.Setup(s => s.GetCurrentModAsync()).ReturnsAsync((ModDetailState?)null);
-        
+
         // Act
         var cut = Render<Viewer3D>(parameters => parameters
             .Add(p => p.OwnerName, "TestAuthor")
@@ -85,7 +88,7 @@ public class Viewer3DPageTests : Bunit.TestContext
                 Categories = new List<string> { "Cosmetics" },
                 Versions = new List<PackageVersion>()
             },
-            ZipBytes = new byte[] { 0x50, 0x4B, 0x03, 0x04 } // ZIP magic bytes
+            ZipCacheKey = "TestAuthor_TestMod_1.0.0"
         };
     }
 }

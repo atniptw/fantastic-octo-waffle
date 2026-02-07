@@ -4,6 +4,7 @@
 @inject IModDetailStateService StateService
 @inject IAssetRenderer AssetRenderer
 @inject IViewerService ViewerService
+@inject IZipCacheService ZipCacheService
 @inject ILogger<Viewer3D> Logger
 @implements IAsyncDisposable
 
@@ -123,7 +124,8 @@
             byte[] glbData;
             try
             {
-                glbData = await AssetRenderer.RenderAsGlbAsync(fileItem, state.ZipBytes, default);
+                var bundleBytes = await ZipCacheService.GetFileBytesAsync(state.ZipCacheKey, fileItem.FileName, default);
+                glbData = await AssetRenderer.RenderAsGlbFromBundleAsync(fileItem, bundleBytes, default);
             }
             catch (Exception ex)
             {
@@ -131,8 +133,9 @@
                 Logger.LogWarning(ex, "GLB export failed for {FileName}, falling back to JSON geometry", decodedFileName);
                 _loadingMessage = "GLB export failed, falling back to JSON geometry...";
                 StateHasChanged();
-                
-                _geometry = await AssetRenderer.RenderAsync(fileItem, state.ZipBytes, default);
+
+                var bundleBytes = await ZipCacheService.GetFileBytesAsync(state.ZipCacheKey, fileItem.FileName, default);
+                _geometry = await AssetRenderer.RenderFromBundleAsync(fileItem, bundleBytes, default);
                 _loading = false;
                 StateHasChanged();
                 

@@ -187,7 +187,7 @@ public partial class ZipDownloader : IZipDownloader
                 {
                     await using var stream = await response.Content.ReadAsStreamAsync(cts.Token).ConfigureAwait(false);
                     await using var fileStream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, ChunkSize, useAsync: true);
-                    
+
                     var buffer = new byte[ChunkSize];
                     var downloaded = 0L;
                     int bytesRead;

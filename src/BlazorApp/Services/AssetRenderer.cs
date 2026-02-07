@@ -21,8 +21,6 @@ public class AssetRenderer : IAssetRenderer
         ArgumentNullException.ThrowIfNull(zipBytes);
         ct.ThrowIfCancellationRequested();
 
-        await Task.CompletedTask;
-
         if (!file.Renderable)
         {
             throw new InvalidOperationException($"File '{file.FileName}' is not marked as renderable.");
@@ -34,10 +32,10 @@ public class AssetRenderer : IAssetRenderer
         using (var archive = new ZipArchive(ms, ZipArchiveMode.Read))
         {
             // Match by filename (handles files in subdirectories)
-            var entry = archive.Entries.FirstOrDefault(e => 
+            var entry = archive.Entries.FirstOrDefault(e =>
                 e.Name.Equals(file.FileName, StringComparison.OrdinalIgnoreCase) ||
                 e.FullName.Equals(file.FileName, StringComparison.OrdinalIgnoreCase));
-            
+
             if (entry == null)
             {
                 throw new InvalidDataException($"File '{file.FileName}' not found in ZIP archive.");
@@ -47,21 +45,38 @@ public class AssetRenderer : IAssetRenderer
             fileBytes = new byte[entry.Length];
             int totalRead = 0;
             int bytesRead;
-            while (totalRead < fileBytes.Length && 
+            while (totalRead < fileBytes.Length &&
                    (bytesRead = await entryStream.ReadAsync(fileBytes.AsMemory(totalRead), ct)) > 0)
             {
                 totalRead += bytesRead;
             }
         }
 
+        return await RenderFromBundleAsync(file, fileBytes, ct).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc/>
+    public async Task<ThreeJsGeometry> RenderFromBundleAsync(FileIndexItem file, byte[] bundleBytes, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(file);
+        ArgumentNullException.ThrowIfNull(bundleBytes);
+        ct.ThrowIfCancellationRequested();
+
+        await Task.CompletedTask;
+
+        if (!file.Renderable)
+        {
+            throw new InvalidOperationException($"File '{file.FileName}' is not marked as renderable.");
+        }
+
         // Parse based on file type
         if (file.Type == FileType.UnityFS)
         {
-            return ParseUnityFSBundle(fileBytes);
+            return ParseUnityFSBundle(bundleBytes);
         }
         else if (file.Type == FileType.SerializedFile)
         {
-            return ParseSerializedFile(fileBytes);
+            return ParseSerializedFile(bundleBytes);
         }
         else
         {
@@ -69,6 +84,9 @@ public class AssetRenderer : IAssetRenderer
         }
     }
 
+    /// <summary>
+    /// Parses a UnityFS bundle and extracts mesh geometry.
+    /// </summary>
     private ThreeJsGeometry ParseUnityFSBundle(byte[] bundleBytes)
     {
         using var ms = new MemoryStream(bundleBytes);
@@ -186,7 +204,7 @@ public class AssetRenderer : IAssetRenderer
 
         int.TryParse(parts[0], out int major);
         int.TryParse(parts[1], out int minor);
-        
+
         // Parse patch (may have letter suffix like "3f1c1")
         var patchStr = parts[2];
         int patchEndIdx = 0;
@@ -372,10 +390,10 @@ public class AssetRenderer : IAssetRenderer
         using (var ms = new MemoryStream(zipBytes))
         using (var archive = new ZipArchive(ms, ZipArchiveMode.Read))
         {
-            var entry = archive.Entries.FirstOrDefault(e => 
+            var entry = archive.Entries.FirstOrDefault(e =>
                 e.Name.Equals(file.FileName, StringComparison.OrdinalIgnoreCase) ||
                 e.FullName.Equals(file.FileName, StringComparison.OrdinalIgnoreCase));
-            
+
             if (entry == null)
             {
                 throw new InvalidDataException($"File '{file.FileName}' not found in ZIP archive.");
@@ -385,7 +403,7 @@ public class AssetRenderer : IAssetRenderer
             fileBytes = new byte[entry.Length];
             int totalRead = 0;
             int bytesRead;
-            while (totalRead < fileBytes.Length && 
+            while (totalRead < fileBytes.Length &&
                    (bytesRead = await entryStream.ReadAsync(fileBytes.AsMemory(totalRead), ct)) > 0)
             {
                 totalRead += bytesRead;
@@ -394,7 +412,7 @@ public class AssetRenderer : IAssetRenderer
 
         // Parse based on file type and extract meshes
         List<UnityAssetParser.Classes.Mesh> meshes;
-        
+
         if (file.Type == FileType.UnityFS)
         {
             meshes = ParseUnityFSBundleToMeshes(fileBytes);
@@ -411,8 +429,40 @@ public class AssetRenderer : IAssetRenderer
         // Export meshes to GLB using GltfExporter
         var exporter = new GltfExporter();
         var glbData = exporter.MeshesToGlb(meshes);
-        
+
         return glbData;
+    }
+
+    /// <inheritdoc/>
+    public async Task<byte[]> RenderAsGlbFromBundleAsync(FileIndexItem file, byte[] bundleBytes, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(file);
+        ArgumentNullException.ThrowIfNull(bundleBytes);
+        ct.ThrowIfCancellationRequested();
+
+        await Task.CompletedTask;
+
+        if (!file.Renderable)
+        {
+            throw new InvalidOperationException($"File '{file.FileName}' is not marked as renderable.");
+        }
+
+        List<UnityAssetParser.Classes.Mesh> meshes;
+        if (file.Type == FileType.UnityFS)
+        {
+            meshes = ParseUnityFSBundleToMeshes(bundleBytes);
+        }
+        else if (file.Type == FileType.SerializedFile)
+        {
+            meshes = ParseSerializedFileToMeshes(bundleBytes);
+        }
+        else
+        {
+            throw new InvalidDataException($"Unsupported file type: {file.Type}");
+        }
+
+        var exporter = new GltfExporter();
+        return exporter.MeshesToGlb(meshes);
     }
 
     /// <summary>
@@ -472,7 +522,7 @@ public class AssetRenderer : IAssetRenderer
         {
             var meshData = serializedFile.ReadObjectData(meshObj);
             var mesh = MeshParser.Parse(meshData.Span, version, isBigEndian);
-            
+
             if (mesh != null)
             {
                 // Resolve external vertex buffer if present
@@ -485,15 +535,15 @@ public class AssetRenderer : IAssetRenderer
                         mesh.VertexData.DataSize = resolved;
                     }
                 }
-                
+
                 // Extract vertex attributes using MeshHelper
                 var meshHelper = new MeshHelper(mesh, version, !isBigEndian);
                 meshHelper.Process();
-                
+
                 // Populate mesh attributes from extracted data
                 PopulateMeshAttributesFromHelper(mesh, meshHelper);
             }
-            
+
             return mesh;
         }).Where(mesh => mesh != null).Cast<UnityAssetParser.Classes.Mesh>().ToList();
 
@@ -511,47 +561,47 @@ public class AssetRenderer : IAssetRenderer
             var positions = new Vector3f[meshHelper.Positions.Length / 3];
             for (int i = 0; i < positions.Length; i++)
             {
-                positions[i] = new Vector3f 
-                { 
-                    X = meshHelper.Positions[i * 3], 
-                    Y = meshHelper.Positions[i * 3 + 1], 
-                    Z = meshHelper.Positions[i * 3 + 2] 
+                positions[i] = new Vector3f
+                {
+                    X = meshHelper.Positions[i * 3],
+                    Y = meshHelper.Positions[i * 3 + 1],
+                    Z = meshHelper.Positions[i * 3 + 2]
                 };
             }
             mesh.Vertices = positions;
         }
-        
+
         // Convert normals
         if (meshHelper.Normals != null && meshHelper.Normals.Length > 0)
         {
             var normals = new Vector3f[meshHelper.Normals.Length / 3];
             for (int i = 0; i < normals.Length; i++)
             {
-                normals[i] = new Vector3f 
-                { 
-                    X = meshHelper.Normals[i * 3], 
-                    Y = meshHelper.Normals[i * 3 + 1], 
-                    Z = meshHelper.Normals[i * 3 + 2] 
+                normals[i] = new Vector3f
+                {
+                    X = meshHelper.Normals[i * 3],
+                    Y = meshHelper.Normals[i * 3 + 1],
+                    Z = meshHelper.Normals[i * 3 + 2]
                 };
             }
             mesh.Normals = normals;
         }
-        
+
         // Convert UVs
         if (meshHelper.UVs != null && meshHelper.UVs.Length > 0)
         {
             var uvs = new Vector2f[meshHelper.UVs.Length / 2];
             for (int i = 0; i < uvs.Length; i++)
             {
-                uvs[i] = new Vector2f 
-                { 
-                    U = meshHelper.UVs[i * 2], 
-                    V = meshHelper.UVs[i * 2 + 1] 
+                uvs[i] = new Vector2f
+                {
+                    U = meshHelper.UVs[i * 2],
+                    V = meshHelper.UVs[i * 2 + 1]
                 };
             }
             mesh.UV = uvs;
         }
-        
+
         // Populate index buffer if missing, using indices from MeshHelper.
         // This ensures GLTF export does not fall back to incorrect sequential indices.
         if ((mesh.IndexBuffer == null || mesh.IndexBuffer.Length == 0) &&
@@ -560,7 +610,7 @@ public class AssetRenderer : IAssetRenderer
             // Convert uint[] indices to byte[] format
             // Determine format: use 32-bit if any index exceeds UInt16.MaxValue
             bool use32Bit = meshHelper.Indices.Any(idx => idx > ushort.MaxValue);
-            
+
             if (use32Bit)
             {
                 mesh.IndexFormat = 1; // UInt32
@@ -602,17 +652,17 @@ public class AssetRenderer : IAssetRenderer
         {
             var meshData = serializedFile.ReadObjectData(meshObj);
             var mesh = MeshParser.Parse(meshData.Span, version, isBigEndian);
-            
+
             if (mesh != null)
             {
                 // Extract vertex attributes using MeshHelper
                 var meshHelper = new MeshHelper(mesh, version, !isBigEndian);
                 meshHelper.Process();
-                
+
                 // Populate mesh attributes from extracted data
                 PopulateMeshAttributesFromHelper(mesh, meshHelper);
             }
-            
+
             return mesh;
         }).Where(mesh => mesh != null).Cast<UnityAssetParser.Classes.Mesh>().ToList();
 

@@ -274,8 +274,7 @@
     private static readonly ILogger<ModDetail> Logger = NullLogger<ModDetail>.Instance;
 
     private IThunderstoreService _thunderstoreService = default!;
-    private IZipDownloader _zipDownloader = default!;
-    private IZipIndexer _zipIndexer = default!;
+    private IZipCacheService _zipCacheService = default!;
     private IModDetailStateService _stateService = default!;
 
     [Parameter]
@@ -301,8 +300,7 @@
         // Resolve services explicitly to avoid DI property injection issues in AOT builds.
         var services = ServiceLocator.Provider ?? throw new InvalidOperationException("Service provider not initialized");
         _thunderstoreService = services.GetRequiredService<IThunderstoreService>();
-        _zipDownloader = services.GetRequiredService<IZipDownloader>();
-        _zipIndexer = services.GetRequiredService<IZipIndexer>();
+        _zipCacheService = services.GetRequiredService<IZipCacheService>();
         _stateService = services.GetRequiredService<IModDetailStateService>();
 
         // Fetch package metadata (uses cached data if available)
@@ -343,47 +341,48 @@
         _totalBytes = _package.LatestVersion.FileSize ?? 0;
         _cts = new CancellationTokenSource();
         StateHasChanged();
+
+        const long MaxPreviewZipSizeBytes = 2L * 1024 * 1024 * 1024; // 2GB
+        if (_totalBytes > MaxPreviewZipSizeBytes)
+        {
+            _state = DownloadState.Error;
+            _errorMessage = $"This mod is {FormatFileSize(_totalBytes)} and is too large for in-browser preview. Try a smaller mod or download it locally.";
+            StateHasChanged();
+            return;
+        }
         
         try
         {
-            // Note: We collect ZIP bytes to store for Viewer3D asset extraction.
-            // This loads the entire ZIP into memory, which may cause issues for large mods (>50MB).
-            // Future improvement: Consider IndexedDB storage or streaming extraction per-file.
-            
-            // Step 1: Download ZIP (streaming and collection)
-            var downloadStream = _zipDownloader.StreamZipAsync(_package.LatestVersion, _cts.Token);
-            
+            var version = _package.LatestVersion;
+            if (version == null)
+            {
+                throw new InvalidOperationException("Package version not available");
+            }
+
+            var versionLabel = string.IsNullOrWhiteSpace(version.VersionNumber) ? "unknown" : version.VersionNumber;
+            var cacheKey = $"{OwnerName}_{Name}_{versionLabel}";
+
+            // Step 1: Download ZIP and cache locally in IndexedDB (streaming)
+            await _zipCacheService.CacheZipAsync(
+                version,
+                cacheKey,
+                (downloaded, total) =>
+                {
+                    _downloadedBytes = downloaded;
+                    if (total > 0)
+                    {
+                        _totalBytes = total;
+                    }
+                    _ = InvokeAsync(StateHasChanged);
+                },
+                _cts.Token);
+
+            // Step 2: List .hhh files from cached ZIP
             _state = DownloadState.Processing;
             StateHasChanged();
-            
-            // Collect ZIP bytes for storage
-            var zipChunks = new List<byte[]>();
-            await foreach (var chunk in downloadStream)
-            {
-                zipChunks.Add(chunk);
-            }
-            
-            // Combine chunks into single byte array
-            var totalSize = zipChunks.Sum(c => c.Length);
-            var zipBytes = new byte[totalSize];
-            var offset = 0;
-            foreach (var chunk in zipChunks)
-            {
-                Array.Copy(chunk, 0, zipBytes, offset, chunk.Length);
-                offset += chunk.Length;
-            }
-            
-            // Step 2: Index ZIP from bytes
-            async IAsyncEnumerable<byte[]> BytesToStream()
-            {
-                yield return zipBytes;
-            }
-            
-            _fileIndex = new List<FileIndexItem>();
-            await foreach (var item in _zipIndexer.IndexAsync(BytesToStream(), _cts.Token))
-            {
-                _fileIndex.Add(item);
-            }
+
+            var hhhFiles = await _zipCacheService.ListHhhFilesAsync(cacheKey, _cts.Token);
+            _fileIndex = hhhFiles.ToList();
             
             // Log file index summary for debugging
             Logger.LogInformation("File index completed: {TotalFiles} total files, {RenderableFiles} renderable",
@@ -395,8 +394,8 @@
                     item.FileName, item.Type, item.Renderable, item.SizeBytes);
             }
 
-            // Step 3: Store for Viewer3D (including ZIP bytes)
-            await _stateService.SetCurrentModAsync(ModId, _fileIndex, _package, zipBytes);
+            // Step 3: Store for Viewer3D (ZIP cache key)
+            await _stateService.SetCurrentModAsync(ModId, _fileIndex, _package, cacheKey);
             
             // Step 4: Ready
             _state = DownloadState.Ready;
@@ -415,6 +414,11 @@
         {
             _state = DownloadState.Error;
             _errorMessage = "Downloaded file is corrupted—try again";
+        }
+        catch (OutOfMemoryException)
+        {
+            _state = DownloadState.Error;
+            _errorMessage = "This mod is too large to process in the browser. Try a smaller mod or download it locally.";
         }
         catch (Exception)
         {

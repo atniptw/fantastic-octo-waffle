@@ -11,19 +11,19 @@ public sealed class ModDetailStateService : IModDetailStateService
     private ModDetailState? _currentState;
 
     /// <inheritdoc/>
-    public Task SetCurrentModAsync(string modId, List<FileIndexItem> fileIndex, ThunderstorePackage metadata, byte[] zipBytes)
+    public Task SetCurrentModAsync(string modId, List<FileIndexItem> fileIndex, ThunderstorePackage metadata, string zipCacheKey)
     {
         ArgumentNullException.ThrowIfNull(modId);
         ArgumentNullException.ThrowIfNull(fileIndex);
         ArgumentNullException.ThrowIfNull(metadata);
-        ArgumentNullException.ThrowIfNull(zipBytes);
+        ArgumentNullException.ThrowIfNull(zipCacheKey);
 
         _currentState = new ModDetailState
         {
             ModId = modId,
             FileIndex = fileIndex,
             Metadata = metadata,
-            ZipBytes = zipBytes,
+            ZipCacheKey = zipCacheKey,
             CreatedAt = DateTime.UtcNow
         };
 

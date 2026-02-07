@@ -15,7 +15,12 @@ public interface IAssetRenderer
     /// <exception cref="InvalidDataException">Corrupt asset or parsing error.</exception>
     /// <exception cref="InvalidOperationException">File is not renderable.</exception>
     Task<ThreeJsGeometry> RenderAsync(FileIndexItem file, byte[] zipBytes, CancellationToken ct = default);
-    
+
+    /// <summary>
+    /// Renders geometry directly from a bundle file byte array (e.g., .hhh).
+    /// </summary>
+    Task<ThreeJsGeometry> RenderFromBundleAsync(FileIndexItem file, byte[] bundleBytes, CancellationToken ct = default);
+
     /// <summary>
     /// Parse asset file and export as GLB binary format.
     /// More efficient for complex meshes and supports materials/textures.
@@ -27,4 +32,9 @@ public interface IAssetRenderer
     /// <exception cref="InvalidDataException">Corrupt asset or parsing error.</exception>
     /// <exception cref="InvalidOperationException">File is not renderable.</exception>
     Task<byte[]> RenderAsGlbAsync(FileIndexItem file, byte[] zipBytes, CancellationToken ct = default);
+
+    /// <summary>
+    /// Renders GLB directly from a bundle file byte array (e.g., .hhh).
+    /// </summary>
+    Task<byte[]> RenderAsGlbFromBundleAsync(FileIndexItem file, byte[] bundleBytes, CancellationToken ct = default);
 }
