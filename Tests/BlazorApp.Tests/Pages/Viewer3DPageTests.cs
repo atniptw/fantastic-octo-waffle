@@ -33,7 +33,7 @@ public class Viewer3DPageTests : Bunit.TestContext
         
         // Act
         var cut = Render<Viewer3D>(parameters => parameters
-            .Add(p => p.Owner, "TestAuthor")
+            .Add(p => p.OwnerName, "TestAuthor")
             .Add(p => p.Name, "TestMod")
             .Add(p => p.FileName, "test.hhh"));
 
@@ -55,7 +55,7 @@ public class Viewer3DPageTests : Bunit.TestContext
 
         // Act
         var cut = Render<Viewer3D>(parameters => parameters
-            .Add(p => p.Owner, "TestAuthor")
+            .Add(p => p.OwnerName, "TestAuthor")
             .Add(p => p.Name, "TestMod")
             .Add(p => p.FileName, "nonexistent.hhh"));
 

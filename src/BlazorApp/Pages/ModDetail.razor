@@ -1,4 +1,4 @@
-@page "/mod/{Owner}/{Name}"
+@page "/mod/{OwnerName}/{Name}"
 @using BlazorApp.Models
 @using BlazorApp.Services
 @using Microsoft.Extensions.Logging
@@ -279,12 +279,12 @@
     private IModDetailStateService _stateService = default!;
 
     [Parameter]
-    public string Owner { get; set; } = string.Empty;
+    public string OwnerName { get; set; } = string.Empty;
     
     [Parameter]
     public string Name { get; set; } = string.Empty;
     
-    private string ModId => $"{Owner}_{Name}";
+    private string ModId => $"{OwnerName}_{Name}";
     
     private enum DownloadState { Idle, Downloading, Processing, Ready, Error }
     
@@ -308,7 +308,7 @@
         // Fetch package metadata (uses cached data if available)
         try
         {
-            _package = await _thunderstoreService.GetPackageByNameAsync(Owner, Name);
+            _package = await _thunderstoreService.GetPackageByNameAsync(OwnerName, Name);
             
             if (_package == null)
             {
@@ -433,7 +433,7 @@
     private string GetViewerUrl(string filename)
     {
         var encodedFilename = Uri.EscapeDataString(filename);
-        return $"/viewer/{Owner}/{Name}/{encodedFilename}";
+        return $"/viewer/{OwnerName}/{Name}/{encodedFilename}";
     }
 
     private string FormatFileSize(long bytes)
