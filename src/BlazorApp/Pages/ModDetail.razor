@@ -3,7 +3,6 @@
 @using BlazorApp.Services
 @using Microsoft.Extensions.Logging
 @using Microsoft.Extensions.Logging.Abstractions
-@inject NavigationManager NavManager
 @implements IAsyncDisposable
 
 <PageTitle>@(_package?.Name ?? Name) - R.E.P.O. Mod Browser</PageTitle>
@@ -277,6 +276,7 @@
     private IThunderstoreService _thunderstoreService = default!;
     private IZipCacheService _zipCacheService = default!;
     private IModDetailStateService _stateService = default!;
+    private NavigationManager _navManager = default!;
 
     [Parameter]
     public string OwnerName { get; set; } = string.Empty;
@@ -303,6 +303,7 @@
         _thunderstoreService = services.GetRequiredService<IThunderstoreService>();
         _zipCacheService = services.GetRequiredService<IZipCacheService>();
         _stateService = services.GetRequiredService<IModDetailStateService>();
+        _navManager = services.GetRequiredService<NavigationManager>();
 
         // Fetch package metadata (uses cached data if available)
         try
@@ -438,10 +439,10 @@
     private string GetViewerUrl(string filename)
     {
         var encodedFilename = Uri.EscapeDataString(filename);
-        return NavManager.ToAbsoluteUri($"viewer/{OwnerName}/{Name}/{encodedFilename}").ToString();
+        return _navManager.ToAbsoluteUri($"viewer/{OwnerName}/{Name}/{encodedFilename}").ToString();
     }
 
-    private string GetHomeUrl() => NavManager.BaseUri;
+    private string GetHomeUrl() => _navManager.BaseUri;
 
     private string FormatFileSize(long bytes)
     {
