@@ -6,6 +6,7 @@
 @inject IViewerService ViewerService
 @inject IZipCacheService ZipCacheService
 @inject ILogger<Viewer3D> Logger
+@inject NavigationManager NavManager
 @implements IAsyncDisposable
 
 <PageTitle>3D Viewer - @FileName</PageTitle>
@@ -14,8 +15,8 @@
     <!-- Breadcrumb -->
     <nav aria-label="breadcrumb">
         <ol class="breadcrumb">
-            <li class="breadcrumb-item"><a href="/">← Mods</a></li>
-            <li class="breadcrumb-item"><a href="/mod/@OwnerName/@Name">@Name</a></li>
+            <li class="breadcrumb-item"><a href="@GetHomeUrl()">← Mods</a></li>
+            <li class="breadcrumb-item"><a href="@GetModUrl()">@Name</a></li>
             <li class="breadcrumb-item active" aria-current="page">@FileName</li>
         </ol>
     </nav>
@@ -26,7 +27,7 @@
             <h4 class="alert-heading">Error</h4>
             <p>@_error</p>
             <hr>
-            <a href="/mod/@OwnerName/@Name" class="btn btn-primary">← Back to Mod Details</a>
+            <a href="@GetModUrl()" class="btn btn-primary">← Back to Mod Details</a>
         </div>
     }
     else if (_loading)
@@ -190,4 +191,8 @@
             // Ignore disposal errors
         }
     }
+
+    private string GetHomeUrl() => NavManager.BaseUri;
+
+    private string GetModUrl() => NavManager.ToAbsoluteUri($"mod/{OwnerName}/{Name}").ToString();
 }

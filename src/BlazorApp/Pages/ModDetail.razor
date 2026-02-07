@@ -3,6 +3,7 @@
 @using BlazorApp.Services
 @using Microsoft.Extensions.Logging
 @using Microsoft.Extensions.Logging.Abstractions
+@inject NavigationManager NavManager
 @implements IAsyncDisposable
 
 <PageTitle>@(_package?.Name ?? Name) - R.E.P.O. Mod Browser</PageTitle>
@@ -11,7 +12,7 @@
     <!-- Breadcrumb -->
     <nav aria-label="breadcrumb">
         <ol class="breadcrumb">
-            <li class="breadcrumb-item"><a href="/">← Cosmetics</a></li>
+            <li class="breadcrumb-item"><a href="@GetHomeUrl()">← Cosmetics</a></li>
             <li class="breadcrumb-item active" aria-current="page">@(_package?.Name ?? Name)</li>
         </ol>
     </nav>
@@ -29,7 +30,7 @@
             }
             else
             {
-                <a href="/" class="btn btn-primary">← Back to Mods</a>
+                <a href="@GetHomeUrl()" class="btn btn-primary">← Back to Mods</a>
             }
         </div>
     }
@@ -437,8 +438,10 @@
     private string GetViewerUrl(string filename)
     {
         var encodedFilename = Uri.EscapeDataString(filename);
-        return $"/viewer/{OwnerName}/{Name}/{encodedFilename}";
+        return NavManager.ToAbsoluteUri($"viewer/{OwnerName}/{Name}/{encodedFilename}").ToString();
     }
+
+    private string GetHomeUrl() => NavManager.BaseUri;
 
     private string FormatFileSize(long bytes)
     {
