@@ -58,6 +58,8 @@ dotnet publish -c Release /p:PublishDir=/var/www/app
 
 For detailed documentation, see the `docs/` directory.
 
+- [UnityFS (.hhh) → glTF/GLB → Three.js (Blazor WASM) plan](docs/UnityBundleToGltfPlan.md)
+
 ### Code Quality
 
 This project enforces strict code quality standards through automated CI checks:
