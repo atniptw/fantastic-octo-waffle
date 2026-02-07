@@ -6,7 +6,6 @@
 @inject IViewerService ViewerService
 @inject IZipCacheService ZipCacheService
 @inject ILogger<Viewer3D> Logger
-@inject NavigationManager NavManager
 @implements IAsyncDisposable
 
 <PageTitle>3D Viewer - @FileName</PageTitle>
@@ -81,11 +80,14 @@
     private string _loadingMessage = "Initializing...";
     private ThreeJsGeometry? _geometry;
     private string? _meshId;
+    private NavigationManager _navManager = default!;
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
+            var services = ServiceLocator.Provider ?? throw new InvalidOperationException("Service provider not initialized");
+            _navManager = services.GetRequiredService<NavigationManager>();
             // URL-decode the filename parameter (handles nested paths like "plugins/MoreHead/...")
             var decodedFileName = Uri.UnescapeDataString(FileName);
             
@@ -192,7 +194,7 @@
         }
     }
 
-    private string GetHomeUrl() => NavManager.BaseUri;
+    private string GetHomeUrl() => _navManager.BaseUri;
 
-    private string GetModUrl() => NavManager.ToAbsoluteUri($"mod/{OwnerName}/{Name}").ToString();
+    private string GetModUrl() => _navManager.ToAbsoluteUri($"mod/{OwnerName}/{Name}").ToString();
 }
