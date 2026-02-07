@@ -1,7 +1,7 @@
 /**
  * Three.js mesh renderer interop module.
  * Provides functions for rendering 3D meshes from parsed Unity assets.
- * 
+ *
  * Contract (from docs/BlazorUI.md and docs/DataModels.md):
  * - positions: Float32Array length 3 * vertexCount (XYZ)
  * - indices: Uint16Array | Uint32Array length 3 * triangleCount
@@ -41,68 +41,68 @@ let nextMeshId = 1;
  * @throws {Error} If canvas not found or already initialized
  */
 export function init(canvasId, options = {}) {
-    if (renderer) {
-        throw new Error('Renderer already initialized');
-    }
+  if (renderer) {
+    throw new Error('Renderer already initialized');
+  }
 
-    const canvas = document.getElementById(canvasId);
-    if (!canvas) {
-        throw new Error(`Canvas element with id '${canvasId}' not found`);
-    }
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) {
+    throw new Error(`Canvas element with id '${canvasId}' not found`);
+  }
 
-    // Setup renderer
-    renderer = new THREE.WebGLRenderer({
-        canvas: canvas,
-        antialias: true,
-        alpha: true
-    });
-    renderer.setSize(canvas.clientWidth, canvas.clientHeight);
-    renderer.setPixelRatio(window.devicePixelRatio);
+  // Setup renderer
+  renderer = new THREE.WebGLRenderer({
+    canvas: canvas,
+    antialias: true,
+    alpha: true,
+  });
+  renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+  renderer.setPixelRatio(window.devicePixelRatio);
 
-    // Setup scene
-    scene = new THREE.Scene();
-    const bgColor = options.background ?? 0x1a1a1a;
-    scene.background = new THREE.Color(bgColor);
+  // Setup scene
+  scene = new THREE.Scene();
+  const bgColor = options.background ?? 0x1a1a1a;
+  scene.background = new THREE.Color(bgColor);
 
-    // Setup camera
-    const fov = options.fov ?? 60;
-    const aspect = canvas.clientWidth / canvas.clientHeight;
-    const near = options.near ?? 0.1;
-    const far = options.far ?? 1000;
-    camera = new THREE.PerspectiveCamera(fov, aspect, near, far);
-    camera.position.set(0, 0, 5);
+  // Setup camera
+  const fov = options.fov ?? 60;
+  const aspect = canvas.clientWidth / canvas.clientHeight;
+  const near = options.near ?? 0.1;
+  const far = options.far ?? 1000;
+  camera = new THREE.PerspectiveCamera(fov, aspect, near, far);
+  camera.position.set(0, 0, 5);
 
-    // Setup controls
-    controls = new OrbitControls(camera, canvas);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.05;
-    controls.screenSpacePanning = false;
-    controls.minDistance = 0.001;
-    controls.maxDistance = 2000;
+  // Setup controls
+  controls = new OrbitControls(camera, canvas);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.05;
+  controls.screenSpacePanning = false;
+  controls.minDistance = 0.001;
+  controls.maxDistance = 2000;
 
-    // Add lighting
-    const ambientLight = new THREE.AmbientLight(0xffffff, AMBIENT_LIGHT_INTENSITY);
-    scene.add(ambientLight);
+  // Add lighting
+  const ambientLight = new THREE.AmbientLight(0xffffff, AMBIENT_LIGHT_INTENSITY);
+  scene.add(ambientLight);
 
-    const directionalLight = new THREE.DirectionalLight(0xffffff, DIRECTIONAL_LIGHT_INTENSITY);
-    directionalLight.position.set(1, 1, 1);
-    scene.add(directionalLight);
+  const directionalLight = new THREE.DirectionalLight(0xffffff, DIRECTIONAL_LIGHT_INTENSITY);
+  directionalLight.position.set(1, 1, 1);
+  scene.add(directionalLight);
 
-    // Start animation loop
-    startAnimationLoop();
+  // Start animation loop
+  startAnimationLoop();
 }
 
 /**
  * Animation loop for rendering and updating controls.
  */
 function startAnimationLoop() {
-    function animate() {
-        if (!renderer || !scene || !camera) return; // Stop if disposed
-        animationId = requestAnimationFrame(animate);
-        controls.update();
-        renderer.render(scene, camera);
-    }
-    animate();
+  function animate() {
+    if (!renderer || !scene || !camera) return; // Stop if disposed
+    animationId = requestAnimationFrame(animate);
+    controls.update();
+    renderer.render(scene, camera);
+  }
+  animate();
 }
 
 /**
@@ -117,50 +117,53 @@ function startAnimationLoop() {
  * @throws {Error} If renderer not initialized or GLB loading fails
  */
 export async function loadGLB(glbData, materialOpts = {}) {
-    validateRendererInitialized();
-    
-    // Convert to Uint8Array if needed
-    const uint8Array = glbData instanceof Uint8Array 
-        ? glbData 
-        : new Uint8Array(glbData);
-    
-    // Create blob URL from GLB data
-    const blob = new Blob([uint8Array], { type: 'application/octet-stream' });
-    const url = URL.createObjectURL(blob);
-    
-    try {
-        const loader = new GLTFLoader();
-        const gltf = await new Promise((resolve, reject) => {
-            loader.load(
-                url,
-                (gltf) => resolve(gltf),
-                undefined, // onProgress
-                (error) => reject(new Error(`GLB load failed: ${error.message}`))
-            );
-        });
-        
-        // Apply material overrides if specified
-        if (Object.keys(materialOpts).length > 0) {
-            gltf.scene.traverse((child) => {
-                if (child.isMesh && child.material) {
-                    applyMaterialOptions(child.material, materialOpts);
-                }
-            });
-        }
-        
-        scene.add(gltf.scene);
-        
-        // Center camera on the loaded model
-        centerCameraOnMesh(gltf.scene);
-        
-        const meshId = `gltf-${nextMeshId++}`;
-        meshes.set(meshId, gltf.scene);
-        
-        return meshId;
-    } finally {
-        // Clean up blob URL
-        URL.revokeObjectURL(url);
+  validateRendererInitialized();
+
+  // Convert to Uint8Array if needed
+  const uint8Array = glbData instanceof Uint8Array ? glbData : new Uint8Array(glbData);
+
+  // Create blob URL from GLB data
+  const blob = new Blob([uint8Array], { type: 'application/octet-stream' });
+  const url = URL.createObjectURL(blob);
+
+  try {
+    const loader = new GLTFLoader();
+    const gltf = await new Promise((resolve, reject) => {
+      loader.load(
+        url,
+        gltf => resolve(gltf),
+        undefined, // onProgress
+        error => reject(new Error(`GLB load failed: ${error.message}`))
+      );
+    });
+
+    const root = gltf.scene ?? (gltf.scenes && gltf.scenes.length ? gltf.scenes[0] : null);
+    if (!root) {
+      throw new Error('GLB loaded without a scene');
     }
+
+    // Apply material overrides if specified
+    if (Object.keys(materialOpts).length > 0) {
+      root.traverse(child => {
+        if (child.isMesh && child.material) {
+          applyMaterialOptions(child.material, materialOpts);
+        }
+      });
+    }
+
+    scene.add(root);
+
+    // Center camera on the loaded model
+    centerCameraOnMesh(root);
+
+    const meshId = `gltf-${nextMeshId++}`;
+    meshes.set(meshId, root);
+
+    return meshId;
+  } finally {
+    // Clean up blob URL
+    URL.revokeObjectURL(url);
+  }
 }
 
 /**
@@ -170,22 +173,22 @@ export async function loadGLB(glbData, materialOpts = {}) {
  * @returns {boolean}
  */
 function isValidMaterialColorOption(color) {
-    if (color === null || color === undefined) {
-        return false;
-    }
-
-    if (typeof color === 'string') {
-        // Reject empty or whitespace-only strings; let THREE.Color validate others.
-        return color.trim().length > 0;
-    }
-
-    if (typeof color === 'number') {
-        // Basic numeric validation: finite and within typical [0, 0xffffff] range.
-        return Number.isFinite(color) && color >= 0 && color <= 0xffffff;
-    }
-
-    // Any other type is invalid.
+  if (color === null || color === undefined) {
     return false;
+  }
+
+  if (typeof color === 'string') {
+    // Reject empty or whitespace-only strings; let THREE.Color validate others.
+    return color.trim().length > 0;
+  }
+
+  if (typeof color === 'number') {
+    // Basic numeric validation: finite and within typical [0, 0xffffff] range.
+    return Number.isFinite(color) && color >= 0 && color <= 0xffffff;
+  }
+
+  // Any other type is invalid.
+  return false;
 }
 
 /**
@@ -194,19 +197,19 @@ function isValidMaterialColorOption(color) {
  * @param {object} opts - Material options
  */
 function applyMaterialOptions(material, opts) {
-    if (opts.color !== undefined && isValidMaterialColorOption(opts.color)) {
-        material.color = new THREE.Color(opts.color);
-    }
-    if (opts.wireframe !== undefined) {
-        material.wireframe = opts.wireframe;
-    }
-    if (opts.metalness !== undefined && 'metalness' in material) {
-        material.metalness = opts.metalness;
-    }
-    if (opts.roughness !== undefined && 'roughness' in material) {
-        material.roughness = opts.roughness;
-    }
-    material.needsUpdate = true;
+  if (opts.color !== undefined && isValidMaterialColorOption(opts.color)) {
+    material.color = new THREE.Color(opts.color);
+  }
+  if (opts.wireframe !== undefined) {
+    material.wireframe = opts.wireframe;
+  }
+  if (opts.metalness !== undefined && 'metalness' in material) {
+    material.metalness = opts.metalness;
+  }
+  if (opts.roughness !== undefined && 'roughness' in material) {
+    material.roughness = opts.roughness;
+  }
+  material.needsUpdate = true;
 }
 
 /**
@@ -226,19 +229,19 @@ function applyMaterialOptions(material, opts) {
  * @throws {Error} If renderer not initialized or geometry invalid
  */
 export function loadMesh(geometry, groups = null, materialOpts = {}) {
-    validateRendererInitialized();
-    validateGeometry(geometry);
+  validateRendererInitialized();
+  validateGeometry(geometry);
 
-    const bufferGeometry = createBufferGeometry(geometry, groups);
-    const material = createMaterial(materialOpts);
-    const mesh = new THREE.Mesh(bufferGeometry, material);
-    
-    scene.add(mesh);
-    centerCameraOnMesh(mesh);
+  const bufferGeometry = createBufferGeometry(geometry, groups);
+  const material = createMaterial(materialOpts);
+  const mesh = new THREE.Mesh(bufferGeometry, material);
 
-    const meshId = `mesh-${nextMeshId++}`;
-    meshes.set(meshId, mesh);
-    return meshId;
+  scene.add(mesh);
+  centerCameraOnMesh(mesh);
+
+  const meshId = `mesh-${nextMeshId++}`;
+  meshes.set(meshId, mesh);
+  return meshId;
 }
 
 /**
@@ -246,9 +249,9 @@ export function loadMesh(geometry, groups = null, materialOpts = {}) {
  * @throws {Error} If renderer not initialized
  */
 function validateRendererInitialized() {
-    if (!renderer || !scene) {
-        throw new Error('Renderer not initialized. Call init() first.');
-    }
+  if (!renderer || !scene) {
+    throw new Error('Renderer not initialized. Call init() first.');
+  }
 }
 
 /**
@@ -257,23 +260,23 @@ function validateRendererInitialized() {
  * @throws {Error} If geometry is invalid
  */
 function validateGeometry(geometry) {
-    if (!geometry?.positions || !geometry?.indices) {
-        throw new Error('Invalid geometry: positions and indices are required');
-    }
+  if (!geometry?.positions || !geometry?.indices) {
+    throw new Error('Invalid geometry: positions and indices are required');
+  }
 
-    const vertexCount = geometry.positions.length / 3;
-    const indexCount = geometry.indices.length;
+  const vertexCount = geometry.positions.length / 3;
+  const indexCount = geometry.indices.length;
 
-    // Validate indices are divisible by 3 (triangles)
-    if (indexCount % 3 !== 0) {
-        throw new Error('Invalid geometry: indices length must be divisible by 3');
-    }
+  // Validate indices are divisible by 3 (triangles)
+  if (indexCount % 3 !== 0) {
+    throw new Error('Invalid geometry: indices length must be divisible by 3');
+  }
 
-    const triangleCount = indexCount / 3;
+  const triangleCount = indexCount / 3;
 
-    if (vertexCount < 3 || triangleCount < 1) {
-        throw new Error('Invalid geometry: insufficient vertices or triangles');
-    }
+  if (vertexCount < 3 || triangleCount < 1) {
+    throw new Error('Invalid geometry: insufficient vertices or triangles');
+  }
 }
 
 /**
@@ -283,28 +286,26 @@ function validateGeometry(geometry) {
  * @returns {THREE.BufferGeometry} Created geometry
  */
 function createBufferGeometry(geometry, groups) {
-    const bufferGeometry = new THREE.BufferGeometry();
-    
-    // Convert arrays to typed arrays (Blazor sends plain arrays)
-    const positions = geometry.positions instanceof Float32Array 
-        ? geometry.positions 
-        : new Float32Array(geometry.positions);
-    
-    const indices = geometry.indices instanceof Uint32Array 
-        ? geometry.indices 
-        : new Uint32Array(geometry.indices);
-    
-    bufferGeometry.setAttribute('position',
-        new THREE.BufferAttribute(positions, 3));
-    
-    bufferGeometry.setIndex(
-        new THREE.BufferAttribute(indices, 1));
+  const bufferGeometry = new THREE.BufferGeometry();
 
-    addNormalsToGeometry(bufferGeometry, geometry);
-    addUVsToGeometry(bufferGeometry, geometry);
-    addGroupsToGeometry(bufferGeometry, groups);
+  // Convert arrays to typed arrays (Blazor sends plain arrays)
+  const positions =
+    geometry.positions instanceof Float32Array
+      ? geometry.positions
+      : new Float32Array(geometry.positions);
 
-    return bufferGeometry;
+  const indices =
+    geometry.indices instanceof Uint32Array ? geometry.indices : new Uint32Array(geometry.indices);
+
+  bufferGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+  bufferGeometry.setIndex(new THREE.BufferAttribute(indices, 1));
+
+  addNormalsToGeometry(bufferGeometry, geometry);
+  addUVsToGeometry(bufferGeometry, geometry);
+  addGroupsToGeometry(bufferGeometry, groups);
+
+  return bufferGeometry;
 }
 
 /**
@@ -313,15 +314,15 @@ function createBufferGeometry(geometry, groups) {
  * @param {object} geometry - Source geometry data
  */
 function addNormalsToGeometry(bufferGeometry, geometry) {
-    if (geometry.normals && geometry.normals.length === geometry.positions.length) {
-        const normals = geometry.normals instanceof Float32Array 
-            ? geometry.normals 
-            : new Float32Array(geometry.normals);
-        bufferGeometry.setAttribute('normal',
-            new THREE.BufferAttribute(normals, 3));
-    } else {
-        bufferGeometry.computeVertexNormals();
-    }
+  if (geometry.normals && geometry.normals.length === geometry.positions.length) {
+    const normals =
+      geometry.normals instanceof Float32Array
+        ? geometry.normals
+        : new Float32Array(geometry.normals);
+    bufferGeometry.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+  } else {
+    bufferGeometry.computeVertexNormals();
+  }
 }
 
 /**
@@ -330,14 +331,12 @@ function addNormalsToGeometry(bufferGeometry, geometry) {
  * @param {object} geometry - Source geometry data
  */
 function addUVsToGeometry(bufferGeometry, geometry) {
-    const vertexCount = geometry.positions.length / 3;
-    if (geometry.uvs && geometry.uvs.length === vertexCount * 2) {
-        const uvs = geometry.uvs instanceof Float32Array 
-            ? geometry.uvs 
-            : new Float32Array(geometry.uvs);
-        bufferGeometry.setAttribute('uv',
-            new THREE.BufferAttribute(uvs, 2));
-    }
+  const vertexCount = geometry.positions.length / 3;
+  if (geometry.uvs && geometry.uvs.length === vertexCount * 2) {
+    const uvs =
+      geometry.uvs instanceof Float32Array ? geometry.uvs : new Float32Array(geometry.uvs);
+    bufferGeometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+  }
 }
 
 /**
@@ -346,11 +345,11 @@ function addUVsToGeometry(bufferGeometry, geometry) {
  * @param {Array<object>} groups - Submesh groups
  */
 function addGroupsToGeometry(bufferGeometry, groups) {
-    if (groups && Array.isArray(groups)) {
-        for (const group of groups) {
-            bufferGeometry.addGroup(group.start, group.count, group.materialIndex);
-        }
+  if (groups && Array.isArray(groups)) {
+    for (const group of groups) {
+      bufferGeometry.addGroup(group.start, group.count, group.materialIndex);
     }
+  }
 }
 
 /**
@@ -359,13 +358,13 @@ function addGroupsToGeometry(bufferGeometry, groups) {
  * @returns {THREE.Material} Created material
  */
 function createMaterial(opts) {
-    return new THREE.MeshStandardMaterial({
-        color: opts.color ?? 0x888888,
-        wireframe: opts.wireframe ?? false,
-        metalness: opts.metalness ?? 0.5,
-        roughness: opts.roughness ?? 0.5,
-        side: THREE.DoubleSide
-    });
+  return new THREE.MeshStandardMaterial({
+    color: opts.color ?? 0x888888,
+    wireframe: opts.wireframe ?? false,
+    metalness: opts.metalness ?? 0.5,
+    roughness: opts.roughness ?? 0.5,
+    side: THREE.DoubleSide,
+  });
 }
 
 /**
@@ -373,50 +372,50 @@ function createMaterial(opts) {
  * @param {THREE.Mesh} mesh - Mesh to center on
  */
 function centerCameraOnMesh(mesh) {
-    let box = new THREE.Box3().setFromObject(mesh);
-    let center = box.getCenter(new THREE.Vector3());
-    let size = box.getSize(new THREE.Vector3());
+  let box = new THREE.Box3().setFromObject(mesh);
+  let center = box.getCenter(new THREE.Vector3());
+  let size = box.getSize(new THREE.Vector3());
 
-    // Handle extremely small meshes by scaling them for visibility
-    const minVisibleSize = 0.01;
-    let maxDim = Math.max(size.x, size.y, size.z);
-    if (maxDim > 0 && maxDim < minVisibleSize) {
-        const scaleFactor = minVisibleSize / maxDim;
-        mesh.scale.setScalar(scaleFactor);
-        box = new THREE.Box3().setFromObject(mesh);
-        center = box.getCenter(new THREE.Vector3());
-        size = box.getSize(new THREE.Vector3());
-        maxDim = Math.max(size.x, size.y, size.z);
-    }
+  // Handle extremely small meshes by scaling them for visibility
+  const minVisibleSize = 0.01;
+  let maxDim = Math.max(size.x, size.y, size.z);
+  if (maxDim > 0 && maxDim < minVisibleSize) {
+    const scaleFactor = minVisibleSize / maxDim;
+    mesh.scale.setScalar(scaleFactor);
+    box = new THREE.Box3().setFromObject(mesh);
+    center = box.getCenter(new THREE.Vector3());
+    size = box.getSize(new THREE.Vector3());
+    maxDim = Math.max(size.x, size.y, size.z);
+  }
 
-    // Set controls target to mesh center
-    controls.target.copy(center);
+  // Set controls target to mesh center
+  controls.target.copy(center);
 
-    // Position camera to view entire mesh
-    if (maxDim === 0) {
-        maxDim = 1.0;
-    }
-    const fov = camera.fov * (Math.PI / 180);
-    let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
-    cameraZ *= CAMERA_MARGIN_FACTOR; // Add some margin
+  // Position camera to view entire mesh
+  if (maxDim === 0) {
+    maxDim = 1.0;
+  }
+  const fov = camera.fov * (Math.PI / 180);
+  let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
+  cameraZ *= CAMERA_MARGIN_FACTOR; // Add some margin
 
-    // Adjust near/far to avoid clipping tiny meshes
-    camera.near = Math.max(cameraZ / 1000, 0.00001);
-    camera.far = Math.max(cameraZ * 1000, 10);
-    camera.updateProjectionMatrix();
+  // Adjust near/far to avoid clipping tiny meshes
+  camera.near = Math.max(cameraZ / 1000, 0.00001);
+  camera.far = Math.max(cameraZ * 1000, 10);
+  camera.updateProjectionMatrix();
 
-    controls.minDistance = Math.max(maxDim * 0.1, 0.0005);
-    controls.maxDistance = Math.max(maxDim * 1000, 10);
+  controls.minDistance = Math.max(maxDim * 0.1, 0.0005);
+  controls.maxDistance = Math.max(maxDim * 1000, 10);
 
-    const newCameraPos = {
-        x: center.x + cameraZ * 0.5,
-        y: center.y + cameraZ * 0.5,
-        z: center.z + cameraZ
-    };
+  const newCameraPos = {
+    x: center.x + cameraZ * 0.5,
+    y: center.y + cameraZ * 0.5,
+    z: center.z + cameraZ,
+  };
 
-    camera.position.set(newCameraPos.x, newCameraPos.y, newCameraPos.z);
-    camera.lookAt(center);
-    controls.update();
+  camera.position.set(newCameraPos.x, newCameraPos.y, newCameraPos.z);
+  camera.lookAt(center);
+  controls.update();
 }
 
 /**
@@ -430,25 +429,25 @@ function centerCameraOnMesh(mesh) {
  * @throws {Error} If mesh not found
  */
 export function updateMaterial(meshId, opts = {}) {
-    const mesh = meshes.get(meshId);
-    if (!mesh) {
-        throw new Error(`Mesh with ID '${meshId}' not found`);
-    }
+  const mesh = meshes.get(meshId);
+  if (!mesh) {
+    throw new Error(`Mesh with ID '${meshId}' not found`);
+  }
 
-    const material = mesh.material;
-    if (opts.color !== undefined) {
-        material.color.set(opts.color);
-    }
-    if (opts.wireframe !== undefined) {
-        material.wireframe = opts.wireframe;
-    }
-    if (opts.metalness !== undefined) {
-        material.metalness = opts.metalness;
-    }
-    if (opts.roughness !== undefined) {
-        material.roughness = opts.roughness;
-    }
-    material.needsUpdate = true;
+  const material = mesh.material;
+  if (opts.color !== undefined) {
+    material.color.set(opts.color);
+  }
+  if (opts.wireframe !== undefined) {
+    material.wireframe = opts.wireframe;
+  }
+  if (opts.metalness !== undefined) {
+    material.metalness = opts.metalness;
+  }
+  if (opts.roughness !== undefined) {
+    material.roughness = opts.roughness;
+  }
+  material.needsUpdate = true;
 }
 
 /**
@@ -456,23 +455,23 @@ export function updateMaterial(meshId, opts = {}) {
  * @param {string} meshId - Mesh ID to dispose
  */
 export function clearMesh(meshId) {
-    if (!meshId) {
-        return;
-    }
+  if (!meshId) {
+    return;
+  }
 
-    const mesh = meshes.get(meshId);
-    if (mesh) {
-        disposeMesh(mesh);
-        meshes.delete(meshId);
-    }
+  const mesh = meshes.get(meshId);
+  if (mesh) {
+    disposeMesh(mesh);
+    meshes.delete(meshId);
+  }
 }
 
 /**
  * Clear all meshes from the scene.
  */
 export function clear() {
-    meshes.forEach(mesh => disposeMesh(mesh));
-    meshes.clear();
+  meshes.forEach(mesh => disposeMesh(mesh));
+  meshes.clear();
 }
 
 /**
@@ -480,19 +479,19 @@ export function clear() {
  * @param {THREE.Mesh} mesh - Mesh to dispose
  */
 function disposeMesh(mesh) {
-    if (mesh.geometry) {
-        mesh.geometry.dispose();
+  if (mesh.geometry) {
+    mesh.geometry.dispose();
+  }
+  if (mesh.material) {
+    if (Array.isArray(mesh.material)) {
+      mesh.material.forEach(m => m.dispose());
+    } else {
+      mesh.material.dispose();
     }
-    if (mesh.material) {
-        if (Array.isArray(mesh.material)) {
-            mesh.material.forEach(m => m.dispose());
-        } else {
-            mesh.material.dispose();
-        }
-    }
-    if (scene) {
-        scene.remove(mesh);
-    }
+  }
+  if (scene) {
+    scene.remove(mesh);
+  }
 }
 
 /**
@@ -501,33 +500,33 @@ function disposeMesh(mesh) {
  * A page reload or new module instance is required for reuse.
  */
 export function dispose() {
-    // Stop animation
-    if (animationId) {
-        cancelAnimationFrame(animationId);
-        animationId = null;
-    }
+  // Stop animation
+  if (animationId) {
+    cancelAnimationFrame(animationId);
+    animationId = null;
+  }
 
-    // Clear all meshes
-    clear();
+  // Clear all meshes
+  clear();
 
-    // Dispose controls
-    if (controls) {
-        controls.dispose();
-        controls = null;
-    }
+  // Dispose controls
+  if (controls) {
+    controls.dispose();
+    controls = null;
+  }
 
-    // Dispose renderer
-    if (renderer) {
-        renderer.dispose();
-        renderer = null;
-    }
+  // Dispose renderer
+  if (renderer) {
+    renderer.dispose();
+    renderer = null;
+  }
 
-    // Clear references
-    scene = null;
-    camera = null;
-    // Note: nextMeshId is reset to prevent ID collisions if somehow reused,
-    // but reinitialization is not supported by design
-    nextMeshId = 1;
+  // Clear references
+  scene = null;
+  camera = null;
+  // Note: nextMeshId is reset to prevent ID collisions if somehow reused,
+  // but reinitialization is not supported by design
+  nextMeshId = 1;
 }
 
 /**
@@ -536,23 +535,23 @@ export function dispose() {
  * @param {number} height - New height in pixels
  */
 export function resize(width, height) {
-    if (!camera || !renderer) {
-        return;
-    }
+  if (!camera || !renderer) {
+    return;
+  }
 
-    camera.aspect = width / height;
-    camera.updateProjectionMatrix();
-    renderer.setSize(width, height);
+  camera.aspect = width / height;
+  camera.updateProjectionMatrix();
+  renderer.setSize(width, height);
 }
 
 // Expose functions to global window object for Blazor JSInterop
 window.meshRenderer = {
-    init,
-    loadMesh,
-    loadGLB,
-    updateMaterial,
-    clear,
-    clearMesh,
-    dispose,
-    resize
+  init,
+  loadMesh,
+  loadGLB,
+  updateMaterial,
+  clear,
+  clearMesh,
+  dispose,
+  resize,
 };

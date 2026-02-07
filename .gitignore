@@ -112,3 +112,5 @@ PublishProfiles/
 *.sln.docstates
 
 .playwright-mcp
+
+mods/

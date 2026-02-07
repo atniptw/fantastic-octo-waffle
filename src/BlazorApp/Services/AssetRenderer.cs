@@ -432,10 +432,34 @@ public class AssetRenderer : IAssetRenderer
                 var meshHelper = new MeshHelper(mesh, version, !isBigEndian, bundle.Nodes, bundle.DataRegion);
                 meshHelper.Process();
 
+                if (mesh.CompressedMesh != null)
+                {
+                    var cm = mesh.CompressedMesh;
+                    Console.WriteLine($"DEBUG: CompressedMesh weights={cm.Weights.NumItems} boneIndices={cm.BoneIndices.NumItems} bindPoses={cm.BindPoses?.NumItems ?? 0}");
+                }
+
                 Console.WriteLine($"DEBUG: Mesh '{mesh.Name}' vtx={meshHelper.VertexCount} pos={meshHelper.Positions?.Length ?? 0} norm={meshHelper.Normals?.Length ?? 0} uv={meshHelper.UVs?.Length ?? 0} color={meshHelper.Colors?.Length ?? 0}");
 
                 // Populate mesh attributes from extracted data
                 PopulateMeshAttributesFromHelper(mesh, meshHelper);
+
+                // Build skin weights from blend channels if present
+                if (mesh.Skin == null && mesh.VariableBoneCountWeights != null && mesh.VariableBoneCountWeights.Length > 0)
+                {
+                    var weights = SkinningHelper.BuildWeightsFromVariableBoneCount(
+                        mesh.VariableBoneCountWeights,
+                        meshHelper.VertexCount);
+                    if (weights != null)
+                    {
+                        mesh.Skin = weights;
+                        Console.WriteLine($"DEBUG: Built skin weights from VariableBoneCountWeights for mesh '{mesh.Name}'");
+                    }
+                }
+
+                if (SkinningHelper.TryApplyBindPoseSkinning(mesh))
+                {
+                    Console.WriteLine($"DEBUG: Applied bind-pose skinning to mesh '{mesh.Name}'");
+                }
             }
 
             return mesh;

@@ -524,6 +524,7 @@ public class GltfExporter
     private static MaterialBuilder CreateMaterialBuilder(MaterialInfo? materialInfo)
     {
         var name = materialInfo?.Name ?? "default";
+        var defaultBaseColor = new Vector4(0.8f, 0.8f, 0.8f, 1.0f);
         var material = new MaterialBuilder(name)
             .WithDoubleSide(true)
             .WithMetallicRoughnessShader()
@@ -531,7 +532,13 @@ public class GltfExporter
 
         if (materialInfo != null)
         {
-            material.WithChannelParam(KnownChannel.BaseColor, materialInfo.BaseColor);
+            var baseColor = materialInfo.BaseColor;
+            if (materialInfo.BaseColorTexture == null && IsWhite(baseColor))
+            {
+                baseColor = defaultBaseColor;
+            }
+
+            material.WithChannelParam(KnownChannel.BaseColor, baseColor);
 
             if (materialInfo.BaseColorTexture != null &&
                 materialInfo.BaseColorTexture.Rgba32.Length > 0)
@@ -545,8 +552,21 @@ public class GltfExporter
                 material.WithChannelImage(KnownChannel.BaseColor, image);
             }
         }
+        else
+        {
+            material.WithChannelParam(KnownChannel.BaseColor, defaultBaseColor);
+        }
 
         return material;
+    }
+
+    private static bool IsWhite(Vector4 color)
+    {
+        const float epsilon = 0.0001f;
+        return Math.Abs(color.X - 1f) < epsilon &&
+               Math.Abs(color.Y - 1f) < epsilon &&
+               Math.Abs(color.Z - 1f) < epsilon &&
+               Math.Abs(color.W - 1f) < epsilon;
     }
 
     private static IReadOnlyList<MaterialBuilder> CreateMaterialBuilders(IReadOnlyList<MaterialInfo>? materials)

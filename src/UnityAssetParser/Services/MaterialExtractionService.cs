@@ -445,42 +445,35 @@ public sealed class MaterialExtractionService
             return new Vector4(1f, 1f, 1f, 1f);
         }
 
-        if (!propsDict.TryGetValue("m_Colors", out var colorsObj))
+        var colorEntries = GetColorEntries(propsDict);
+        if (colorEntries.Count == 0)
         {
             return new Vector4(1f, 1f, 1f, 1f);
         }
 
-        var entries = GetArray(colorsObj);
-        if (entries == null)
+        string[] preferredKeys =
         {
-            return new Vector4(1f, 1f, 1f, 1f);
-        }
+            "_BaseColor",
+            "_Color",
+            "_TintColor",
+            "_MainColor",
+            "_Diffuse",
+            "_AlbedoColor",
+            "_EmissionColor"
+        };
 
-        foreach (var entryObj in entries)
+        foreach (var key in preferredKeys)
         {
-            if (entryObj is not Dictionary<string, object?> entry)
+            if (colorEntries.TryGetValue(key, out var color))
             {
-                continue;
-            }
-
-            var key = GetString(entry, "first");
-            if (!string.Equals(key, "_Color", StringComparison.OrdinalIgnoreCase) &&
-                !string.Equals(key, "_BaseColor", StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            if (entry.TryGetValue("second", out var secondObj) && secondObj is Dictionary<string, object?> colorDict)
-            {
-                float r = GetFloat(colorDict, "r", 1f);
-                float g = GetFloat(colorDict, "g", 1f);
-                float b = GetFloat(colorDict, "b", 1f);
-                float a = GetFloat(colorDict, "a", 1f);
-                return new Vector4(r, g, b, a);
+                Console.WriteLine($"DEBUG: Material base color from '{key}'");
+                return color;
             }
         }
 
-        return new Vector4(1f, 1f, 1f, 1f);
+        var first = colorEntries.First();
+        Console.WriteLine($"DEBUG: Material base color fallback to '{first.Key}'");
+        return first.Value;
     }
 
     private static float GetFloat(Dictionary<string, object?> dict, string key, float fallback)
@@ -497,6 +490,46 @@ public sealed class MaterialExtractionService
             int i => i,
             _ => fallback
         };
+    }
+
+    private static Dictionary<string, Vector4> GetColorEntries(Dictionary<string, object?> propsDict)
+    {
+        var result = new Dictionary<string, Vector4>(StringComparer.OrdinalIgnoreCase);
+        if (!propsDict.TryGetValue("m_Colors", out var colorsObj))
+        {
+            return result;
+        }
+
+        var entries = GetArray(colorsObj);
+        if (entries == null)
+        {
+            return result;
+        }
+
+        foreach (var entryObj in entries)
+        {
+            if (entryObj is not Dictionary<string, object?> entry)
+            {
+                continue;
+            }
+
+            var key = GetString(entry, "first");
+            if (string.IsNullOrEmpty(key))
+            {
+                continue;
+            }
+
+            if (entry.TryGetValue("second", out var secondObj) && secondObj is Dictionary<string, object?> colorDict)
+            {
+                float r = GetFloat(colorDict, "r", 1f);
+                float g = GetFloat(colorDict, "g", 1f);
+                float b = GetFloat(colorDict, "b", 1f);
+                float a = GetFloat(colorDict, "a", 1f);
+                result[key] = new Vector4(r, g, b, a);
+            }
+        }
+
+        return result;
     }
 
     private static long? GetMainTexturePathId(Dictionary<string, object?> materialTree)

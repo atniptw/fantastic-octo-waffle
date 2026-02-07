@@ -9,8 +9,6 @@ const META_STORE = 'zipMeta';
 const CHUNK_STORE = 'zipChunks';
 
 let dbPromise = null;
-let fflatePromise = null;
-
 function initDb() {
   if (dbPromise) return dbPromise;
 
@@ -69,13 +67,6 @@ async function getChunk(cacheKey, index) {
     request.onsuccess = () => resolve(request.result ? new Uint8Array(request.result.data) : null);
     request.onerror = () => reject(request.error);
   });
-}
-
-async function loadFflate() {
-  if (!fflatePromise) {
-    fflatePromise = import('https://cdn.jsdelivr.net/npm/fflate@0.8.2/esm/index.js');
-  }
-  return fflatePromise;
 }
 
 async function readRange(cacheKey, start, end) {
@@ -185,11 +176,11 @@ async function getEntries(cacheKey) {
   return parseCentralDirectory(cdBuffer);
 }
 
-export async function start(cacheKey) {
+async function start(cacheKey) {
   await clear(cacheKey);
 }
 
-export async function appendChunk(cacheKey, index, chunk) {
+async function appendChunk(cacheKey, index, chunk) {
   const db = await initDb();
   return new Promise((resolve, reject) => {
     const tx = db.transaction([CHUNK_STORE], 'readwrite');
@@ -206,7 +197,7 @@ export async function appendChunk(cacheKey, index, chunk) {
   });
 }
 
-export async function finalize(cacheKey, totalSize, chunkSize, chunkCount) {
+async function finalize(cacheKey, totalSize, chunkSize, chunkCount) {
   await withStore(META_STORE, 'readwrite', store =>
     store.put({
       cacheKey,
@@ -218,12 +209,12 @@ export async function finalize(cacheKey, totalSize, chunkSize, chunkCount) {
   );
 }
 
-export async function hasZip(cacheKey) {
+async function hasZip(cacheKey) {
   const meta = await getMeta(cacheKey);
   return !!meta;
 }
 
-export async function listHhhFiles(cacheKey) {
+async function listHhhFiles(cacheKey) {
   const entries = await getEntries(cacheKey);
   return entries
     .filter(entry => entry.path.toLowerCase().endsWith('.hhh'))
@@ -233,7 +224,7 @@ export async function listHhhFiles(cacheKey) {
     }));
 }
 
-export async function getFileBytes(cacheKey, filePath) {
+async function getFileBytes(cacheKey, filePath) {
   const entries = await getEntries(cacheKey);
   const entry = entries.find(candidate => candidate.path === filePath);
   if (!entry) throw new Error('File not found in archive');
@@ -263,11 +254,16 @@ export async function getFileBytes(cacheKey, filePath) {
     throw new Error('Unsupported compression method');
   }
 
-  const { inflateRaw } = await loadFflate();
-  return inflateRaw(compressed);
+  if (typeof DecompressionStream !== 'function') {
+    throw new Error('Deflate-raw decompression is not supported in this browser');
+  }
+
+  const stream = new Response(compressed).body.pipeThrough(new DecompressionStream('deflate-raw'));
+  const arrayBuffer = await new Response(stream).arrayBuffer();
+  return new Uint8Array(arrayBuffer);
 }
 
-export async function clear(cacheKey) {
+async function clear(cacheKey) {
   const db = await initDb();
   await new Promise((resolve, reject) => {
     const tx = db.transaction([META_STORE], 'readwrite');

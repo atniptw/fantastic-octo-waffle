@@ -86,10 +86,10 @@ public static class MeshParser
             }
         }
 
-        // Field 3: m_BindPose (legacy vertices/normals data)
+        // Field 3: m_BindPose
         if (data.TryGetValue("m_BindPose", out var bindPoseObj) && bindPoseObj is List<object?> bindPoseList)
         {
-            // BindPose is list of 4x4 matrices for skeletal animation - not directly used for geometry extraction
+            mesh.BindPose = MapBindPoseList(bindPoseList);
         }
 
         // Field 4: m_IndexBuffer
@@ -106,10 +106,17 @@ public static class MeshParser
             mesh.IndexBuffer = bytes.ToArray();
         }
 
-        // Field 5: m_Skin (bone weights - not directly used for geometry extraction)
-        if (data.TryGetValue("m_Skin", out var skinObj) && skinObj is List<object?> skinList)
+        // Field 5: m_Skin (bone weights)
+        if (data.TryGetValue("m_Skin", out var skinObj))
         {
-            // Skin data - not directly used for geometry extraction
+            if (skinObj is List<object?> skinList)
+            {
+                mesh.Skin = MapSkinWeights(skinList);
+            }
+            else
+            {
+                Console.WriteLine($"DEBUG: m_Skin type={skinObj?.GetType().Name ?? "null"}");
+            }
         }
 
         // Field 6: m_MeshCompression
@@ -130,6 +137,32 @@ public static class MeshParser
             // AABB - not directly used for geometry extraction
         }
 
+        // Field 8.5: m_VariableBoneCountWeights (Unity 2019+)
+        if (data.TryGetValue("m_VariableBoneCountWeights", out var vbwObj))
+        {
+            if (vbwObj is Dictionary<string, object?> vbwDict)
+            {
+                Console.WriteLine($"DEBUG: VariableBoneCountWeights keys: {string.Join(", ", vbwDict.Keys)}");
+                if (vbwDict.TryGetValue("m_Data", out var dataObj))
+                {
+                    Console.WriteLine($"DEBUG: VariableBoneCountWeights m_Data type={dataObj?.GetType().Name ?? "null"}");
+                }
+                var weights = ReadUIntArrayFromArrayWrapper(vbwDict, "m_Data");
+                if (weights != null && weights.Length > 0)
+                {
+                    mesh.VariableBoneCountWeights = weights;
+                    Console.WriteLine($"DEBUG: VariableBoneCountWeights length={weights.Length}");
+                }
+                else
+                {
+                    Console.WriteLine("DEBUG: VariableBoneCountWeights present but no m_Data array");
+                }
+            }
+            else
+            {
+                Console.WriteLine($"DEBUG: m_VariableBoneCountWeights type={vbwObj?.GetType().Name ?? "null"}");
+            }
+        }
         // Field 9: m_VertexData
         if (data.TryGetValue("m_VertexData", out var vertexDataObj) && vertexDataObj is Dictionary<string, object?> vertexDataDict)
         {
@@ -152,6 +185,21 @@ public static class MeshParser
         if (data.TryGetValue("m_Shapes", out var shapesObj) && shapesObj != null)
         {
             // Shapes - not directly used for geometry extraction
+        }
+
+        if (mesh.BindPose == null && data.Keys.Any(k => k.Contains("Bind", StringComparison.OrdinalIgnoreCase)))
+        {
+            Console.WriteLine($"DEBUG: Mesh fields include bind-related keys: {string.Join(", ", data.Keys.Where(k => k.Contains("Bind", StringComparison.OrdinalIgnoreCase)))}");
+        }
+        if (mesh.Skin == null && data.Keys.Any(k => k.Contains("Skin", StringComparison.OrdinalIgnoreCase) || k.Contains("Bone", StringComparison.OrdinalIgnoreCase)))
+        {
+            var keys = data.Keys.Where(k => k.Contains("Skin", StringComparison.OrdinalIgnoreCase) || k.Contains("Bone", StringComparison.OrdinalIgnoreCase));
+            Console.WriteLine($"DEBUG: Mesh fields include skin/bone keys: {string.Join(", ", keys)}");
+        }
+
+        if (mesh.Skin == null)
+        {
+            Console.WriteLine($"DEBUG: Mesh top-level keys: {string.Join(", ", data.Keys)}");
         }
 
         // Field 13: m_KeepVertices
@@ -351,6 +399,229 @@ public static class MeshParser
             Offset = offset,
             Size = size
         };
+    }
+
+    private static Matrix4x4f[]? MapBindPoseList(List<object?> bindPoseList)
+    {
+        if (bindPoseList.Count == 0)
+        {
+            return null;
+        }
+
+        var matrices = new List<Matrix4x4f>();
+        foreach (var item in bindPoseList)
+        {
+            if (item is not Dictionary<string, object?> matDict)
+            {
+                continue;
+            }
+
+            var values = ReadMatrixValues(matDict);
+            if (values != null)
+            {
+                matrices.Add(new Matrix4x4f { Values = values });
+            }
+        }
+
+        return matrices.Count > 0 ? matrices.ToArray() : null;
+    }
+
+    private static BoneWeight4[]? MapSkinWeights(List<object?> skinList)
+    {
+        if (skinList.Count == 0)
+        {
+            return null;
+        }
+
+        var weights = new List<BoneWeight4>();
+        bool logged = false;
+
+        foreach (var item in skinList)
+        {
+            if (item is not Dictionary<string, object?> dict)
+            {
+                continue;
+            }
+
+            if (!logged)
+            {
+                Console.WriteLine($"DEBUG: Skin weight keys: {string.Join(", ", dict.Keys)}");
+                logged = true;
+            }
+
+            var bw = new BoneWeight4
+            {
+                BoneIndex0 = GetInt(dict, "boneIndex0"),
+                BoneIndex1 = GetInt(dict, "boneIndex1"),
+                BoneIndex2 = GetInt(dict, "boneIndex2"),
+                BoneIndex3 = GetInt(dict, "boneIndex3"),
+                Weight0 = GetFloat(dict, "weight0"),
+                Weight1 = GetFloat(dict, "weight1"),
+                Weight2 = GetFloat(dict, "weight2"),
+                Weight3 = GetFloat(dict, "weight3")
+            };
+
+            if (bw.Weight0 == 0 && bw.Weight1 == 0 && bw.Weight2 == 0 && bw.Weight3 == 0)
+            {
+                // Try alternate key names
+                bw.Weight0 = GetFloat(dict, "m_Weight0");
+                bw.Weight1 = GetFloat(dict, "m_Weight1");
+                bw.Weight2 = GetFloat(dict, "m_Weight2");
+                bw.Weight3 = GetFloat(dict, "m_Weight3");
+                bw.BoneIndex0 = GetInt(dict, "m_BoneIndex0");
+                bw.BoneIndex1 = GetInt(dict, "m_BoneIndex1");
+                bw.BoneIndex2 = GetInt(dict, "m_BoneIndex2");
+                bw.BoneIndex3 = GetInt(dict, "m_BoneIndex3");
+            }
+
+            weights.Add(bw);
+        }
+
+        return weights.Count > 0 ? weights.ToArray() : null;
+    }
+
+    private static float[]? ReadMatrixValues(Dictionary<string, object?> dict)
+    {
+        // Common Unity field names
+        string[] keys =
+        {
+            "e00","e01","e02","e03",
+            "e10","e11","e12","e13",
+            "e20","e21","e22","e23",
+            "e30","e31","e32","e33"
+        };
+
+        if (keys.All(k => dict.ContainsKey(k)))
+        {
+            return keys.Select(k => GetFloat(dict, k)).ToArray();
+        }
+
+        string[] altKeys =
+        {
+            "m00","m01","m02","m03",
+            "m10","m11","m12","m13",
+            "m20","m21","m22","m23",
+            "m30","m31","m32","m33"
+        };
+
+        if (altKeys.All(k => dict.ContainsKey(k)))
+        {
+            return altKeys.Select(k => GetFloat(dict, k)).ToArray();
+        }
+
+        return null;
+    }
+
+    private static int GetInt(Dictionary<string, object?> dict, string key)
+    {
+        if (!dict.TryGetValue(key, out var value) || value == null)
+        {
+            return 0;
+        }
+
+        return value switch
+        {
+            int i => i,
+            long l => (int)l,
+            uint u => (int)u,
+            ushort us => us,
+            byte b => b,
+            _ => 0
+        };
+    }
+
+    private static float GetFloat(Dictionary<string, object?> dict, string key)
+    {
+        if (!dict.TryGetValue(key, out var value) || value == null)
+        {
+            return 0f;
+        }
+
+        return value switch
+        {
+            float f => f,
+            double d => (float)d,
+            int i => i,
+            _ => 0f
+        };
+    }
+
+    private static uint[]? ReadUIntArrayFromArrayWrapper(Dictionary<string, object?> dict, string key)
+    {
+        if (!dict.TryGetValue(key, out var value))
+        {
+            Console.WriteLine($"DEBUG: m_Data key not found");
+            return null;
+        }
+        if (value == null)
+        {
+            Console.WriteLine($"DEBUG: m_Data value is null");
+            return null;
+        }
+
+        if (value is Dictionary<string, object?> meta)
+        {
+            Console.WriteLine($"DEBUG: m_Data wrapper keys: {string.Join(", ", meta.Keys)}");
+            if (meta.TryGetValue("Array", out var arrayObj) && arrayObj is List<object?> arrayListMeta)
+            {
+                return arrayListMeta.Where(v => v != null).Select(v => Convert.ToUInt32(v)).ToArray();
+            }
+            if (meta.TryGetValue("__bytes__", out var bytesObj) && bytesObj is string b64)
+            {
+                var raw = Convert.FromBase64String(b64);
+                return BytesToUIntArray(raw);
+            }
+        }
+
+        if (value is byte[] bytes)
+        {
+            return BytesToUIntArray(bytes);
+        }
+
+        if (value is ReadOnlyMemory<byte> rom)
+        {
+            return BytesToUIntArray(rom.ToArray());
+        }
+
+        if (value is Memory<byte> mem)
+        {
+            return BytesToUIntArray(mem.ToArray());
+        }
+
+        if (value is List<object?> list)
+        {
+            // If list looks like bytes, interpret as uint32
+            if (list.Count % 4 == 0 && list.All(v => v is byte or sbyte or short or ushort or int))
+            {
+                var raw = list.Select(v => Convert.ToByte(v)).ToArray();
+                return BytesToUIntArray(raw);
+            }
+            return list.Where(v => v != null).Select(v => Convert.ToUInt32(v)).ToArray();
+        }
+
+        if (value is Dictionary<string, object?> map &&
+            map.TryGetValue("Array", out var arr) &&
+            arr is List<object?> arrayList)
+        {
+            return arrayList.Where(v => v != null).Select(v => Convert.ToUInt32(v)).ToArray();
+        }
+
+        Console.WriteLine($"DEBUG: m_Data value type={value.GetType().Name}");
+        return null;
+    }
+
+    private static uint[]? BytesToUIntArray(byte[] raw)
+    {
+        if (raw.Length % 4 != 0)
+        {
+            return null;
+        }
+        var result = new uint[raw.Length / 4];
+        for (int i = 0; i < result.Length; i++)
+        {
+            result[i] = BitConverter.ToUInt32(raw, i * 4);
+        }
+        return result;
     }
 
     /// <summary>

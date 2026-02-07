@@ -120,6 +120,11 @@ public sealed class Mesh
     public MinMaxAABB[]? BonesAABB { get; set; }
 
     /// <summary>
+    /// Gets or sets the variable bone count weights raw data (Unity 2019+).
+    /// </summary>
+    public uint[]? VariableBoneCountWeights { get; set; }
+
+    /// <summary>
     /// Gets or sets the CRC32 hash of the root bone name for skeleton lookup (optional).
     /// </summary>
     public int RootBoneNameHash { get; set; }
@@ -209,8 +214,5 @@ public sealed class Mesh
 
     // ========== ADVANCED FIELDS ==========
 
-    /// <summary>
-    /// Gets or sets variable bone weights data supporting 4+ bones per vertex (v2020.1+).
-    /// </summary>
-    public object? VariableBoneCountWeights { get; set; }
+    // VariableBoneCountWeights is defined earlier as uint[] for parsing.
 }

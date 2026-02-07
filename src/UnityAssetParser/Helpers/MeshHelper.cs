@@ -38,6 +38,10 @@ public sealed class MeshHelper
     private float[]? _tangents;   // Flat XYZW array: [x0,y0,z0,w0, x1,y1,z1,w1, ...]
     private float[]? _uv2;        // Additional UV set (TexCoord1)
     private float[]? _uv3;        // Third UV set (TexCoord2)
+    private float[]? _blendWeights; // Flat 4D weights per vertex
+    private float[]? _blendIndices; // Flat 4D indices per vertex
+    private const bool EnableBlendChannels = false;
+    private const bool EnableCompressedSkinWeights = false;
     private uint[]? _indices;     // Triangle indices
     private bool _use16BitIndices = true;
     private bool _isBigEndian => !_isLittleEndian;
@@ -88,6 +92,16 @@ public sealed class MeshHelper
     /// Format: [u0, v0, u1, v1, ...]
     /// </summary>
     public float[]? UV3 => _uv3;
+
+    /// <summary>
+    /// Gets the blend weights (4 floats per vertex) if present.
+    /// </summary>
+    public float[]? BlendWeights => _blendWeights;
+
+    /// <summary>
+    /// Gets the blend indices (4 floats per vertex) if present.
+    /// </summary>
+    public float[]? BlendIndices => _blendIndices;
 
     /// <summary>
     /// Gets the triangle indices as a uint array (length = IndexCount).
@@ -475,12 +489,22 @@ public sealed class MeshHelper
         _vertexCount = (int)vertexData.VertexCount;
         var vertexDataRaw = vertexData.DataSize;
 
+        Console.WriteLine($"DEBUG: VertexData channels={channels.Length} streams={streams.Length}");
+        for (int i = 0; i < channels.Length; i++)
+        {
+            var ch = channels[i];
+            if (ch.Dimension == 0) continue;
+            Console.WriteLine($"DEBUG: Channel[{i}] dim={ch.Dimension} fmt={ch.Format} stream={ch.Stream} offset={ch.Offset}");
+        }
+
         foreach (var (chn, channel) in channels.Select((ch, idx) => (idx, ch)))
         {
             if (channel.Dimension == 0)
             {
                 continue;
             }
+
+            // channel debug logged above
 
             var stream = streams[channel.Stream];
             var channelMask = Convert.ToString(stream.ChannelMask, 2).PadLeft(32, '0');
@@ -883,6 +907,18 @@ public sealed class MeshHelper
                 case 7:  // TexCoord2 (rarely used)
                     _uv2 = data;
                     break;
+                case 12: // BlendWeights
+                    if (EnableBlendChannels && dimension == 4)
+                    {
+                        _blendWeights = data;
+                    }
+                    break;
+                case 13: // BlendIndices
+                    if (EnableBlendChannels && dimension == 4)
+                    {
+                        _blendIndices = data;
+                    }
+                    break;
             }
         }
         else
@@ -910,6 +946,18 @@ public sealed class MeshHelper
                     break;
                 case 6:  // TexCoord2
                     _uv3 = data;
+                    break;
+                case 12: // BlendWeights (legacy)
+                    if (EnableBlendChannels && dimension == 4)
+                    {
+                        _blendWeights = data;
+                    }
+                    break;
+                case 13: // BlendIndices (legacy)
+                    if (EnableBlendChannels && dimension == 4)
+                    {
+                        _blendIndices = data;
+                    }
                     break;
             }
         }
@@ -988,6 +1036,52 @@ public sealed class MeshHelper
                 _normals[i * 3 + 0] = x;
                 _normals[i * 3 + 1] = y;
                 _normals[i * 3 + 2] = z;
+            }
+        }
+
+        // Blend weights / indices (compressed skinning data)
+        if (EnableCompressedSkinWeights && compressedMesh.Weights.NumItems > 0 && compressedMesh.BoneIndices.NumItems > 0)
+        {
+            var weightCount = (int)compressedMesh.Weights.NumItems;
+            var indexCount = (int)compressedMesh.BoneIndices.NumItems;
+            if (weightCount == _vertexCount * 4 && indexCount == _vertexCount * 4)
+            {
+                var wInts = compressedMesh.Weights.UnpackInts();
+                var bInts = compressedMesh.BoneIndices.UnpackInts();
+
+                var maxVal = compressedMesh.Weights.BitSize.HasValue
+                    ? (float)((1 << compressedMesh.Weights.BitSize.Value) - 1)
+                    : 1f;
+                if (maxVal <= 0f) maxVal = 1f;
+
+                _blendWeights = new float[weightCount];
+                _blendIndices = new float[indexCount];
+                for (int i = 0; i < weightCount; i += 4)
+                {
+                    float w0 = wInts[i] / maxVal;
+                    float w1 = wInts[i + 1] / maxVal;
+                    float w2 = wInts[i + 2] / maxVal;
+                    float w3 = wInts[i + 3] / maxVal;
+                    float sum = w0 + w1 + w2 + w3;
+                    if (sum > 0f)
+                    {
+                        w0 /= sum;
+                        w1 /= sum;
+                        w2 /= sum;
+                        w3 /= sum;
+                    }
+                    _blendWeights[i] = w0;
+                    _blendWeights[i + 1] = w1;
+                    _blendWeights[i + 2] = w2;
+                    _blendWeights[i + 3] = w3;
+
+                    _blendIndices[i] = bInts[i];
+                    _blendIndices[i + 1] = bInts[i + 1];
+                    _blendIndices[i + 2] = bInts[i + 2];
+                    _blendIndices[i + 3] = bInts[i + 3];
+                }
+
+                Console.WriteLine($"DEBUG: Compressed skin weights found ({weightCount} weights)");
             }
         }
 
