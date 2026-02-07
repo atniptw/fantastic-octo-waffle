@@ -15,8 +15,9 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 // Lighting constants
-const AMBIENT_LIGHT_INTENSITY = 0.6;
-const DIRECTIONAL_LIGHT_INTENSITY = 0.8;
+const AMBIENT_LIGHT_INTENSITY = 2.0;
+const DIRECTIONAL_LIGHT_INTENSITY = 2.4;
+const HEMISPHERE_LIGHT_INTENSITY = 1.2;
 
 // Camera positioning constant
 const CAMERA_MARGIN_FACTOR = 1.5;
@@ -58,6 +59,9 @@ export function init(canvasId, options = {}) {
   });
   renderer.setSize(canvas.clientWidth, canvas.clientHeight);
   renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 2.0;
 
   // Setup scene
   scene = new THREE.Scene();
@@ -87,6 +91,14 @@ export function init(canvasId, options = {}) {
   const directionalLight = new THREE.DirectionalLight(0xffffff, DIRECTIONAL_LIGHT_INTENSITY);
   directionalLight.position.set(1, 1, 1);
   scene.add(directionalLight);
+
+  const directionalFill = new THREE.DirectionalLight(0xffffff, DIRECTIONAL_LIGHT_INTENSITY * 0.6);
+  directionalFill.position.set(-1, 0.5, -0.5);
+  scene.add(directionalFill);
+
+  const hemiLight = new THREE.HemisphereLight(0xffffff, 0x2a2a2a, HEMISPHERE_LIGHT_INTENSITY);
+  hemiLight.position.set(0, 1, 0);
+  scene.add(hemiLight);
 
   // Start animation loop
   startAnimationLoop();
@@ -151,6 +163,13 @@ export async function loadGLB(glbData, materialOpts = {}) {
       });
     }
 
+    // Boost brightness for untextured materials
+    root.traverse(child => {
+      if (child.isMesh && child.material) {
+        applyDefaultMaterialBoost(child.material);
+      }
+    });
+
     scene.add(root);
 
     // Center camera on the loaded model
@@ -210,6 +229,34 @@ function applyMaterialOptions(material, opts) {
     material.roughness = opts.roughness;
   }
   material.needsUpdate = true;
+}
+
+/**
+ * Brighten untextured materials so models are readable in all lighting conditions.
+ * Applies only when there is no base color map.
+ * @param {THREE.Material} material
+ */
+function applyDefaultMaterialBoost(material) {
+  if (!('color' in material)) return;
+
+  const applyTo = mat => {
+    if (mat.map) return;
+    if ('emissive' in mat) {
+      const base = mat.color.clone();
+      mat.emissive = base.multiplyScalar(0.35);
+      mat.emissiveIntensity = 1.0;
+    }
+    if ('metalness' in mat) mat.metalness = 0.0;
+    if ('roughness' in mat) mat.roughness = 0.9;
+    mat.needsUpdate = true;
+  };
+
+  if (Array.isArray(material)) {
+    material.forEach(m => applyTo(m));
+    return;
+  }
+
+  applyTo(material);
 }
 
 /**
