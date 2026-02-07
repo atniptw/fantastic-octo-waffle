@@ -3,6 +3,14 @@ set -e
 
 echo "🚀 Setting up R.E.P.O. Mod Browser dev environment..."
 
+# Ensure Git LFS is installed and initialized
+if command -v git-lfs >/dev/null 2>&1; then
+	echo "📦 Initializing Git LFS..."
+	git lfs install 2>&1 || echo "⚠️  Git LFS initialization warning"
+else
+	echo "⚠️  Git LFS not found. Ensure devcontainer rebuild completes."
+fi
+
 # Install .NET Blazor WebAssembly workload
 echo "📦 Installing Blazor WebAssembly workload..."
 dotnet workload install wasm-tools 2>&1 || echo "⚠️  Blazor workload installation warning (may already be installed)"

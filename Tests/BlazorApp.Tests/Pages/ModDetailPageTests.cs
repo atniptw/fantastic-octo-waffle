@@ -41,7 +41,7 @@ public class ModDetailPageTests : Bunit.TestContext
 
         // Act
         var cut = Render<ModDetail>(parameters => parameters
-            .Add(p => p.Namespace, "TestAuthor")
+            .Add(p => p.Owner, "TestAuthor")
             .Add(p => p.Name, "Cigar"));
 
         await Task.Delay(100); // Allow async initialization
@@ -62,7 +62,7 @@ public class ModDetailPageTests : Bunit.TestContext
 
         // Act
         var cut = Render<ModDetail>(parameters => parameters
-            .Add(p => p.Namespace, "NonExistent")
+            .Add(p => p.Owner, "NonExistent")
             .Add(p => p.Name, "Mod"));
 
         await Task.Delay(100);
@@ -83,7 +83,7 @@ public class ModDetailPageTests : Bunit.TestContext
 
         // Act
         var cut = Render<ModDetail>(parameters => parameters
-            .Add(p => p.Namespace, "TestAuthor")
+            .Add(p => p.Owner, "TestAuthor")
             .Add(p => p.Name, "Cigar"));
 
         await Task.Delay(100);
@@ -104,7 +104,7 @@ public class ModDetailPageTests : Bunit.TestContext
 
         // Act
         var cut = Render<ModDetail>(parameters => parameters
-            .Add(p => p.Namespace, "TestAuthor")
+            .Add(p => p.Owner, "TestAuthor")
             .Add(p => p.Name, "Cigar"));
 
         await Task.Delay(100);
@@ -127,7 +127,7 @@ public class ModDetailPageTests : Bunit.TestContext
 
         // Act
         var cut = Render<ModDetail>(parameters => parameters
-            .Add(p => p.Namespace, "TestAuthor")
+            .Add(p => p.Owner, "TestAuthor")
             .Add(p => p.Name, "Cigar"));
 
         await Task.Delay(100);
@@ -147,7 +147,7 @@ public class ModDetailPageTests : Bunit.TestContext
 
         // Act
         var cut = Render<ModDetail>(parameters => parameters
-            .Add(p => p.Namespace, "TestAuthor")
+            .Add(p => p.Owner, "TestAuthor")
             .Add(p => p.Name, "Cigar"));
 
         await Task.Delay(100);
@@ -175,7 +175,7 @@ public class ModDetailPageTests : Bunit.TestContext
 
         // Act
         var cut = Render<ModDetail>(parameters => parameters
-            .Add(p => p.Namespace, "TestAuthor")
+            .Add(p => p.Owner, "TestAuthor")
             .Add(p => p.Name, "Cigar"));
 
         await Task.Delay(100);
@@ -210,7 +210,7 @@ public class ModDetailPageTests : Bunit.TestContext
 
         // Act
         var cut = Render<ModDetail>(parameters => parameters
-            .Add(p => p.Namespace, "TestAuthor")
+            .Add(p => p.Owner, "TestAuthor")
             .Add(p => p.Name, "Cigar"));
 
         await Task.Delay(100);
@@ -245,7 +245,7 @@ public class ModDetailPageTests : Bunit.TestContext
 
         // Act
         var cut = Render<ModDetail>(parameters => parameters
-            .Add(p => p.Namespace, "TestAuthor")
+            .Add(p => p.Owner, "TestAuthor")
             .Add(p => p.Name, "Cigar"));
 
         await Task.Delay(100);
@@ -283,7 +283,7 @@ public class ModDetailPageTests : Bunit.TestContext
 
         // Act
         var cut = Render<ModDetail>(parameters => parameters
-            .Add(p => p.Namespace, "TestAuthor")
+            .Add(p => p.Owner, "TestAuthor")
             .Add(p => p.Name, "Cigar"));
 
         await Task.Delay(100);
@@ -311,7 +311,7 @@ public class ModDetailPageTests : Bunit.TestContext
 
         // Act
         var cut = Render<ModDetail>(parameters => parameters
-            .Add(p => p.Namespace, "TestAuthor")
+            .Add(p => p.Owner, "TestAuthor")
             .Add(p => p.Name, "Cigar"));
 
         await Task.Delay(100);
