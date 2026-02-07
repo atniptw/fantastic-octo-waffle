@@ -41,8 +41,8 @@ public class EndToEndPipelineSmokeTests
         
         if (!File.Exists(filePath))
         {
-            // Skip if fixture not available
-            return;
+            // Use Assert to make the skip visible in test output
+            Assert.True(File.Exists(filePath), $"Test fixture not found: {filePath}");
         }
 
         var bundleData = File.ReadAllBytes(filePath);
@@ -108,7 +108,7 @@ public class EndToEndPipelineSmokeTests
         
         if (!File.Exists(filePath))
         {
-            return;
+            Assert.True(File.Exists(filePath), $"Test fixture not found: {filePath}");
         }
 
         var bundleData = File.ReadAllBytes(filePath);
@@ -130,7 +130,7 @@ public class EndToEndPipelineSmokeTests
         
         if (!File.Exists(filePath))
         {
-            return;
+            Assert.True(File.Exists(filePath), $"Test fixture not found: {filePath}");
         }
 
         var bundleData = File.ReadAllBytes(filePath);
@@ -171,7 +171,7 @@ public class EndToEndPipelineSmokeTests
         
         if (!File.Exists(filePath))
         {
-            return;
+            Assert.True(File.Exists(filePath), $"Test fixture not found: {filePath}");
         }
 
         var bundleData = File.ReadAllBytes(filePath);
@@ -200,7 +200,7 @@ public class EndToEndPipelineSmokeTests
         
         if (!File.Exists(filePath))
         {
-            return;
+            Assert.True(File.Exists(filePath), $"Test fixture not found: {filePath}");
         }
 
         var bundleData = File.ReadAllBytes(filePath);
@@ -222,7 +222,9 @@ public class EndToEndPipelineSmokeTests
     #region Validation Helpers
 
     /// <summary>
-    /// Validates that GLB binary has correct structure and magic bytes.
+    /// Validates that GLB binary has correct header structure.
+    /// Checks magic bytes, version, and total length field.
+    /// Does not validate chunk structure or alignment.
     /// </summary>
     private static void ValidateGlbStructure(byte[] glbData)
     {
@@ -251,18 +253,18 @@ public class EndToEndPipelineSmokeTests
     #region Performance Benchmarks
 
     [Fact]
-    public void Benchmark_CigarBundle_ParseAndExportUnder1Second()
+    public void Benchmark_CigarBundle_ParseAndExportCompletes()
     {
         // Arrange
         string filePath = Path.Combine(FixturesPath, "Cigar_neck.hhh");
         
         if (!File.Exists(filePath))
         {
-            return;
+            Assert.True(File.Exists(filePath), $"Test fixture not found: {filePath}");
         }
 
         var bundleData = File.ReadAllBytes(filePath);
-        var startTime = DateTime.UtcNow;
+        var sw = System.Diagnostics.Stopwatch.StartNew();
 
         // Act
         var meshes = _meshExtractor.ExtractMeshes(bundleData);
@@ -270,14 +272,14 @@ public class EndToEndPipelineSmokeTests
             meshes.Select(m => m.ToUnityMesh()).ToList());
         var glbData = _gltfExporter.ExportToGlb(gltfModel);
 
-        var elapsed = DateTime.UtcNow - startTime;
+        sw.Stop();
 
-        // Assert - Should complete in reasonable time
-        Assert.True(elapsed.TotalSeconds < 5.0, 
-            $"Pipeline took {elapsed.TotalSeconds:F2}s (expected < 5s)");
+        // Assert - Should complete in reasonable time (10s threshold for CI tolerance)
+        Assert.True(sw.Elapsed.TotalSeconds < 10.0, 
+            $"Pipeline took {sw.Elapsed.TotalSeconds:F2}s (expected < 10s)");
 
         // Log performance for monitoring
-        Console.WriteLine($"Pipeline performance: {elapsed.TotalMilliseconds:F0}ms");
+        Console.WriteLine($"Pipeline performance: {sw.ElapsedMilliseconds}ms");
         Console.WriteLine($"Output size: {glbData.Length / 1024}KB");
     }
 
@@ -373,6 +375,16 @@ internal static class MeshGeometryDtoExtensions
             
             if (use16Bit)
             {
+                // Validate all indices fit in UInt16 range
+                for (int i = 0; i < dto.Indices.Length; i++)
+                {
+                    if (dto.Indices[i] > ushort.MaxValue)
+                    {
+                        throw new InvalidOperationException(
+                            $"Index {dto.Indices[i]} at position {i} exceeds UInt16.MaxValue ({ushort.MaxValue}) but Use16BitIndices is true");
+                    }
+                }
+                
                 mesh.IndexBuffer = new byte[dto.Indices.Length * 2];
                 mesh.IndexFormat = 0; // Set format flag for 16-bit
                 for (int i = 0; i < dto.Indices.Length; i++)

@@ -144,6 +144,7 @@ public class GltfExporter
     /// 
     /// Uses IndexFormat field to determine 16-bit vs 32-bit indices.
     /// Unity: IndexFormat 0 = UInt16, 1 = UInt32.
+    /// Throws InvalidOperationException for unknown IndexFormat values.
     /// Fallback to size-based heuristic if IndexFormat is null.
     /// </summary>
     private int[] ExtractIndicesFromBuffer(byte[] buffer, int? indexFormat)
@@ -153,7 +154,13 @@ public class GltfExporter
         {
             if (indexFormat.Value == 0)
             {
-                // 16-bit indices
+                // 16-bit indices - validate buffer length
+                if (buffer.Length % 2 != 0)
+                {
+                    throw new InvalidOperationException(
+                        $"Index buffer length {buffer.Length} is not a multiple of 2 for UInt16 indices (IndexFormat=0)");
+                }
+                
                 var uint16Count = buffer.Length / 2;
                 var result = new int[uint16Count];
                 for (int i = 0; i < uint16Count; i++)
@@ -164,7 +171,13 @@ public class GltfExporter
             }
             else if (indexFormat.Value == 1)
             {
-                // 32-bit indices
+                // 32-bit indices - validate buffer length
+                if (buffer.Length % 4 != 0)
+                {
+                    throw new InvalidOperationException(
+                        $"Index buffer length {buffer.Length} is not a multiple of 4 for UInt32 indices (IndexFormat=1)");
+                }
+                
                 var uint32Count = buffer.Length / 4;
                 var result = new int[uint32Count];
                 for (int i = 0; i < uint32Count; i++)
@@ -172,6 +185,11 @@ public class GltfExporter
                     result[i] = (int)BitConverter.ToUInt32(buffer, i * 4);
                 }
                 return result;
+            }
+            else
+            {
+                throw new InvalidOperationException(
+                    $"Unknown IndexFormat value '{indexFormat.Value}'. Expected 0 (UInt16) or 1 (UInt32).");
             }
         }
 
