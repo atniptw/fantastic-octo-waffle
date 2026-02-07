@@ -130,7 +130,7 @@ public class GltfExporter
     {
         if (mesh.IndexBuffer != null && mesh.IndexBuffer.Length > 0)
         {
-            return ExtractIndicesFromBuffer(mesh.IndexBuffer);
+            return ExtractIndicesFromBuffer(mesh.IndexBuffer, mesh.IndexFormat);
         }
         else
         {
@@ -142,12 +142,41 @@ public class GltfExporter
     /// <summary>
     /// Extracts int array from raw index buffer bytes.
     /// 
-    /// Assumes 32-bit or 16-bit indices based on buffer size.
-    /// Unity typically uses UInt16 or UInt32 for indices.
+    /// Uses IndexFormat field to determine 16-bit vs 32-bit indices.
+    /// Unity: IndexFormat 0 = UInt16, 1 = UInt32.
+    /// Fallback to size-based heuristic if IndexFormat is null.
     /// </summary>
-    private int[] ExtractIndicesFromBuffer(byte[] buffer)
+    private int[] ExtractIndicesFromBuffer(byte[] buffer, int? indexFormat)
     {
-        // Assume 32-bit indices if divisible by 4, otherwise 16-bit
+        // Use IndexFormat field if available (0 = UInt16, 1 = UInt32)
+        if (indexFormat.HasValue)
+        {
+            if (indexFormat.Value == 0)
+            {
+                // 16-bit indices
+                var uint16Count = buffer.Length / 2;
+                var result = new int[uint16Count];
+                for (int i = 0; i < uint16Count; i++)
+                {
+                    result[i] = BitConverter.ToUInt16(buffer, i * 2);
+                }
+                return result;
+            }
+            else if (indexFormat.Value == 1)
+            {
+                // 32-bit indices
+                var uint32Count = buffer.Length / 4;
+                var result = new int[uint32Count];
+                for (int i = 0; i < uint32Count; i++)
+                {
+                    result[i] = (int)BitConverter.ToUInt32(buffer, i * 4);
+                }
+                return result;
+            }
+        }
+
+        // Fallback: Assume 32-bit indices if divisible by 4, otherwise 16-bit
+        // This heuristic fails when buffer size is ambiguous (e.g., 936 bytes could be 234 uint32 or 468 uint16)
         if (buffer.Length % 4 == 0)
         {
             var uint32Count = buffer.Length / 4;
