@@ -2,10 +2,6 @@
 @using BlazorApp.Models
 @using BlazorApp.Services
 @using Microsoft.Extensions.Logging.Abstractions
-@inject IModDetailStateService StateService
-@inject IAssetRenderer AssetRenderer
-@inject IViewerService ViewerService
-@inject IZipCacheService ZipCacheService
 @implements IAsyncDisposable
 
 <PageTitle>3D Viewer - @FileName</PageTitle>
@@ -82,6 +78,10 @@
     private string? _meshId;
     private NavigationManager _navManager = default!;
     private static readonly ILogger<Viewer3D> Logger = NullLogger<Viewer3D>.Instance;
+    private IModDetailStateService _stateService = default!;
+    private IAssetRenderer _assetRenderer = default!;
+    private IViewerService _viewerService = default!;
+    private IZipCacheService _zipCacheService = default!;
 
     protected override async Task OnInitializedAsync()
     {
@@ -89,12 +89,16 @@
         {
             var services = ServiceLocator.Provider ?? throw new InvalidOperationException("Service provider not initialized");
             _navManager = services.GetRequiredService<NavigationManager>();
+            _stateService = services.GetRequiredService<IModDetailStateService>();
+            _assetRenderer = services.GetRequiredService<IAssetRenderer>();
+            _viewerService = services.GetRequiredService<IViewerService>();
+            _zipCacheService = services.GetRequiredService<IZipCacheService>();
             // URL-decode the filename parameter (handles nested paths like "plugins/MoreHead/...")
             var decodedFileName = Uri.UnescapeDataString(FileName);
             
             // Step 1: Retrieve mod state
             _loadingMessage = "Loading mod data...";
-            var state = await StateService.GetCurrentModAsync();
+            var state = await _stateService.GetCurrentModAsync();
             
             if (state == null)
             {
@@ -128,8 +132,8 @@
             GlbExportResult glbResult;
             try
             {
-                var bundleBytes = await ZipCacheService.GetFileBytesAsync(state.ZipCacheKey, fileItem.FileName, default);
-                glbResult = await AssetRenderer.RenderAsGlbFromBundleAsync(fileItem, bundleBytes, default);
+                var bundleBytes = await _zipCacheService.GetFileBytesAsync(state.ZipCacheKey, fileItem.FileName, default);
+                glbResult = await _assetRenderer.RenderAsGlbFromBundleAsync(fileItem, bundleBytes, default);
             }
             catch (Exception ex)
             {
@@ -147,13 +151,13 @@
             await Task.Delay(100);
 
             // Step 5: Initialize Three.js viewer (once)
-            await ViewerService.InitializeAsync("threeJsCanvas");
+            await _viewerService.InitializeAsync("threeJsCanvas");
 
             try
             {
                 // Step 6: Load GLB into viewer
                 _loadingMessage = "Loading GLB into viewer...";
-                _meshId = await ViewerService.ShowGlbAsync(glbResult.GlbBytes);
+                _meshId = await _viewerService.ShowGlbAsync(glbResult.GlbBytes);
 
                 // Ensure geometry metadata object is initialized so UI can display basic info
                 _geometry ??= new ThreeJsGeometry
@@ -187,7 +191,7 @@
     {
         try
         {
-            await ViewerService.DisposeAsync();
+            await _viewerService.DisposeAsync();
         }
         catch
         {
