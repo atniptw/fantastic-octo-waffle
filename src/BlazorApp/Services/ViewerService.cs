@@ -1,5 +1,6 @@
 using BlazorApp.Models;
 using Microsoft.JSInterop;
+using System.Text.Json.Serialization;
 
 namespace BlazorApp.Services;
 
@@ -46,12 +47,12 @@ public class ViewerService : IViewerService
         ct.ThrowIfCancellationRequested();
 
         // Call meshRenderer.init(canvasId, options)
-        var options = new
+        var options = new ViewerInitOptions
         {
-            fov = 60,
-            near = 0.1,
-            far = 1000,
-            background = 0x1a1a1a
+            Fov = 60,
+            Near = 0.1,
+            Far = 1000,
+            Background = 0x1a1a1a
         };
 
         try
@@ -80,33 +81,33 @@ public class ViewerService : IViewerService
 
         // Prepare geometry data for JS interop
         // Note: Arrays are automatically marshaled to typed arrays by Blazor
-        var geometryData = new
+        var geometryData = new GeometryDto
         {
-            positions = geometry.Positions,
-            indices = geometry.Indices,
-            normals = geometry.Normals,
-            uvs = geometry.Uvs
+            Positions = geometry.Positions ?? Array.Empty<float>(),
+            Indices = geometry.Indices ?? Array.Empty<uint>(),
+            Normals = geometry.Normals,
+            Uvs = geometry.Uvs
         };
 
         // Prepare groups if present
-        object? groups = null;
+        GroupDto[]? groups = null;
         if (geometry.Groups != null && geometry.Groups.Count > 0)
         {
-            groups = geometry.Groups.Select(g => new
+            groups = geometry.Groups.Select(g => new GroupDto
             {
-                start = g.Start,
-                count = g.Count,
-                materialIndex = g.MaterialIndex
+                Start = g.Start,
+                Count = g.Count,
+                MaterialIndex = g.MaterialIndex
             }).ToArray();
         }
 
         // Default material options
-        var materialOpts = new
+        var materialOpts = new MaterialOptions
         {
-            color = 0x888888,
-            wireframe = false,
-            metalness = 0.5,
-            roughness = 0.5
+            Color = 0x888888,
+            Wireframe = false,
+            Metalness = 0.5,
+            Roughness = 0.5
         };
 
         // Call meshRenderer.loadMesh(geometry, groups, materialOpts)
@@ -133,12 +134,12 @@ public class ViewerService : IViewerService
         }
 
         // Default material options
-        var materialOpts = new
+        var materialOpts = new MaterialOptions
         {
-            color = 0x888888,
-            wireframe = false,
-            metalness = 0.5,
-            roughness = 0.5
+            Color = 0x888888,
+            Wireframe = false,
+            Metalness = 0.5,
+            Roughness = 0.5
         };
 
         // Call meshRenderer.loadGLB(glbData, materialOpts)
@@ -158,15 +159,11 @@ public class ViewerService : IViewerService
         ct.ThrowIfCancellationRequested();
 
         // Prepare material options (only include non-null values)
-        var opts = new Dictionary<string, object>();
-        if (color != null)
+        var opts = new MaterialUpdateOptions
         {
-            opts["color"] = color;
-        }
-        if (wireframe.HasValue)
-        {
-            opts["wireframe"] = wireframe.Value;
-        }
+            Color = color,
+            Wireframe = wireframe
+        };
 
         // Call meshRenderer.updateMaterial(meshId, opts)
         await _jsRuntime.InvokeVoidAsync("meshRenderer.updateMaterial", meshId, opts);
@@ -189,5 +186,75 @@ public class ViewerService : IViewerService
         // Call meshRenderer.dispose() to cleanup all resources
         await _jsRuntime.InvokeVoidAsync("meshRenderer.dispose");
         _isInitialized = false;
+    }
+
+    private sealed class ViewerInitOptions
+    {
+        [JsonPropertyName("fov")]
+        public int Fov { get; set; }
+
+        [JsonPropertyName("near")]
+        public double Near { get; set; }
+
+        [JsonPropertyName("far")]
+        public int Far { get; set; }
+
+        [JsonPropertyName("background")]
+        public int Background { get; set; }
+    }
+
+    private sealed class MaterialOptions
+    {
+        [JsonPropertyName("color")]
+        public int Color { get; set; }
+
+        [JsonPropertyName("wireframe")]
+        public bool Wireframe { get; set; }
+
+        [JsonPropertyName("metalness")]
+        public double Metalness { get; set; }
+
+        [JsonPropertyName("roughness")]
+        public double Roughness { get; set; }
+    }
+
+    private sealed class MaterialUpdateOptions
+    {
+        [JsonPropertyName("color")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? Color { get; set; }
+
+        [JsonPropertyName("wireframe")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public bool? Wireframe { get; set; }
+    }
+
+    private sealed class GeometryDto
+    {
+        [JsonPropertyName("positions")]
+        public float[] Positions { get; set; } = Array.Empty<float>();
+
+        [JsonPropertyName("indices")]
+        public uint[] Indices { get; set; } = Array.Empty<uint>();
+
+        [JsonPropertyName("normals")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public float[]? Normals { get; set; }
+
+        [JsonPropertyName("uvs")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public float[]? Uvs { get; set; }
+    }
+
+    private sealed class GroupDto
+    {
+        [JsonPropertyName("start")]
+        public int Start { get; set; }
+
+        [JsonPropertyName("count")]
+        public int Count { get; set; }
+
+        [JsonPropertyName("materialIndex")]
+        public int MaterialIndex { get; set; }
     }
 }
