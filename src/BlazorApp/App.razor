@@ -1,6 +1,6 @@
 @using BlazorApp.Layout
 @using BlazorApp.Pages
-@inject NavigationManager Nav
+@using BlazorApp.Services
 
 <Router AppAssembly="@typeof(App).Assembly">
     <Found Context="routeData">
@@ -9,7 +9,7 @@
     </Found>
     <NotFound>
         <PageTitle>Not found</PageTitle>
-        @if (string.IsNullOrEmpty(Nav.ToBaseRelativePath(Nav.Uri)))
+        @if (string.IsNullOrEmpty(_nav.ToBaseRelativePath(_nav.Uri)))
         {
             <LayoutView Layout="@typeof(MainLayout)">
                 <Index />
@@ -21,3 +21,13 @@
         }
     </NotFound>
 </Router>
+
+@code {
+    private NavigationManager _nav = default!;
+
+    protected override void OnInitialized()
+    {
+        var services = ServiceLocator.Provider ?? throw new InvalidOperationException("Service provider not initialized");
+        _nav = services.GetRequiredService<NavigationManager>();
+    }
+}

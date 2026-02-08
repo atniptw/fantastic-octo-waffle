@@ -2,8 +2,6 @@
 @page "/index.html"
 @using BlazorApp.Models
 @using BlazorApp.Services
-@inject IThunderstoreService ThunderstoreService
-@inject IJSRuntime JSRuntime
 @implements IAsyncDisposable
 
 <PageTitle>R.E.P.O. Mod Browser</PageTitle>
@@ -91,12 +89,17 @@
     private string? _error;
     private IJSObjectReference? _lazyLoadModule;
     private IJSObjectReference? _imageObserver;
+    private IThunderstoreService _thunderstoreService = default!;
+    private IJSRuntime _jsRuntime = default!;
     
     private bool _hasMorePackages => _packages != null && _currentIndex < _packages.Count;
     private int _remainingCount => _packages != null ? _packages.Count - _currentIndex : 0;
 
     protected override async Task OnInitializedAsync()
     {
+        var services = ServiceLocator.Provider ?? throw new InvalidOperationException("Service provider not initialized");
+        _thunderstoreService = services.GetRequiredService<IThunderstoreService>();
+        _jsRuntime = services.GetRequiredService<IJSRuntime>();
         await LoadPackagesAsync();
     }
 
@@ -107,7 +110,7 @@
             try
             {
                 // Initialize lazy loading module
-                _lazyLoadModule = await JSRuntime.InvokeAsync<IJSObjectReference>("import", LazyLoadModulePath);
+                _lazyLoadModule = await _jsRuntime.InvokeAsync<IJSObjectReference>("import", LazyLoadModulePath);
                 _imageObserver = await _lazyLoadModule.InvokeAsync<IJSObjectReference>("initializeLazyLoading");
             }
             catch (Exception)
@@ -136,7 +139,7 @@
         
         try
         {
-            var allPackages = await ThunderstoreService.GetPackagesAsync();
+            var allPackages = await _thunderstoreService.GetPackagesAsync();
             
             // Filter for Cosmetics category and non-deprecated
             _packages = allPackages
