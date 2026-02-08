@@ -1,11 +1,11 @@
 @page "/viewer/{OwnerName}/{Name}/{*FileName}"
 @using BlazorApp.Models
 @using BlazorApp.Services
+@using Microsoft.Extensions.Logging.Abstractions
 @inject IModDetailStateService StateService
 @inject IAssetRenderer AssetRenderer
 @inject IViewerService ViewerService
 @inject IZipCacheService ZipCacheService
-@inject ILogger<Viewer3D> Logger
 @implements IAsyncDisposable
 
 <PageTitle>3D Viewer - @FileName</PageTitle>
@@ -81,6 +81,7 @@
     private ThreeJsGeometry? _geometry;
     private string? _meshId;
     private NavigationManager _navManager = default!;
+    private static readonly ILogger<Viewer3D> Logger = NullLogger<Viewer3D>.Instance;
 
     protected override async Task OnInitializedAsync()
     {
