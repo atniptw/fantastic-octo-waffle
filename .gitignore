@@ -32,6 +32,7 @@ npm-debug.log*
 # Build output
 wwwroot/dist/
 wwwroot/lib/
+src/BlazorApp/wwwroot/lib/
 
 # OS
 .DS_Store

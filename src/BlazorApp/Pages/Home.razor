@@ -1,7 +1,41 @@
 ﻿@page "/"
 
-<PageTitle>Home</PageTitle>
+<PageTitle>R.E.P.O Outfit Planner</PageTitle>
 
-<h1>Hello, world!</h1>
+<section class="landing">
+	<header class="landing__header">
+		<h1>R.E.P.O Outfit Planner</h1>
+		<p>Preview and plan cosmetic loadouts locally in your browser.</p>
+	</header>
 
-Welcome to your new app.
+	<div class="landing__steps">
+		<div class="step-card">
+			<div class="step-card__title">Step 1: Upload Base Mod</div>
+			<div class="dropzone">
+				<div class="dropzone__hint">Drop MoreHead zip/dll here</div>
+				<button class="btn btn-outline-primary" type="button">Browse Files</button>
+				<div class="dropzone__status success">Status: ✓ MoreHead v1.2.0 Loaded</div>
+			</div>
+		</div>
+
+		<div class="step-card">
+			<div class="step-card__title">Step 2: Upload Cosmetic Mods</div>
+			<div class="dropzone">
+				<div class="dropzone__hint">Drop cosmetic mods here</div>
+				<button class="btn btn-outline-primary" type="button">Browse Files</button>
+				<div class="dropzone__status">
+					<div>Loaded Mods:</div>
+					<ul>
+						<li>✓ Spooky Hats v1.0</li>
+						<li>✓ Ghost Backpacks v2.1</li>
+					</ul>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<div class="landing__cta">
+		<button class="btn btn-primary" type="button" disabled>Continue →</button>
+		<span class="landing__cta-note">Enabled after base mod is loaded</span>
+	</div>
+</section>
