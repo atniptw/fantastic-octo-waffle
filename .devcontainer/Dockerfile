@@ -1,5 +1,7 @@
 FROM mcr.microsoft.com/devcontainers/dotnet:10.0
 
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+
 # Install Node.js 24 LTS
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl gnupg \
@@ -19,6 +21,8 @@ RUN apt-get update \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Playwright and browsers at build time
+# Install Playwright and browsers at build time (shared path)
 RUN npm install -g playwright@latest \
-    && npx playwright install --with-deps
+    && mkdir -p /ms-playwright \
+    && npx playwright install --with-deps \
+    && chmod -R 777 /ms-playwright
