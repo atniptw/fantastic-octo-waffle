@@ -1,0 +1,536 @@
+name: Pull Request Code Quality Checks
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+      - 'LICENSE'
+  workflow_dispatch:
+
+# Default permissions for all jobs (principle of least privilege)
+permissions:
+  contents: read
+
+env:
+  DOTNET_VERSION: '10.0.x'
+  NODE_VERSION: '24.x'
+  BUNDLE_SIZE_THRESHOLD_PERCENT: 10
+
+jobs:
+  # Priority 1: Secret & Credential Scanning (Non-negotiable)
+  secret-scanning:
+    name: 🔒 Secret & Credential Scanning
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for TruffleHog
+
+      - name: TruffleHog Secret Scan
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.pull_request.base.sha }}
+          head: ${{ github.event.pull_request.head.sha }}
+          extra_args: --only-verified
+
+  # Priority 2: Bundle Size Analysis (Performance Gate)
+  bundle-size-analysis:
+    name: 📦 Bundle Size Analysis
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout PR code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Install WASM workloads
+        run: dotnet workload install wasm-tools-net9
+        working-directory: src/BlazorApp
+
+      - name: Build Blazor Release
+        run: dotnet publish -c Release -o ../../dist
+        working-directory: src/BlazorApp
+
+      - name: Calculate Bundle Sizes (PR)
+        id: pr-size
+        run: |
+          WASM_SIZE=$(find dist/_framework -name "*.wasm" -exec du -cb {} + | tail -1 | cut -f1)
+          JS_SIZE=$(find dist/_framework -name "*.js" -exec du -cb {} + | tail -1 | cut -f1)
+          TOTAL_SIZE=$(du -sb dist | cut -f1)
+          echo "wasm=$WASM_SIZE" >> $GITHUB_OUTPUT
+          echo "js=$JS_SIZE" >> $GITHUB_OUTPUT
+          echo "total=$TOTAL_SIZE" >> $GITHUB_OUTPUT
+          echo "### PR Bundle Sizes" >> $GITHUB_STEP_SUMMARY
+          echo "- WASM: $(numfmt --to=iec-i --suffix=B $WASM_SIZE)" >> $GITHUB_STEP_SUMMARY
+          echo "- JS: $(numfmt --to=iec-i --suffix=B $JS_SIZE)" >> $GITHUB_STEP_SUMMARY
+          echo "- Total: $(numfmt --to=iec-i --suffix=B $TOTAL_SIZE)" >> $GITHUB_STEP_SUMMARY
+
+      - name: Checkout base branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
+          path: base-branch
+
+      - name: Build Blazor Release (Base)
+        run: |
+          dotnet workload install wasm-tools-net9
+          dotnet publish -c Release -o ../../dist-base
+        working-directory: base-branch/src/BlazorApp
+        continue-on-error: true
+
+      - name: Calculate Bundle Sizes (Base) and Compare
+        id: base-size
+        run: |
+          if [ -d "dist-base" ]; then
+            WASM_SIZE_BASE=$(find dist-base/_framework -name "*.wasm" -exec du -cb {} + 2>/dev/null | tail -1 | cut -f1 || echo "0")
+            JS_SIZE_BASE=$(find dist-base/_framework -name "*.js" -exec du -cb {} + 2>/dev/null | tail -1 | cut -f1 || echo "0")
+            TOTAL_SIZE_BASE=$(du -sb dist-base 2>/dev/null | cut -f1 || echo "0")
+
+            WASM_SIZE_PR=${{ steps.pr-size.outputs.wasm }}
+            JS_SIZE_PR=${{ steps.pr-size.outputs.js }}
+            TOTAL_SIZE_PR=${{ steps.pr-size.outputs.total }}
+
+            WASM_DIFF=$((WASM_SIZE_PR - WASM_SIZE_BASE))
+            TOTAL_DIFF=$((TOTAL_SIZE_PR - TOTAL_SIZE_BASE))
+
+            if [ $WASM_SIZE_BASE -gt 0 ]; then
+              WASM_PERCENT=$((WASM_DIFF * 100 / WASM_SIZE_BASE))
+            else
+              WASM_PERCENT=0
+            fi
+
+            if [ $TOTAL_SIZE_BASE -gt 0 ]; then
+              TOTAL_PERCENT=$((TOTAL_DIFF * 100 / TOTAL_SIZE_BASE))
+            else
+              TOTAL_PERCENT=0
+            fi
+
+            echo "### Base Branch Bundle Sizes" >> $GITHUB_STEP_SUMMARY
+            echo "- WASM: $(numfmt --to=iec-i --suffix=B $WASM_SIZE_BASE)" >> $GITHUB_STEP_SUMMARY
+            echo "- JS: $(numfmt --to=iec-i --suffix=B $JS_SIZE_BASE)" >> $GITHUB_STEP_SUMMARY
+            echo "- Total: $(numfmt --to=iec-i --suffix=B $TOTAL_SIZE_BASE)" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Size Changes" >> $GITHUB_STEP_SUMMARY
+            echo "- WASM: ${WASM_PERCENT}% change" >> $GITHUB_STEP_SUMMARY
+            echo "- Total: ${TOTAL_PERCENT}% change" >> $GITHUB_STEP_SUMMARY
+
+            # Fail if WASM grows more than threshold
+            if [ $WASM_PERCENT -gt ${{ env.BUNDLE_SIZE_THRESHOLD_PERCENT }} ]; then
+              echo "❌ WASM bundle grew by ${WASM_PERCENT}%, exceeding threshold of ${{ env.BUNDLE_SIZE_THRESHOLD_PERCENT }}%" >> $GITHUB_STEP_SUMMARY
+              exit 1
+            elif [ $WASM_PERCENT -lt -5 ]; then
+              ABS_WASM_PERCENT=${WASM_PERCENT#-}
+              echo "✅ WASM bundle decreased by ${ABS_WASM_PERCENT}% - great optimization!" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "✅ WASM bundle size change within acceptable limits" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "⚠️ Could not build base branch for comparison" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # Priority 3: Cyclomatic Complexity Limits (AI Maintainability)
+  complexity-analysis:
+    name: 🧮 Cyclomatic Complexity Check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Install WASM workloads
+        run: dotnet workload install wasm-tools-net9
+        working-directory: src/BlazorApp
+
+      - name: Build with Roslyn Analyzers
+        run: |
+          dotnet build /p:TreatWarningsAsErrors=false /p:WarningLevel=4 \
+            /p:EnforceCodeStyleInBuild=true \
+            /p:AnalysisLevel=latest-all \
+            /p:CodeAnalysisTreatWarningsAsErrors=false
+        working-directory: src/BlazorApp
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Check JavaScript Complexity (ESLint)
+        run: |
+          cd src/BlazorApp/wwwroot/js
+          if [ -f "package.json" ]; then
+            npm install
+            npx eslint *.js
+          else
+            echo "No package.json found - skipping ESLint check"
+          fi
+
+  # Priority 4: Code Coverage Thresholds (Clear Targets)
+  code-coverage:
+    name: 📊 Code Coverage Analysis
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Install WASM workloads
+        run: dotnet workload install wasm-tools-net9
+        working-directory: src/BlazorApp
+
+      - name: Restore dependencies
+        run: dotnet restore
+        working-directory: src/BlazorApp
+
+      - name: Run tests with coverage
+        run: |
+          # Check if test project exists
+          if find .. -name "*Test*.csproj" -o -name "*Tests.csproj" | grep -q .; then
+            dotnet test --collect:"XPlat Code Coverage" \
+              --results-directory ./TestResults/ \
+              --logger "console;verbosity=detailed"
+          else
+            echo "⚠️ No test projects found. Creating placeholder test structure is recommended."
+            echo "Coverage check skipped - add tests to enable this check." >> $GITHUB_STEP_SUMMARY
+          fi
+        working-directory: src/BlazorApp
+        continue-on-error: true
+
+      - name: Upload coverage to Codecov
+        if: hashFiles('src/BlazorApp/TestResults/**/coverage.cobertura.xml') != ''
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./src/BlazorApp/TestResults/**/coverage.cobertura.xml
+          flags: unittests
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+        continue-on-error: true
+
+      - name: Generate Coverage Report
+        run: |
+          if [ -d "src/BlazorApp/TestResults" ]; then
+            echo "### Code Coverage Summary" >> $GITHUB_STEP_SUMMARY
+            echo "Coverage reports generated. View detailed results in Codecov." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ No coverage data available - add test projects to track coverage" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # Priority 5: Integration & E2E Tests (System Validation)
+  integration-tests:
+    name: 🔗 Integration & E2E Tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Install WASM workloads
+        run: dotnet workload install wasm-tools-net9
+        working-directory: src/BlazorApp
+
+      - name: Restore Blazor app dependencies
+        run: dotnet restore
+        working-directory: src/BlazorApp
+
+      - name: Restore E2E test dependencies
+        run: dotnet restore
+        working-directory: Tests/BlazorApp.E2E.Tests
+
+      - name: Build E2E test project
+        run: dotnet build --no-restore
+        working-directory: Tests/BlazorApp.E2E.Tests
+
+      - name: Install Playwright browsers
+        run: |
+          pwsh bin/Debug/net10.0/playwright.ps1 install --with-deps chromium
+        working-directory: Tests/BlazorApp.E2E.Tests
+
+      - name: Run E2E Tests
+        run: |
+          echo "### E2E Tests" >> $GITHUB_STEP_SUMMARY
+          echo "Running end-to-end tests for Blazor app..." >> $GITHUB_STEP_SUMMARY
+          
+          if dotnet test --no-build --logger "console;verbosity=detailed"; then
+            echo "✅ All E2E tests passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ E2E tests failed - check logs for details" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+        working-directory: Tests/BlazorApp.E2E.Tests
+
+      - name: Run Integration Tests
+        continue-on-error: true
+        run: |
+          # Check for integration test projects
+          if find .. -name "*IntegrationTests.csproj" -o -name "*Integration.Tests.csproj" | grep -q .; then
+            dotnet test --filter "Category=Integration" --logger "console;verbosity=detailed"
+          else
+            echo "### Integration Tests Status" >> $GITHUB_STEP_SUMMARY
+            echo "⚠️ Integration test suite not yet implemented. Critical flows to test:" >> $GITHUB_STEP_SUMMARY
+            echo "- Bundle parsing → Three.js render pipeline" >> $GITHUB_STEP_SUMMARY
+            echo "- Thunderstore API client with mock responses" >> $GITHUB_STEP_SUMMARY
+            echo "- Mesh geometry extraction and validation" >> $GITHUB_STEP_SUMMARY
+          fi
+        working-directory: src/BlazorApp
+
+  # Secondary: Linting & Formatting
+  linting-formatting:
+    name: 🎨 Linting & Formatting
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Install dotnet-format
+        run: dotnet tool install -g dotnet-format || true
+
+      - name: Check C# Formatting
+        run: |
+          dotnet format --verify-no-changes --verbosity diagnostic
+        working-directory: src/BlazorApp
+        continue-on-error: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Check JavaScript Formatting (Prettier)
+        run: |
+          cd src/BlazorApp/wwwroot/js
+          if [ -f "package.json" ]; then
+            npm install
+            npx prettier --check *.js || echo "Prettier check completed with warnings"
+          else
+            npx prettier --check *.js || echo "Prettier check completed with warnings"
+          fi
+        continue-on-error: true
+
+  # Secondary: Build Verification
+  build-verification:
+    name: 🔨 Build Verification
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      matrix:
+        configuration: [Debug, Release]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Install WASM workloads
+        run: dotnet workload install wasm-tools-net9
+        working-directory: src/BlazorApp
+
+      - name: Restore NuGet packages
+        run: dotnet restore
+        working-directory: src/BlazorApp
+
+      - name: Build ${{ matrix.configuration }}
+        run: dotnet build -c ${{ matrix.configuration }} --no-restore
+        working-directory: src/BlazorApp
+
+      - name: Publish ${{ matrix.configuration }}
+        run: dotnet publish -c ${{ matrix.configuration }} -o ../../dist-${{ matrix.configuration }}
+        working-directory: src/BlazorApp
+
+      - name: Verify Build Artifacts
+        run: |
+          echo "### Build Verification (${{ matrix.configuration }})" >> $GITHUB_STEP_SUMMARY
+          echo "Build artifacts:" >> $GITHUB_STEP_SUMMARY
+          
+          # Check repository root for dist directory
+          DIST_DIR="dist-${{ matrix.configuration }}"
+          
+          if [ ! -d "$DIST_DIR" ]; then
+            echo "❌ Build output directory not found: $DIST_DIR" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Debug Information:**" >> $GITHUB_STEP_SUMMARY
+            echo "- Current working directory: $(pwd)" >> $GITHUB_STEP_SUMMARY
+            echo "- Repository contents:" >> $GITHUB_STEP_SUMMARY
+            ls -la . 2>&1 | grep -E "^d|^-" | head -15 | sed 's/^/  /' >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+          
+          # StaticWebAssetBasePath is different for Debug vs Release
+          # Debug: no base path, so wwwroot/ is root
+          # Release: base path is /fantastic-octo-waffle, so wwwroot/fantastic-octo-waffle/
+          if [ "${{ matrix.configuration }}" == "Release" ]; then
+            APP_ROOT="$DIST_DIR/wwwroot/fantastic-octo-waffle"
+          else
+            APP_ROOT="$DIST_DIR/wwwroot"
+          fi
+          
+          if [ -f "$APP_ROOT/index.html" ] && [ -d "$APP_ROOT/_framework" ]; then
+            FRAMEWORK_SIZE=$(du -sh "$APP_ROOT/_framework" | cut -f1)
+            echo "✅ Critical files present" >> $GITHUB_STEP_SUMMARY
+            echo "- Framework directory size: $FRAMEWORK_SIZE" >> $GITHUB_STEP_SUMMARY
+            
+            # Count framework artifacts
+            JS_COUNT=$(find "$APP_ROOT/_framework" -name "*.js" 2>/dev/null | wc -l)
+            WASM_COUNT=$(find "$APP_ROOT/_framework" -name "*.wasm" 2>/dev/null | wc -l)
+            WOFF_COUNT=$(find "$APP_ROOT/_framework" -name "*.woff2" 2>/dev/null | wc -l)
+            
+            echo "- JS files: $JS_COUNT" >> $GITHUB_STEP_SUMMARY
+            echo "- WASM files: $WASM_COUNT (expected: 0 for Debug, >0 for Release)" >> $GITHUB_STEP_SUMMARY
+            echo "- Font files: $WOFF_COUNT" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Missing critical build artifacts" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Debug Information:**" >> $GITHUB_STEP_SUMMARY
+            echo "- Configuration: ${{ matrix.configuration }}" >> $GITHUB_STEP_SUMMARY
+            echo "- Expected app root: $APP_ROOT" >> $GITHUB_STEP_SUMMARY
+            echo "- Checking for index.html: $([ -f "$APP_ROOT/index.html" ] && echo "✅ Found" || echo "❌ Not found")" >> $GITHUB_STEP_SUMMARY
+            echo "- Checking for _framework dir: $([ -d "$APP_ROOT/_framework" ] && echo "✅ Found" || echo "❌ Not found")" >> $GITHUB_STEP_SUMMARY
+            echo "- $DIST_DIR directory structure:" >> $GITHUB_STEP_SUMMARY
+            find "$DIST_DIR" -type f -o -type d 2>&1 | head -30 | sed 's/^/  /' >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+
+  # Secondary: Dead Code Detection
+  dead-code-detection:
+    name: 🧹 Dead Code Detection
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Install WASM workloads
+        run: dotnet workload install wasm-tools-net9
+        working-directory: src/BlazorApp
+
+      - name: Build with unused code warnings
+        run: |
+          dotnet build /p:TreatWarningsAsErrors=false \
+            /p:NoWarn="" \
+            /p:WarningsAsErrors="CS0168;CS0219;CS8019"
+        working-directory: src/BlazorApp
+        continue-on-error: true
+
+  # Summary Job - Required Status Check
+  pr-checks-summary:
+    name: ✅ PR Checks Summary
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    needs: [secret-scanning, bundle-size-analysis, complexity-analysis, code-coverage, integration-tests, linting-formatting, build-verification, dead-code-detection]
+    if: always()
+    steps:
+      - name: Check all jobs status
+        run: |
+          echo "## Pull Request Quality Checks Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Priority checks (must pass)
+          if [ "${{ needs.secret-scanning.result }}" == "success" ]; then
+            echo "✅ Secret Scanning: PASSED" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Secret Scanning: FAILED" >> $GITHUB_STEP_SUMMARY
+            FAILED=1
+          fi
+
+          if [ "${{ needs.bundle-size-analysis.result }}" == "success" ]; then
+            echo "✅ Bundle Size Analysis: PASSED" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Bundle Size Analysis: FAILED" >> $GITHUB_STEP_SUMMARY
+            FAILED=1
+          fi
+
+          if [ "${{ needs.complexity-analysis.result }}" == "success" ]; then
+            echo "✅ Complexity Analysis: PASSED" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Complexity Analysis: FAILED" >> $GITHUB_STEP_SUMMARY
+            FAILED=1
+          fi
+
+          # Secondary checks (warnings only)
+          if [ "${{ needs.code-coverage.result }}" == "success" ]; then
+            echo "✅ Code Coverage: PASSED" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ Code Coverage: CHECK NEEDED" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "${{ needs.integration-tests.result }}" == "success" ]; then
+            echo "✅ Integration Tests: PASSED" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ Integration Tests: NOT IMPLEMENTED" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "${{ needs.linting-formatting.result }}" == "success" ]; then
+            echo "✅ Linting & Formatting: PASSED" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ Linting & Formatting: WARNINGS" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "${{ needs.build-verification.result }}" == "success" ]; then
+            echo "✅ Build Verification: PASSED" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Build Verification: FAILED" >> $GITHUB_STEP_SUMMARY
+            FAILED=1
+          fi
+
+          if [ "${{ needs.dead-code-detection.result }}" == "success" ]; then
+            echo "✅ Dead Code Detection: PASSED" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ Dead Code Detection: WARNINGS" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -n "$FAILED" ]; then
+            echo "❌ **PR checks FAILED** - Please fix issues before merging" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          else
+            echo "✅ **All critical checks PASSED** - PR ready for review" >> $GITHUB_STEP_SUMMARY
+          fi

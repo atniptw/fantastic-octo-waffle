@@ -1,0 +1,604 @@
+/**
+ * Three.js mesh renderer interop module.
+ * Provides functions for rendering 3D meshes from parsed Unity assets.
+ *
+ * Contract (from docs/BlazorUI.md and docs/DataModels.md):
+ * - positions: Float32Array length 3 * vertexCount (XYZ)
+ * - indices: Uint16Array | Uint32Array length 3 * triangleCount
+ * - normals (optional): Float32Array length 3 * vertexCount
+ * - uvs (optional): Float32Array length 2 * vertexCount
+ * - groups (optional): Array<{ start: number, count: number, materialIndex: number }>
+ */
+
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+// Lighting constants
+const AMBIENT_LIGHT_INTENSITY = 2.0;
+const DIRECTIONAL_LIGHT_INTENSITY = 2.4;
+const HEMISPHERE_LIGHT_INTENSITY = 1.2;
+
+// Camera positioning constant
+const CAMERA_MARGIN_FACTOR = 1.5;
+
+// Module state
+let scene = null;
+let camera = null;
+let renderer = null;
+let controls = null;
+let meshes = new Map(); // meshId -> THREE.Mesh
+let animationId = null;
+let nextMeshId = 1;
+
+/**
+ * Initialize Three.js viewer with the specified canvas element.
+ * @param {string} canvasId - ID of the canvas element
+ * @param {object} options - Configuration options
+ * @param {number} options.fov - Camera field of view (default: 60)
+ * @param {number} options.near - Camera near plane (default: 0.1)
+ * @param {number} options.far - Camera far plane (default: 1000)
+ * @param {string|number} options.background - Background color (default: 0x1a1a1a)
+ * @throws {Error} If canvas not found or already initialized
+ */
+export function init(canvasId, options = {}) {
+  if (renderer) {
+    throw new Error('Renderer already initialized');
+  }
+
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) {
+    throw new Error(`Canvas element with id '${canvasId}' not found`);
+  }
+
+  // Setup renderer
+  renderer = new THREE.WebGLRenderer({
+    canvas: canvas,
+    antialias: true,
+    alpha: true,
+  });
+  renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+  renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 2.0;
+
+  // Setup scene
+  scene = new THREE.Scene();
+  const bgColor = options.background ?? 0x1a1a1a;
+  scene.background = new THREE.Color(bgColor);
+
+  // Setup camera
+  const fov = options.fov ?? 60;
+  const aspect = canvas.clientWidth / canvas.clientHeight;
+  const near = options.near ?? 0.1;
+  const far = options.far ?? 1000;
+  camera = new THREE.PerspectiveCamera(fov, aspect, near, far);
+  camera.position.set(0, 0, 5);
+
+  // Setup controls
+  controls = new OrbitControls(camera, canvas);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.05;
+  controls.screenSpacePanning = false;
+  controls.minDistance = 0.001;
+  controls.maxDistance = 2000;
+
+  // Add lighting
+  const ambientLight = new THREE.AmbientLight(0xffffff, AMBIENT_LIGHT_INTENSITY);
+  scene.add(ambientLight);
+
+  const directionalLight = new THREE.DirectionalLight(0xffffff, DIRECTIONAL_LIGHT_INTENSITY);
+  directionalLight.position.set(1, 1, 1);
+  scene.add(directionalLight);
+
+  const directionalFill = new THREE.DirectionalLight(0xffffff, DIRECTIONAL_LIGHT_INTENSITY * 0.6);
+  directionalFill.position.set(-1, 0.5, -0.5);
+  scene.add(directionalFill);
+
+  const hemiLight = new THREE.HemisphereLight(0xffffff, 0x2a2a2a, HEMISPHERE_LIGHT_INTENSITY);
+  hemiLight.position.set(0, 1, 0);
+  scene.add(hemiLight);
+
+  // Start animation loop
+  startAnimationLoop();
+}
+
+/**
+ * Animation loop for rendering and updating controls.
+ */
+function startAnimationLoop() {
+  function animate() {
+    if (!renderer || !scene || !camera) return; // Stop if disposed
+    animationId = requestAnimationFrame(animate);
+    controls.update();
+    renderer.render(scene, camera);
+  }
+  animate();
+}
+
+/**
+ * Load GLB binary data into the viewer using Three.js GLTFLoader.
+ * @param {Uint8Array|number[]} glbData - GLB binary data
+ * @param {object} [materialOpts] - Material options to apply after loading
+ * @param {string|number} [materialOpts.color] - Material color override
+ * @param {boolean} [materialOpts.wireframe] - Wireframe mode
+ * @param {number} [materialOpts.metalness] - Metalness
+ * @param {number} [materialOpts.roughness] - Roughness
+ * @returns {Promise<string>} Mesh ID for future operations
+ * @throws {Error} If renderer not initialized or GLB loading fails
+ */
+export async function loadGLB(glbData, materialOpts = {}) {
+  validateRendererInitialized();
+
+  // Convert to Uint8Array if needed
+  const uint8Array = glbData instanceof Uint8Array ? glbData : new Uint8Array(glbData);
+
+  // Create blob URL from GLB data
+  const blob = new Blob([uint8Array], { type: 'application/octet-stream' });
+  const url = URL.createObjectURL(blob);
+
+  try {
+    const loader = new GLTFLoader();
+    const gltf = await new Promise((resolve, reject) => {
+      loader.load(
+        url,
+        gltf => resolve(gltf),
+        undefined, // onProgress
+        error => reject(new Error(`GLB load failed: ${error.message}`))
+      );
+    });
+
+    const root = gltf.scene ?? (gltf.scenes && gltf.scenes.length ? gltf.scenes[0] : null);
+    if (!root) {
+      throw new Error('GLB loaded without a scene');
+    }
+
+    // Apply material overrides if specified
+    if (Object.keys(materialOpts).length > 0) {
+      root.traverse(child => {
+        if (child.isMesh && child.material) {
+          applyMaterialOptions(child.material, materialOpts);
+        }
+      });
+    }
+
+    // Boost brightness for untextured materials
+    root.traverse(child => {
+      if (child.isMesh && child.material) {
+        applyDefaultMaterialBoost(child.material);
+      }
+    });
+
+    scene.add(root);
+
+    // Center camera on the loaded model
+    centerCameraOnMesh(root);
+
+    const meshId = `gltf-${nextMeshId++}`;
+    meshes.set(meshId, root);
+
+    return meshId;
+  } finally {
+    // Clean up blob URL
+    URL.revokeObjectURL(url);
+  }
+}
+
+/**
+ * Validate a material color option before applying it.
+ * Accepts string or number; rejects null, undefined, and empty strings.
+ * @param {string|number|null|undefined} color
+ * @returns {boolean}
+ */
+function isValidMaterialColorOption(color) {
+  if (color === null || color === undefined) {
+    return false;
+  }
+
+  if (typeof color === 'string') {
+    // Reject empty or whitespace-only strings; let THREE.Color validate others.
+    return color.trim().length > 0;
+  }
+
+  if (typeof color === 'number') {
+    // Basic numeric validation: finite and within typical [0, 0xffffff] range.
+    return Number.isFinite(color) && color >= 0 && color <= 0xffffff;
+  }
+
+  // Any other type is invalid.
+  return false;
+}
+
+/**
+ * Apply material options to a Three.js material.
+ * @param {THREE.Material} material - Material to modify
+ * @param {object} opts - Material options
+ */
+function applyMaterialOptions(material, opts) {
+  if (opts.color !== undefined && isValidMaterialColorOption(opts.color)) {
+    material.color = new THREE.Color(opts.color);
+  }
+  if (opts.wireframe !== undefined) {
+    material.wireframe = opts.wireframe;
+  }
+  if (opts.metalness !== undefined && 'metalness' in material) {
+    material.metalness = opts.metalness;
+  }
+  if (opts.roughness !== undefined && 'roughness' in material) {
+    material.roughness = opts.roughness;
+  }
+  material.needsUpdate = true;
+}
+
+/**
+ * Brighten untextured materials so models are readable in all lighting conditions.
+ * Applies only when there is no base color map.
+ * @param {THREE.Material} material
+ */
+function applyDefaultMaterialBoost(material) {
+  if (!('color' in material)) return;
+
+  const applyTo = mat => {
+    if (mat.map) return;
+    if ('emissive' in mat) {
+      const base = mat.color.clone();
+      mat.emissive = base.multiplyScalar(0.35);
+      mat.emissiveIntensity = 1.0;
+    }
+    if ('metalness' in mat) mat.metalness = 0.0;
+    if ('roughness' in mat) mat.roughness = 0.9;
+    mat.needsUpdate = true;
+  };
+
+  if (Array.isArray(material)) {
+    material.forEach(m => applyTo(m));
+    return;
+  }
+
+  applyTo(material);
+}
+
+/**
+ * Load mesh geometry into the viewer and display it.
+ * @param {object} geometry - Geometry data
+ * @param {Float32Array} geometry.positions - Vertex positions (XYZ)
+ * @param {Uint16Array|Uint32Array} geometry.indices - Triangle indices
+ * @param {Float32Array} [geometry.normals] - Vertex normals (XYZ)
+ * @param {Float32Array} [geometry.uvs] - Texture coordinates (UV)
+ * @param {Array<object>} [groups] - Submesh groups
+ * @param {object} [materialOpts] - Material options
+ * @param {string|number} [materialOpts.color] - Material color (default: 0x888888)
+ * @param {boolean} [materialOpts.wireframe] - Wireframe mode (default: false)
+ * @param {number} [materialOpts.metalness] - Metalness (default: 0.5)
+ * @param {number} [materialOpts.roughness] - Roughness (default: 0.5)
+ * @returns {string} Mesh ID for future operations
+ * @throws {Error} If renderer not initialized or geometry invalid
+ */
+export function loadMesh(geometry, groups = null, materialOpts = {}) {
+  validateRendererInitialized();
+  validateGeometry(geometry);
+
+  const bufferGeometry = createBufferGeometry(geometry, groups);
+  const material = createMaterial(materialOpts);
+  const mesh = new THREE.Mesh(bufferGeometry, material);
+
+  scene.add(mesh);
+  centerCameraOnMesh(mesh);
+
+  const meshId = `mesh-${nextMeshId++}`;
+  meshes.set(meshId, mesh);
+  return meshId;
+}
+
+/**
+ * Validate that the renderer is initialized.
+ * @throws {Error} If renderer not initialized
+ */
+function validateRendererInitialized() {
+  if (!renderer || !scene) {
+    throw new Error('Renderer not initialized. Call init() first.');
+  }
+}
+
+/**
+ * Validate geometry data.
+ * @param {object} geometry - Geometry to validate
+ * @throws {Error} If geometry is invalid
+ */
+function validateGeometry(geometry) {
+  if (!geometry?.positions || !geometry?.indices) {
+    throw new Error('Invalid geometry: positions and indices are required');
+  }
+
+  const vertexCount = geometry.positions.length / 3;
+  const indexCount = geometry.indices.length;
+
+  // Validate indices are divisible by 3 (triangles)
+  if (indexCount % 3 !== 0) {
+    throw new Error('Invalid geometry: indices length must be divisible by 3');
+  }
+
+  const triangleCount = indexCount / 3;
+
+  if (vertexCount < 3 || triangleCount < 1) {
+    throw new Error('Invalid geometry: insufficient vertices or triangles');
+  }
+}
+
+/**
+ * Create Three.js BufferGeometry from geometry data.
+ * @param {object} geometry - Geometry data
+ * @param {Array<object>} groups - Submesh groups
+ * @returns {THREE.BufferGeometry} Created geometry
+ */
+function createBufferGeometry(geometry, groups) {
+  const bufferGeometry = new THREE.BufferGeometry();
+
+  // Convert arrays to typed arrays (Blazor sends plain arrays)
+  const positions =
+    geometry.positions instanceof Float32Array
+      ? geometry.positions
+      : new Float32Array(geometry.positions);
+
+  const indices =
+    geometry.indices instanceof Uint32Array ? geometry.indices : new Uint32Array(geometry.indices);
+
+  bufferGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+  bufferGeometry.setIndex(new THREE.BufferAttribute(indices, 1));
+
+  addNormalsToGeometry(bufferGeometry, geometry);
+  addUVsToGeometry(bufferGeometry, geometry);
+  addGroupsToGeometry(bufferGeometry, groups);
+
+  return bufferGeometry;
+}
+
+/**
+ * Add normals to geometry or compute them.
+ * @param {THREE.BufferGeometry} bufferGeometry - Target geometry
+ * @param {object} geometry - Source geometry data
+ */
+function addNormalsToGeometry(bufferGeometry, geometry) {
+  if (geometry.normals && geometry.normals.length === geometry.positions.length) {
+    const normals =
+      geometry.normals instanceof Float32Array
+        ? geometry.normals
+        : new Float32Array(geometry.normals);
+    bufferGeometry.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+  } else {
+    bufferGeometry.computeVertexNormals();
+  }
+}
+
+/**
+ * Add UVs to geometry if present.
+ * @param {THREE.BufferGeometry} bufferGeometry - Target geometry
+ * @param {object} geometry - Source geometry data
+ */
+function addUVsToGeometry(bufferGeometry, geometry) {
+  const vertexCount = geometry.positions.length / 3;
+  if (geometry.uvs && geometry.uvs.length === vertexCount * 2) {
+    const uvs =
+      geometry.uvs instanceof Float32Array ? geometry.uvs : new Float32Array(geometry.uvs);
+    bufferGeometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+  }
+}
+
+/**
+ * Add groups to geometry for submeshes.
+ * @param {THREE.BufferGeometry} bufferGeometry - Target geometry
+ * @param {Array<object>} groups - Submesh groups
+ */
+function addGroupsToGeometry(bufferGeometry, groups) {
+  if (groups && Array.isArray(groups)) {
+    for (const group of groups) {
+      bufferGeometry.addGroup(group.start, group.count, group.materialIndex);
+    }
+  }
+}
+
+/**
+ * Create material with specified options.
+ * @param {object} opts - Material options
+ * @returns {THREE.Material} Created material
+ */
+function createMaterial(opts) {
+  return new THREE.MeshStandardMaterial({
+    color: opts.color ?? 0x888888,
+    wireframe: opts.wireframe ?? false,
+    metalness: opts.metalness ?? 0.5,
+    roughness: opts.roughness ?? 0.5,
+    side: THREE.DoubleSide,
+  });
+}
+
+/**
+ * Center camera on the given mesh using its bounding box.
+ * @param {THREE.Mesh} mesh - Mesh to center on
+ */
+function centerCameraOnMesh(mesh) {
+  let box = new THREE.Box3().setFromObject(mesh);
+  let center = box.getCenter(new THREE.Vector3());
+  let size = box.getSize(new THREE.Vector3());
+
+  // Handle extremely small meshes by scaling them for visibility
+  const minVisibleSize = 0.01;
+  let maxDim = Math.max(size.x, size.y, size.z);
+  if (maxDim > 0 && maxDim < minVisibleSize) {
+    const scaleFactor = minVisibleSize / maxDim;
+    mesh.scale.setScalar(scaleFactor);
+    box = new THREE.Box3().setFromObject(mesh);
+    center = box.getCenter(new THREE.Vector3());
+    size = box.getSize(new THREE.Vector3());
+    maxDim = Math.max(size.x, size.y, size.z);
+  }
+
+  // Set controls target to mesh center
+  controls.target.copy(center);
+
+  // Position camera to view entire mesh
+  if (maxDim === 0) {
+    maxDim = 1.0;
+  }
+  const fov = camera.fov * (Math.PI / 180);
+  let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
+  cameraZ *= CAMERA_MARGIN_FACTOR; // Add some margin
+
+  // Adjust near/far to avoid clipping tiny meshes
+  camera.near = Math.max(cameraZ / 1000, 0.00001);
+  camera.far = Math.max(cameraZ * 1000, 10);
+  camera.updateProjectionMatrix();
+
+  controls.minDistance = Math.max(maxDim * 0.1, 0.0005);
+  controls.maxDistance = Math.max(maxDim * 1000, 10);
+
+  const newCameraPos = {
+    x: center.x + cameraZ * 0.5,
+    y: center.y + cameraZ * 0.5,
+    z: center.z + cameraZ,
+  };
+
+  camera.position.set(newCameraPos.x, newCameraPos.y, newCameraPos.z);
+  camera.lookAt(center);
+  controls.update();
+}
+
+/**
+ * Update material properties of a displayed mesh.
+ * @param {string} meshId - Mesh ID returned from loadMesh
+ * @param {object} opts - Material options to update
+ * @param {string|number} [opts.color] - New color
+ * @param {boolean} [opts.wireframe] - Wireframe mode
+ * @param {number} [opts.metalness] - Metalness value
+ * @param {number} [opts.roughness] - Roughness value
+ * @throws {Error} If mesh not found
+ */
+export function updateMaterial(meshId, opts = {}) {
+  const mesh = meshes.get(meshId);
+  if (!mesh) {
+    throw new Error(`Mesh with ID '${meshId}' not found`);
+  }
+
+  const material = mesh.material;
+  if (opts.color !== undefined) {
+    material.color.set(opts.color);
+  }
+  if (opts.wireframe !== undefined) {
+    material.wireframe = opts.wireframe;
+  }
+  if (opts.metalness !== undefined) {
+    material.metalness = opts.metalness;
+  }
+  if (opts.roughness !== undefined) {
+    material.roughness = opts.roughness;
+  }
+  material.needsUpdate = true;
+}
+
+/**
+ * Dispose a specific mesh from the scene by its ID.
+ * @param {string} meshId - Mesh ID to dispose
+ */
+export function clearMesh(meshId) {
+  if (!meshId) {
+    return;
+  }
+
+  const mesh = meshes.get(meshId);
+  if (mesh) {
+    disposeMesh(mesh);
+    meshes.delete(meshId);
+  }
+}
+
+/**
+ * Clear all meshes from the scene.
+ */
+export function clear() {
+  meshes.forEach(mesh => disposeMesh(mesh));
+  meshes.clear();
+}
+
+/**
+ * Dispose a single mesh and its resources.
+ * @param {THREE.Mesh} mesh - Mesh to dispose
+ */
+function disposeMesh(mesh) {
+  if (mesh.geometry) {
+    mesh.geometry.dispose();
+  }
+  if (mesh.material) {
+    if (Array.isArray(mesh.material)) {
+      mesh.material.forEach(m => m.dispose());
+    } else {
+      mesh.material.dispose();
+    }
+  }
+  if (scene) {
+    scene.remove(mesh);
+  }
+}
+
+/**
+ * Dispose all viewer resources and cleanup.
+ * <strong>Note:</strong> After calling dispose, the renderer cannot be reinitialized.
+ * A page reload or new module instance is required for reuse.
+ */
+export function dispose() {
+  // Stop animation
+  if (animationId) {
+    cancelAnimationFrame(animationId);
+    animationId = null;
+  }
+
+  // Clear all meshes
+  clear();
+
+  // Dispose controls
+  if (controls) {
+    controls.dispose();
+    controls = null;
+  }
+
+  // Dispose renderer
+  if (renderer) {
+    renderer.dispose();
+    renderer = null;
+  }
+
+  // Clear references
+  scene = null;
+  camera = null;
+  // Note: nextMeshId is reset to prevent ID collisions if somehow reused,
+  // but reinitialization is not supported by design
+  nextMeshId = 1;
+}
+
+/**
+ * Resize the viewport and update camera aspect ratio.
+ * @param {number} width - New width in pixels
+ * @param {number} height - New height in pixels
+ */
+export function resize(width, height) {
+  if (!camera || !renderer) {
+    return;
+  }
+
+  camera.aspect = width / height;
+  camera.updateProjectionMatrix();
+  renderer.setSize(width, height);
+}
+
+// Expose functions to global window object for Blazor JSInterop
+window.meshRenderer = {
+  init,
+  loadMesh,
+  loadGLB,
+  updateMaterial,
+  clear,
+  clearMesh,
+  dispose,
+  resize,
+};

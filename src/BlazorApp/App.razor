@@ -1,0 +1,33 @@
+@using BlazorApp.Layout
+@using BlazorApp.Pages
+@using BlazorApp.Services
+
+<Router AppAssembly="@typeof(App).Assembly">
+    <Found Context="routeData">
+        <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)"/>
+        <FocusOnNavigate RouteData="@routeData" Selector="h1" />
+    </Found>
+    <NotFound>
+        <PageTitle>Not found</PageTitle>
+        @if (string.IsNullOrEmpty(_nav.ToBaseRelativePath(_nav.Uri)))
+        {
+            <LayoutView Layout="@typeof(MainLayout)">
+                <Index />
+            </LayoutView>
+        }
+        else
+        {
+            <p role="alert">Sorry, there's nothing at this address.</p>
+        }
+    </NotFound>
+</Router>
+
+@code {
+    private NavigationManager _nav = default!;
+
+    protected override void OnInitialized()
+    {
+        var services = ServiceLocator.Provider ?? throw new InvalidOperationException("Service provider not initialized");
+        _nav = services.GetRequiredService<NavigationManager>();
+    }
+}

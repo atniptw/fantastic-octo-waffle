@@ -1,0 +1,221 @@
+@page "/"
+@page "/index.html"
+@using BlazorApp.Models
+@using BlazorApp.Services
+@implements IAsyncDisposable
+
+<PageTitle>R.E.P.O. Mod Browser</PageTitle>
+
+<div class="container mt-4">
+    <h1>Cosmetic Mods</h1>
+    <p class="text-muted">Browse R.E.P.O. cosmetic mods from Thunderstore</p>
+    
+    @if (_loading)
+    {
+        <div class="text-center my-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-3 text-muted">Fetching cosmetic mods from Thunderstore...</p>
+            <small class="text-muted">This may take a few seconds on first load</small>
+        </div>
+    }
+    else if (_error != null)
+    {
+        <div class="alert alert-danger" role="alert">
+            <h4 class="alert-heading">Error Loading Mods</h4>
+            <p>@_error</p>
+            <hr>
+            <button class="btn btn-primary" @onclick="LoadPackagesAsync">Retry</button>
+        </div>
+    }
+    else if (_packages == null || _packages.Count == 0)
+    {
+        <div class="alert alert-info" role="alert">
+            <p class="mb-0">No cosmetic mods found.</p>
+        </div>
+    }
+    else
+    {
+        <div class="row mod-card-grid">
+            @foreach (var package in _displayedPackages)
+            {
+                var latestVersion = package.LatestVersion;
+                if (latestVersion == null) continue;
+                
+                <div class="col-md-4 col-sm-6 mb-3">
+                    <div class="card mod-card">
+                        @if (package.Icon != null)
+                        {
+                            <img data-src="@package.Icon" 
+                                 class="card-img-top lazy-loading" 
+                                 alt="@package.Name icon"
+                                 width="256"
+                                 height="256"
+                                 loading="lazy" />
+                        }
+                        <div class="card-body">
+                            <h5 class="card-title">@package.Name</h5>
+                            <p class="card-text text-muted">by @package.Owner</p>
+                            <p class="card-text"><small>@latestVersion.Description</small></p>
+                            <p class="card-text"><small>Version: @latestVersion.VersionNumber</small></p>
+                            <a href="mod/@package.Owner/@package.Name" class="btn btn-primary">View Details</a>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+        
+        @if (_hasMorePackages)
+        {
+            <div class="text-center my-4">
+                <button class="btn btn-outline-primary" @onclick="LoadMorePackages">
+                    Load More (@_remainingCount more mods)
+                </button>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private const int InitialBatchSize = 24; // First batch (4 rows of 6)
+    private const int LoadMoreBatchSize = 18; // Subsequent batches (3 rows of 6)
+    private const string LazyLoadModulePath = "./js/lazyLoad.js";
+    
+    private List<ThunderstorePackage>? _packages;
+    private List<ThunderstorePackage> _displayedPackages = new();
+    private int _currentIndex = 0;
+    private bool _loading = true;
+    private string? _error;
+    private IJSObjectReference? _lazyLoadModule;
+    private IJSObjectReference? _imageObserver;
+    private IThunderstoreService _thunderstoreService = default!;
+    private IJSRuntime _jsRuntime = default!;
+    
+    private bool _hasMorePackages => _packages != null && _currentIndex < _packages.Count;
+    private int _remainingCount => _packages != null ? _packages.Count - _currentIndex : 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var services = ServiceLocator.Provider ?? throw new InvalidOperationException("Service provider not initialized");
+        _thunderstoreService = services.GetRequiredService<IThunderstoreService>();
+        _jsRuntime = services.GetRequiredService<IJSRuntime>();
+        await LoadPackagesAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                // Initialize lazy loading module
+                _lazyLoadModule = await _jsRuntime.InvokeAsync<IJSObjectReference>("import", LazyLoadModulePath);
+                _imageObserver = await _lazyLoadModule.InvokeAsync<IJSObjectReference>("initializeLazyLoading");
+            }
+            catch (Exception)
+            {
+                // Lazy loading initialization failed, images will load normally
+            }
+        }
+        else if (_lazyLoadModule != null && _imageObserver != null)
+        {
+            try
+            {
+                // Observe newly added images after each render
+                await _lazyLoadModule.InvokeVoidAsync("observeNewImages", _imageObserver);
+            }
+            catch (Exception)
+            {
+                // Ignore observer errors
+            }
+        }
+    }
+
+    private async Task LoadPackagesAsync()
+    {
+        _loading = true;
+        _error = null;
+        
+        try
+        {
+            var allPackages = await _thunderstoreService.GetPackagesAsync();
+            
+            // Filter for Cosmetics category and non-deprecated
+            _packages = allPackages
+                .Where(p => p.Categories.Contains("Cosmetics") && !p.IsDeprecated)
+                .OrderByDescending(p => p.DateUpdated)
+                .ToList();
+            
+            // Load initial batch
+            LoadMorePackages();
+        }
+        catch (HttpRequestException ex)
+        {
+            _error = ex.StatusCode switch
+            {
+                System.Net.HttpStatusCode.NotFound => "Mod service temporarily unavailable",
+                System.Net.HttpStatusCode.InternalServerError => "Mod service temporarily unavailable",
+                _ => "Unable to connect to mod service"
+            };
+        }
+        catch (TaskCanceledException)
+        {
+            _error = "Unable to connect to mod service";
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            _error = "Invalid response from mod service";
+        }
+        catch (NotSupportedException)
+        {
+            _error = "Invalid response from mod service";
+        }
+        catch (Exception)
+        {
+            _error = "An error occurred. Please try again.";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+    
+    private void LoadMorePackages()
+    {
+        if (_packages == null) return;
+        
+        var batchSize = _currentIndex == 0 ? InitialBatchSize : LoadMoreBatchSize;
+        var batch = _packages.Skip(_currentIndex).Take(batchSize).ToList();
+        
+        _displayedPackages.AddRange(batch);
+        _currentIndex += batch.Count;
+    }
+    
+    public async ValueTask DisposeAsync()
+    {
+        if (_imageObserver != null)
+        {
+            try
+            {
+                await _imageObserver.DisposeAsync();
+            }
+            catch (Exception)
+            {
+                // Ignore disposal errors
+            }
+        }
+        
+        if (_lazyLoadModule != null)
+        {
+            try
+            {
+                await _lazyLoadModule.DisposeAsync();
+            }
+            catch (Exception)
+            {
+                // Ignore disposal errors
+            }
+        }
+    }
+}

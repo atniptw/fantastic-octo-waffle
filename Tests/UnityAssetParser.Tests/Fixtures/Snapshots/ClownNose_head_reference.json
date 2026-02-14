@@ -1,0 +1,39 @@
+{
+  "file": "ClownNose_head.hhh",
+  "header": {
+    "signature": "UnityFS"
+  },
+  "object_types": {
+    "MeshRenderer": 1,
+    "Shader": 1,
+    "Transform": 2,
+    "Mesh": 1,
+    "Material": 1,
+    "MeshFilter": 1,
+    "AssetBundle": 1,
+    "GameObject": 2
+  },
+  "nodes": [
+    {
+      "path": "assets/headdecorations/\u91cd\u547d\u540d\u54af/clownnose.prefab",
+      "type": "PPtr"
+    }
+  ],
+  "meshes": [
+    {
+      "name": "ClownNose\u5c0f\u4e11\u9f3b\u5b50",
+      "vertex_count": 0,
+      "index_count": 540,
+      "has_normals": false,
+      "has_uv0": false,
+      "object_path": "Object -1301659394590126254"
+    }
+  ],
+  "extraction_errors": [],
+  "summary": {
+    "total_objects": 10,
+    "total_nodes": 1,
+    "total_meshes": 1,
+    "total_extraction_errors": 0
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "blazor-mod-viewer-js",
+  "version": "1.0.0",
+  "description": "JavaScript support for R.E.P.O. Mod Browser",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "lint": "eslint *.js",
+    "format": "prettier --write *.js",
+    "format:check": "prettier --check *.js"
+  },
+  "devDependencies": {
+    "eslint": "^9.0.0",
+    "eslint-plugin-sonarjs": "^2.0.0",
+    "prettier": "^3.1.1"
+  }
+}

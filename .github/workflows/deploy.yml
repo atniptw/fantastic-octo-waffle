@@ -1,0 +1,155 @@
+name: 🚀 Deploy to GitHub Pages & Cloudflare Worker
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+      - 'LICENSE'
+  workflow_dispatch:
+
+# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
+# However, do NOT cancel in-progress runs as we want to allow these production deployments to complete.
+concurrency:
+  group: "deployment"
+  cancel-in-progress: false
+
+env:
+  DOTNET_VERSION: '9.0.x'
+  NODE_VERSION: '24.x'
+
+jobs:
+  deploy-pages:
+    name: 📄 Deploy to GitHub Pages
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Install WASM workloads
+        run: dotnet workload install wasm-tools-net9
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build project
+        run: dotnet build --configuration Release --no-restore
+
+      - name: Publish Blazor WASM
+        run: dotnet publish src/BlazorApp/BlazorApp.csproj -c Release
+
+      - name: Prepare GitHub Pages deployment
+        run: |
+          # The .csproj has StaticWebAssetBasePath=/fantastic-octo-waffle, which creates a subdirectory
+          # Blazor puts everything in dist-Release/wwwroot/fantastic-octo-waffle/
+          # Copy directly to dist for GitHub Pages serving from root
+          mkdir -p dist
+          
+          if [ -d "dist-Release/wwwroot/fantastic-octo-waffle" ]; then
+            echo "✅ Found static assets in dist-Release/wwwroot/fantastic-octo-waffle/"
+            cp -r dist-Release/wwwroot/fantastic-octo-waffle/* dist/
+          elif [ -d "dist-Release/wwwroot" ]; then
+            echo "ℹ️  No base-path subdirectory, copying entire wwwroot"
+            cp -r dist-Release/wwwroot/* dist/
+          else
+            echo "❌ Could not find published files"
+            ls -la dist-Release/ || true
+            exit 1
+          fi
+          
+          # Verify index.html was copied successfully
+          if [ ! -f "dist/index.html" ]; then
+            echo "❌ Failed to copy index.html"
+            echo "Current dist/ contents:"
+            ls -la dist/ || true
+            exit 1
+          fi
+          echo "✅ Successfully prepared GitHub Pages deployment"
+          
+      - name: Add .nojekyll file
+        run: touch dist/.nojekyll
+
+      - name: Configure base path for GitHub Pages
+        run: |
+          # Update base href from / to /fantastic-octo-waffle/ for GitHub Pages
+          sed -i 's|<base href="/" />|<base href="/fantastic-octo-waffle/" />|g' dist/index.html
+          
+          # Verify the change was made
+          if grep -q '<base href="/fantastic-octo-waffle/"' dist/index.html; then
+            echo "✅ Successfully updated base href for GitHub Pages"
+          else
+            echo "⚠️  Base href update may not have worked, checking current value:"
+            grep '<base href=' dist/index.html || echo "  (No base href element found)"
+          fi
+
+          # Remove precompressed index variants to avoid stale base href
+          rm -f dist/index.html.br dist/index.html.gz
+
+          # Ensure blazor.webassembly.js exists for GitHub Pages
+          if ls dist/_framework/blazor.webassembly.*.js >/dev/null 2>&1; then
+            hashed_js=$(ls dist/_framework/blazor.webassembly.*.js | head -n 1)
+            cp "$hashed_js" dist/_framework/blazor.webassembly.js
+            if [ -f "${hashed_js}.br" ]; then
+              cp "${hashed_js}.br" dist/_framework/blazor.webassembly.js.br
+            fi
+            if [ -f "${hashed_js}.gz" ]; then
+              cp "${hashed_js}.gz" dist/_framework/blazor.webassembly.js.gz
+            fi
+            echo "✅ Created blazor.webassembly.js alias"
+          fi
+
+          # Stamp build info for troubleshooting
+          build_time=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          echo "{\"sha\":\"${GITHUB_SHA}\",\"builtAt\":\"${build_time}\"}" > dist/build-info.json
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  deploy-worker:
+    name: ☁️ Deploy to Cloudflare Worker
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install Worker dependencies
+        working-directory: cloudflare-worker
+        run: npm ci
+
+      - name: Wrangler whoami
+        working-directory: cloudflare-worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler whoami
+
+      - name: Deploy to Cloudflare Worker (Production)
+        working-directory: cloudflare-worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npm run deploy -- --env production

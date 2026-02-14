@@ -1,0 +1,471 @@
+@page "/mod/{OwnerName}/{Name}"
+@using BlazorApp.Models
+@using BlazorApp.Services
+@using Microsoft.Extensions.Logging
+@using Microsoft.Extensions.Logging.Abstractions
+@implements IAsyncDisposable
+
+<PageTitle>@(_package?.Name ?? Name) - R.E.P.O. Mod Browser</PageTitle>
+
+<div class="container my-4">
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="@GetHomeUrl()">← Cosmetics</a></li>
+            <li class="breadcrumb-item active" aria-current="page">@(_package?.Name ?? Name)</li>
+        </ol>
+    </nav>
+    
+    <!-- Error State -->
+    @if (_state == DownloadState.Error && !string.IsNullOrEmpty(_errorMessage))
+    {
+        <div class="alert alert-danger" role="alert">
+            <h4 class="alert-heading">Error</h4>
+            <p>@_errorMessage</p>
+            <hr>
+            @if (_package != null)
+            {
+                <button class="btn btn-primary" @onclick="StartDownload">Try Again</button>
+            }
+            else
+            {
+                <a href="@GetHomeUrl()" class="btn btn-primary">← Back to Mods</a>
+            }
+        </div>
+    }
+    
+    <!-- Package Header -->
+    @if (_package != null)
+    {
+        <div class="mod-header mb-4">
+            <div class="row">
+                <div class="col-md-3 mb-3 mb-md-0">
+                    @if (_package.Icon != null)
+                    {
+                        <img src="@_package.Icon" 
+                             class="img-fluid rounded" 
+                             alt="@_package.Name icon"
+                             onerror="this.style.display='none';" 
+                             style="max-width: 200px;" />
+                    }
+                </div>
+                
+                <div class="col-md-9">
+                    <h1>@_package.Name</h1>
+                    <p class="text-muted">by <strong>@_package.Owner</strong></p>
+                    
+                    <!-- Metadata Badges -->
+                    <div class="mb-3">
+                        <span class="badge bg-secondary me-2">
+                            ⭐ @_package.RatingScore/5
+                        </span>
+                        @if (_package.LatestVersion?.Downloads > 0)
+                        {
+                            <span class="badge bg-info text-dark me-2">
+                                ↓ @FormatDownloadCount(_package.LatestVersion.Downloads) downloads
+                            </span>
+                        }
+                        @foreach (var cat in _package.Categories.Take(3))
+                        {
+                            <span class="badge bg-light text-dark me-2">@cat</span>
+                        }
+                    </div>
+                    
+                    <!-- Description -->
+                    <p>@(_package.LatestVersion?.Description ?? "No description available")</p>
+                </div>
+            </div>
+        </div>
+    }
+    
+    <!-- Download Section -->
+    @if (_package != null)
+    {
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5 class="card-title">Download & Preview</h5>
+                
+                @if (_state == DownloadState.Idle)
+                {
+                    <button class="btn btn-primary" @onclick="StartDownload">
+                        Download & Preview
+                    </button>
+                    @if (_package.LatestVersion?.FileSize > 0)
+                    {
+                        <small class="ms-2 text-muted">
+                            (~@FormatFileSize(_package.LatestVersion.FileSize ?? 0))
+                        </small>
+                    }
+                }
+                else if (_state == DownloadState.Downloading)
+                {
+                    <div class="mb-3">
+                        <div class="progress" role="progressbar" 
+                             aria-valuenow="@_downloadedBytes" 
+                             aria-valuemin="0" 
+                             aria-valuemax="@_totalBytes"
+                             aria-label="Download progress">
+                            <div class="progress-bar" 
+                                 style="width: @GetProgressPercentage()%">
+                                @if (_totalBytes > 0)
+                                {
+                                    <span>@FormatFileSize(_downloadedBytes) / @FormatFileSize(_totalBytes)</span>
+                                }
+                                else
+                                {
+                                    <span>@FormatFileSize(_downloadedBytes)</span>
+                                }
+                            </div>
+                        </div>
+                        @if (_totalBytes > 50_000_000) // 50MB
+                        {
+                            <small class="text-muted d-block mt-2">Large file—this may take a moment...</small>
+                        }
+                    </div>
+                    <button class="btn btn-danger" @onclick="CancelDownload">Cancel</button>
+                }
+                else if (_state == DownloadState.Processing)
+                {
+                    <div class="spinner-border spinner-border-sm me-2" role="status">
+                        <span class="visually-hidden">Analyzing files...</span>
+                    </div>
+                    <span>Analyzing mod files and detecting 3D assets...</span>
+                    <br />
+                    <small class="text-muted">Scanning ZIP contents for renderable meshes</small>
+                }
+                else if (_state == DownloadState.Ready)
+                {
+                    <div class="alert alert-success mb-0">
+                        ✓ Ready to preview! Select a file below.
+                    </div>
+                }
+            </div>
+        </div>
+    }
+    
+    <!-- File Index -->
+    @if (_state == DownloadState.Ready && _fileIndex != null)
+    {
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Files (@_fileIndex.Count total)</h5>
+            </div>
+            
+            @if (_fileIndex.Count == 0)
+            {
+                <div class="card-body">
+                    <div class="alert alert-warning mb-0">
+                        <strong>No files found</strong>
+                        <p class="mb-0">This mod ZIP appears to be empty.</p>
+                    </div>
+                </div>
+            }
+            else if (!_fileIndex.Any(f => f.Renderable))
+            {
+                <div class="card-body">
+                    <div class="alert alert-info mb-3">
+                        <strong>No 3D models detected</strong>
+                        <p class="mb-0">This mod doesn't appear to contain renderable 3D models (Unity Mesh objects).</p>
+                    </div>
+                    
+                    <!-- Debug info -->
+                    <div class="accordion" id="debugAccordion">
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed" type="button" 
+                                        data-bs-toggle="collapse" data-bs-target="#debugInfo">
+                                    🔍 Debug: Show all files detected
+                                </button>
+                            </h2>
+                            <div id="debugInfo" class="accordion-collapse collapse" data-bs-parent="#debugAccordion">
+                                <div class="accordion-body">
+                                    <p class="small text-muted mb-2">
+                                        Found @_fileIndex.Count file(s). Showing types detected:
+                                    </p>
+                                    <table class="table table-sm">
+                                        <thead>
+                                            <tr>
+                                                <th>Filename</th>
+                                                <th>Type</th>
+                                                <th>Size</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var item in _fileIndex.Take(20))
+                                            {
+                                                <tr>
+                                                    <td class="text-break"><small>@item.FileName</small></td>
+                                                    <td><span class="badge bg-secondary">@item.Type</span></td>
+                                                    <td><small>@FormatFileSize(item.SizeBytes)</small></td>
+                                                </tr>
+                                            }
+                                            @if (_fileIndex.Count > 20)
+                                            {
+                                                <tr>
+                                                    <td colspan="3" class="text-muted text-center">
+                                                        <small>... and @(_fileIndex.Count - 20) more files</small>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                    <p class="small text-muted mt-2">
+                                        💡 <strong>Tip:</strong> Check the browser console (F12) for detailed parsing logs.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Filename</th>
+                                <th>Type</th>
+                                <th>Size</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in _fileIndex)
+                            {
+                                <tr class="@(item.Renderable ? "table-light" : "text-muted")">
+                                    <td>
+                                        @if (item.Renderable)
+                                        {
+                                            <strong>📦 @item.FileName</strong>
+                                        }
+                                        else
+                                        {
+                                            @item.FileName
+                                        }
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-secondary">@item.Type</span>
+                                    </td>
+                                    <td>@FormatFileSize(item.SizeBytes)</td>
+                                    <td>
+                                        @if (item.Renderable)
+                                        {
+                                            <a class="btn btn-sm btn-primary" href="@GetViewerUrl(item.FileName)">
+                                                Preview
+                                            </a>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">N/A</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private static readonly ILogger<ModDetail> Logger = NullLogger<ModDetail>.Instance;
+
+    private IThunderstoreService _thunderstoreService = default!;
+    private IZipCacheService _zipCacheService = default!;
+    private IModDetailStateService _stateService = default!;
+    private NavigationManager _navManager = default!;
+
+    [Parameter]
+    public string OwnerName { get; set; } = string.Empty;
+    
+    [Parameter]
+    public string Name { get; set; } = string.Empty;
+    
+    private string ModId => $"{OwnerName}_{Name}";
+    
+    private enum DownloadState { Idle, Downloading, Processing, Ready, Error }
+    
+    private DownloadState _state = DownloadState.Idle;
+    private ThunderstorePackage? _package;
+    private List<FileIndexItem>? _fileIndex;
+    private string? _errorMessage;
+    private long _downloadedBytes;
+    private long _totalBytes;
+    private CancellationTokenSource? _cts;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Resolve services explicitly to avoid DI property injection issues in AOT builds.
+        var services = ServiceLocator.Provider ?? throw new InvalidOperationException("Service provider not initialized");
+        _thunderstoreService = services.GetRequiredService<IThunderstoreService>();
+        _zipCacheService = services.GetRequiredService<IZipCacheService>();
+        _stateService = services.GetRequiredService<IModDetailStateService>();
+        _navManager = services.GetRequiredService<NavigationManager>();
+
+        // Fetch package metadata (uses cached data if available)
+        try
+        {
+            _package = await _thunderstoreService.GetPackageByNameAsync(OwnerName, Name);
+            
+            if (_package == null)
+            {
+                _state = DownloadState.Error;
+                _errorMessage = "Mod not found. Try browsing from the home page.";
+            }
+        }
+        catch (HttpRequestException ex)
+        {
+            _state = DownloadState.Error;
+            _errorMessage = ex.StatusCode switch
+            {
+                System.Net.HttpStatusCode.NotFound => "Mod service temporarily unavailable",
+                System.Net.HttpStatusCode.InternalServerError => "Mod service temporarily unavailable",
+                _ => "Failed to load mod details. Check your connection."
+            };
+        }
+        catch (Exception)
+        {
+            _state = DownloadState.Error;
+            _errorMessage = "Failed to load mod details. Check your connection.";
+        }
+    }
+
+    private async Task StartDownload()
+    {
+        if ((_state != DownloadState.Idle && _state != DownloadState.Error) || _package?.LatestVersion == null) return;
+        
+        _state = DownloadState.Downloading;
+        _errorMessage = null;
+        _downloadedBytes = 0;
+        _totalBytes = _package.LatestVersion.FileSize ?? 0;
+        _cts = new CancellationTokenSource();
+        StateHasChanged();
+
+        const long MaxPreviewZipSizeBytes = 2L * 1024 * 1024 * 1024; // 2GB
+        if (_totalBytes > MaxPreviewZipSizeBytes)
+        {
+            _state = DownloadState.Error;
+            _errorMessage = $"This mod is {FormatFileSize(_totalBytes)} and is too large for in-browser preview. Try a smaller mod or download it locally.";
+            StateHasChanged();
+            return;
+        }
+        
+        try
+        {
+            var version = _package.LatestVersion;
+            if (version == null)
+            {
+                throw new InvalidOperationException("Package version not available");
+            }
+
+            var versionLabel = string.IsNullOrWhiteSpace(version.VersionNumber) ? "unknown" : version.VersionNumber;
+            var cacheKey = $"{OwnerName}_{Name}_{versionLabel}";
+
+            // Step 1: Download ZIP and cache locally in IndexedDB (streaming)
+            await _zipCacheService.CacheZipAsync(
+                version,
+                cacheKey,
+                (downloaded, total) =>
+                {
+                    _downloadedBytes = downloaded;
+                    if (total > 0)
+                    {
+                        _totalBytes = total;
+                    }
+                    _ = InvokeAsync(StateHasChanged);
+                },
+                _cts.Token);
+
+            // Step 2: List .hhh files from cached ZIP
+            _state = DownloadState.Processing;
+            StateHasChanged();
+
+            var hhhFiles = await _zipCacheService.ListHhhFilesAsync(cacheKey, _cts.Token);
+            _fileIndex = hhhFiles.ToList();
+            
+            // Log file index summary for debugging
+            Logger.LogInformation("File index completed: {TotalFiles} total files, {RenderableFiles} renderable",
+                _fileIndex.Count, _fileIndex.Count(f => f.Renderable));
+            
+            foreach (var item in _fileIndex)
+            {
+                Logger.LogDebug("File: {FileName}, Type: {FileType}, Renderable: {Renderable}, Size: {Size}",
+                    item.FileName, item.Type, item.Renderable, item.SizeBytes);
+            }
+
+            // Step 3: Store for Viewer3D (ZIP cache key)
+            await _stateService.SetCurrentModAsync(ModId, _fileIndex, _package, cacheKey);
+            
+            // Step 4: Ready
+            _state = DownloadState.Ready;
+        }
+        catch (OperationCanceledException)
+        {
+            _state = DownloadState.Error;
+            _errorMessage = "Download cancelled.";
+        }
+        catch (HttpRequestException)
+        {
+            _state = DownloadState.Error;
+            _errorMessage = "Network error—check your connection and try again";
+        }
+        catch (InvalidDataException)
+        {
+            _state = DownloadState.Error;
+            _errorMessage = "Downloaded file is corrupted—try again";
+        }
+        catch (OutOfMemoryException)
+        {
+            _state = DownloadState.Error;
+            _errorMessage = "This mod is too large to process in the browser. Try a smaller mod or download it locally.";
+        }
+        catch (Exception)
+        {
+            _state = DownloadState.Error;
+            _errorMessage = "Something went wrong—try again or check your connection";
+        }
+        
+        StateHasChanged();
+    }
+
+    private void CancelDownload()
+    {
+        _cts?.Cancel();
+    }
+
+    private string GetViewerUrl(string filename)
+    {
+        var encodedFilename = Uri.EscapeDataString(filename);
+        return _navManager.ToAbsoluteUri($"viewer/{OwnerName}/{Name}/{encodedFilename}").ToString();
+    }
+
+    private string GetHomeUrl() => _navManager.BaseUri;
+
+    private string FormatFileSize(long bytes)
+    {
+        if (bytes < 1024) return $"{bytes}B";
+        if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1}KB";
+        return $"{bytes / (1024.0 * 1024.0):F1}MB";
+    }
+    
+    private string FormatDownloadCount(int count)
+    {
+        if (count < 1000) return count.ToString();
+        if (count < 1_000_000) return $"{count / 1000.0:F1}K";
+        return $"{count / 1_000_000.0:F1}M";
+    }
+
+    private int GetProgressPercentage() => _totalBytes > 0 
+        ? (int)((_downloadedBytes * 100) / _totalBytes) 
+        : 0;
+
+    public ValueTask DisposeAsync()
+    {
+        _cts?.Cancel();
+        _cts?.Dispose();
+        return ValueTask.CompletedTask;
+    }
+}

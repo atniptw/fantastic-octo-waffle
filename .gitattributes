@@ -1,0 +1,2 @@
+Tests/UnityAssetParser.Tests/Fixtures/RealBundles/*.hhh filter=lfs diff=lfs merge=lfs -text
+Tests/UnityAssetParser.Tests/Fixtures/Snapshots/*.glb filter=lfs diff=lfs merge=lfs -text

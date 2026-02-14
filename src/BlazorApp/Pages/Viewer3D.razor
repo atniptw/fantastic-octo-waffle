@@ -1,0 +1,205 @@
+@page "/viewer/{OwnerName}/{Name}/{*FileName}"
+@using BlazorApp.Models
+@using BlazorApp.Services
+@using Microsoft.Extensions.Logging.Abstractions
+@implements IAsyncDisposable
+
+<PageTitle>3D Viewer - @FileName</PageTitle>
+
+<div class="container-fluid mt-4">
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="@GetHomeUrl()">← Mods</a></li>
+            <li class="breadcrumb-item"><a href="@GetModUrl()">@Name</a></li>
+            <li class="breadcrumb-item active" aria-current="page">@FileName</li>
+        </ol>
+    </nav>
+
+    @if (_error != null)
+    {
+        <div class="alert alert-danger" role="alert">
+            <h4 class="alert-heading">Error</h4>
+            <p>@_error</p>
+            <hr>
+            <a href="@GetModUrl()" class="btn btn-primary">← Back to Mod Details</a>
+        </div>
+    }
+    else if (_loading)
+    {
+        <div class="text-center my-5">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading 3D model...</span>
+            </div>
+            <p class="mt-3">@_loadingMessage</p>
+            @if (_loadingMessage.Contains("Parsing"))
+            {
+                <small class="text-muted d-block">Extracting mesh geometry from Unity asset bundle...</small>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h5 class="card-title">@FileName</h5>
+                        @if (_geometry != null)
+                        {
+                            <p class="card-text">
+                                <small class="text-muted">
+                                    Vertices: @_geometry.VertexCount | Triangles: @_geometry.TriangleCount
+                                </small>
+                            </p>
+                        }
+                    </div>
+                </div>
+                <canvas id="threeJsCanvas" style="width: 100%; height: 600px; border: 1px solid #ccc;" aria-label="3D model preview canvas"></canvas>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public string OwnerName { get; set; } = string.Empty;
+    
+    [Parameter]
+    public string Name { get; set; } = string.Empty;
+    
+    [Parameter]
+    public string FileName { get; set; } = string.Empty;
+
+    private bool _loading = true;
+    private string? _error;
+    private string _loadingMessage = "Initializing...";
+    private ThreeJsGeometry? _geometry;
+    private string? _meshId;
+    private NavigationManager _navManager = default!;
+    private static readonly ILogger<Viewer3D> Logger = NullLogger<Viewer3D>.Instance;
+    private IModDetailStateService _stateService = default!;
+    private IAssetRenderer _assetRenderer = default!;
+    private IViewerService _viewerService = default!;
+    private IZipCacheService _zipCacheService = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var services = ServiceLocator.Provider ?? throw new InvalidOperationException("Service provider not initialized");
+            _navManager = services.GetRequiredService<NavigationManager>();
+            _stateService = services.GetRequiredService<IModDetailStateService>();
+            _assetRenderer = services.GetRequiredService<IAssetRenderer>();
+            _viewerService = services.GetRequiredService<IViewerService>();
+            _zipCacheService = services.GetRequiredService<IZipCacheService>();
+            // URL-decode the filename parameter (handles nested paths like "plugins/MoreHead/...")
+            var decodedFileName = Uri.UnescapeDataString(FileName);
+            
+            // Step 1: Retrieve mod state
+            _loadingMessage = "Loading mod data...";
+            var state = await _stateService.GetCurrentModAsync();
+            
+            if (state == null)
+            {
+                _error = "Mod data not found. Please go back and download the mod first.";
+                _loading = false;
+                return;
+            }
+
+            // Step 2: Find the requested file in the index
+            var fileItem = state.FileIndex.FirstOrDefault(f => 
+                f.FileName.Equals(decodedFileName, StringComparison.OrdinalIgnoreCase));
+            
+            if (fileItem == null)
+            {
+                _error = $"File '{decodedFileName}' not found in mod archive.";
+                _loading = false;
+                return;
+            }
+
+            if (!fileItem.Renderable)
+            {
+                _error = $"File '{decodedFileName}' does not contain renderable 3D geometry.";
+                _loading = false;
+                return;
+            }
+
+            // Step 3: Parse and export as GLB (preferred method)
+            _loadingMessage = "Parsing 3D model and exporting to GLB...";
+            StateHasChanged();
+            
+            GlbExportResult glbResult;
+            try
+            {
+                var bundleBytes = await _zipCacheService.GetFileBytesAsync(state.ZipCacheKey, fileItem.FileName, default);
+                glbResult = await _assetRenderer.RenderAsGlbFromBundleAsync(fileItem, bundleBytes, default);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "GLB export failed for {FileName}", decodedFileName);
+                _error = $"Failed to export GLB: {ex.Message}";
+                _loading = false;
+                return;
+            }
+
+            // Step 4: Mark loading complete and render canvas
+            _loading = false;
+            StateHasChanged();
+
+            // Wait for Blazor to render the canvas element
+            await Task.Delay(100);
+
+            // Step 5: Initialize Three.js viewer (once)
+            await _viewerService.InitializeAsync("threeJsCanvas");
+
+            try
+            {
+                // Step 6: Load GLB into viewer
+                _loadingMessage = "Loading GLB into viewer...";
+                _meshId = await _viewerService.ShowGlbAsync(glbResult.GlbBytes);
+
+                // Ensure geometry metadata object is initialized so UI can display basic info
+                _geometry ??= new ThreeJsGeometry
+                {
+                    Positions = Array.Empty<float>(),
+                    Indices = Array.Empty<uint>(),
+                    VertexCount = glbResult.VertexCount,
+                    TriangleCount = glbResult.TriangleCount
+                };
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "GLB viewer load failed for {FileName}", decodedFileName);
+                _error = $"Failed to load GLB in viewer: {ex.Message}";
+                _loading = false;
+            }
+        }
+        catch (NotImplementedException ex)
+        {
+            _error = $"Feature not yet implemented: {ex.Message}";
+            _loading = false;
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to load 3D model: {ex.Message}";
+            _loading = false;
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await _viewerService.DisposeAsync();
+        }
+        catch
+        {
+            // Ignore disposal errors
+        }
+    }
+
+    private string GetHomeUrl() => _navManager.BaseUri;
+
+    private string GetModUrl() => _navManager.ToAbsoluteUri($"mod/{OwnerName}/{Name}").ToString();
+}

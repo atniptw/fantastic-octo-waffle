@@ -1,0 +1,15 @@
+# Dependencies
+node_modules/
+
+# Wrangler output
+.wrangler/
+dist/
+
+# Environment variables
+.dev.vars
+
+# Build artifacts
+*.log
+
+# Test coverage
+coverage/

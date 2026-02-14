@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <OverrideHtmlAssetPlaceholders>true</OverrideHtmlAssetPlaceholders>
+    
+    <!-- Deployment Configuration -->
+    <PublishDir Condition="'$(Configuration)' == 'Debug'">../../dist-Debug/</PublishDir>
+    <PublishDir Condition="'$(Configuration)' == 'Release'">../../dist-Release/</PublishDir>
+    <!-- GitHub Pages base path (Release only). Override via: dotnet publish /p:StaticWebAssetBasePath=/custom -->
+    <StaticWebAssetBasePath Condition="'$(Configuration)' == 'Release'">/fantastic-octo-waffle</StaticWebAssetBasePath>
+    
+    <!-- Code Analysis Settings -->
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest-all</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <!-- Optimization Settings (Release only) -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <PublishTrimmed>true</PublishTrimmed>
+    <TrimMode>full</TrimMode>
+    <RunAOTCompilation>true</RunAOTCompilation>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="9.0.2" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="9.0.1" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="9.0.1" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.0" />
+    
+    <!-- Code Analysis -->
+    <PackageReference Include="Microsoft.CodeAnalysis.NetAnalyzers" Version="10.0.100" />
+    <PackageReference Include="SonarAnalyzer.CSharp" Version="10.4.0.108396" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\UnityAssetParser\UnityAssetParser.csproj" />
+  </ItemGroup>
+
+</Project>

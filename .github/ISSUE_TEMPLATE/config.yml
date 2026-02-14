@@ -1,0 +1,5 @@
+blank: false
+contact_links:
+  - name: GitHub Copilot Documentation
+    url: https://docs.github.com/en/copilot
+    about: Learn about using GitHub Copilot

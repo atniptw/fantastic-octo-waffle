@@ -1,0 +1,116 @@
+# .NET / Blazor
+bin/
+obj/
+*.user
+*.suo
+*.cache
+*.dll
+*.exe
+*.pdb
+*.log
+*.vspscc
+*.vssscc
+.vs/
+_ReSharper*/
+*.DotSettings.user
+[Tt]est[Rr]esult*/
+[Bb]uild[Ll]og.*
+*.pubxml
+*.publishproj
+
+# Blazor WASM specific
+wwwroot/dist/
+wwwroot/_framework/
+blazor.boot.json
+appsettings.Development.json
+
+# Node.js / npm
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Cloudflare Worker
+.wrangler/
+wrangler.toml.local
+.dev.vars
+
+# IDE / Editor
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.swp
+*.swo
+*~
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Build outputs
+dist/
+dist-Debug/
+dist-Release/
+build/
+out/
+coverage/
+.next/
+*.tsbuildinfo
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.cache
+
+# Test results
+TestResults/
+*.trx
+*.coverage
+*.coveragexml
+
+# OS specific
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# NuGet
+*.nupkg
+*.snupkg
+.nuget/
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# Azure / deployment
+*.azurePubxml
+PublishProfiles/
+
+# Rider
+.idea/
+*.sln.iml
+
+# User-specific files
+*.rsuser
+*.user
+*.userosscache
+*.sln.docstates
+
+.playwright-mcp
+
+mods/
