@@ -20,5 +20,8 @@ test("base mod upload enables Continue", async ({ page }) => {
   await expect(page.getByTestId("base-mod-status")).toContainText(
     "morehead-1.4.4.zip"
   );
-  await expect(page.getByTestId("continue-button")).toBeEnabled();
+  const continueButton = page.getByTestId("continue-button");
+  await expect(continueButton).toBeEnabled();
+  await continueButton.click();
+  await expect(page).toHaveURL(/\/planner$/);
 });

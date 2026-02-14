@@ -1,4 +1,5 @@
 ﻿@page "/"
+@inject NavigationManager Navigation
 
 <PageTitle>R.E.P.O Outfit Planner</PageTitle>
 
@@ -53,7 +54,7 @@
 	</div>
 
 	<div class="landing__cta">
-		<button class="btn btn-primary" type="button" disabled="@(!IsBaseModLoaded)" data-testid="continue-button">Continue →</button>
+		<button class="btn btn-primary" type="button" disabled="@(!IsBaseModLoaded)" @onclick="GoToPlanner" data-testid="continue-button">Continue →</button>
 		<span class="landing__cta-note">Enabled after base mod is loaded</span>
 	</div>
 </section>
@@ -86,4 +87,15 @@
 
 		return $"{bytes / kilo:0.##} KB";
 	}
+
+	private void GoToPlanner()
+	{
+		if (!IsBaseModLoaded)
+		{
+			return;
+		}
+
+		Navigation.NavigateTo("/planner", forceLoad: true);
+	}
+
 }

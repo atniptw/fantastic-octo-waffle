@@ -1,0 +1,49 @@
+.planner-shell {
+    min-height: 100vh;
+    background: #f1f5f9;
+    display: flex;
+    flex-direction: column;
+}
+
+.planner-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+    padding: 1.25rem 2rem;
+    background: #0f172a;
+    color: #f8fafc;
+}
+
+.planner-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+}
+
+.planner-subtitle {
+    font-size: 0.9rem;
+    color: #cbd5f5;
+}
+
+.planner-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.planner-actions .btn {
+    border-radius: 999px;
+    padding: 0.5rem 1.2rem;
+}
+
+.planner-main {
+    flex: 1;
+    padding: 2rem;
+}
+
+@media (max-width: 900px) {
+    .planner-topbar {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}
