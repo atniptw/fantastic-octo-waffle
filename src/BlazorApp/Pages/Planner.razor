@@ -1,5 +1,6 @@
 @page "/planner"
 @layout PlannerLayout
+@inject DecorationIndexService DecorationIndex
 
 <PageTitle>Outfit Planner</PageTitle>
 
@@ -34,7 +35,7 @@
     </section>
 
     <aside class="planner-panel planner-items">
-        <div class="planner-panel__title">Items Panel</div>
+        <div class="planner-panel__title">Items Panel (@DecorationIndex.Entries.Count loaded)</div>
         <div class="planner-items__slot">Slot: Head</div>
 
         <div class="planner-item-card">

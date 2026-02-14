@@ -1,5 +1,6 @@
 ﻿@page "/"
 @inject NavigationManager Navigation
+@inject DecorationIndexService DecorationIndex
 
 <PageTitle>R.E.P.O Outfit Planner</PageTitle>
 
@@ -25,6 +26,23 @@
 						<span>Status: Loaded @baseModFile.Name (@FormatFileSize(baseModFile.Size))</span>
 					}
 				</div>
+				@if (baseModFile is not null)
+				{
+					<div class="dropzone__status @(baseModScanSucceeded ? "success" : string.Empty)" data-testid="base-mod-scan-status">
+						@if (isBaseModScanning)
+						{
+							<span>Scan: in progress...</span>
+						}
+						else if (!string.IsNullOrWhiteSpace(baseModScanStatus))
+						{
+							<span>@baseModScanStatus</span>
+						}
+						else
+						{
+							<span>Scan: pending</span>
+						}
+					</div>
+				}
 			</div>
 		</div>
 
@@ -62,12 +80,24 @@
 @code {
 	private IBrowserFile? baseModFile;
 	private IReadOnlyList<IBrowserFile>? cosmeticFiles;
+	private bool isBaseModScanning;
+	private bool baseModScanSucceeded;
+	private string? baseModScanStatus;
 
 	private bool IsBaseModLoaded => baseModFile is not null;
 
-	private void HandleBaseModSelected(InputFileChangeEventArgs args)
+	private async Task HandleBaseModSelected(InputFileChangeEventArgs args)
 	{
 		baseModFile = args.File;
+		isBaseModScanning = true;
+		baseModScanSucceeded = false;
+		baseModScanStatus = "Scan: starting...";
+
+		await DecorationIndex.ScanZipAsync(baseModFile);
+
+		isBaseModScanning = false;
+		baseModScanSucceeded = DecorationIndex.LastScanSucceeded;
+		baseModScanStatus = DecorationIndex.LastScanMessage ?? "Scan complete.";
 	}
 
 	private void HandleCosmeticModsSelected(InputFileChangeEventArgs args)
