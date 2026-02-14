@@ -10,3 +10,15 @@ test("landing page loads and Continue is disabled", async ({ page }) => {
   const continueButton = page.getByTestId("continue-button");
   await expect(continueButton).toBeDisabled();
 });
+
+test("base mod upload enables Continue", async ({ page }) => {
+  await page.goto("/");
+
+  const baseInput = page.getByTestId("base-mod-input");
+  await baseInput.setInputFiles("tests/e2e/fixtures/morehead-1.4.4.zip");
+
+  await expect(page.getByTestId("base-mod-status")).toContainText(
+    "morehead-1.4.4.zip"
+  );
+  await expect(page.getByTestId("continue-button")).toBeEnabled();
+});

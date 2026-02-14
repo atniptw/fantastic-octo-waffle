@@ -13,8 +13,17 @@
 			<div class="step-card__title">Step 1: Upload Base Mod</div>
 			<div class="dropzone">
 				<div class="dropzone__hint">Drop MoreHead zip/dll here</div>
-				<button class="btn btn-outline-primary" type="button">Browse Files</button>
-				<div class="dropzone__status success">Status: ✓ MoreHead v1.2.0 Loaded</div>
+				<InputFile OnChange="HandleBaseModSelected" class="dropzone__input" data-testid="base-mod-input" />
+				<div class="dropzone__status @(IsBaseModLoaded ? "success" : string.Empty)" data-testid="base-mod-status">
+					@if (baseModFile is null)
+					{
+						<span>Status: No base mod selected</span>
+					}
+					else
+					{
+						<span>Status: Loaded @baseModFile.Name (@FormatFileSize(baseModFile.Size))</span>
+					}
+				</div>
 			</div>
 		</div>
 
@@ -22,20 +31,59 @@
 			<div class="step-card__title">Step 2: Upload Cosmetic Mods</div>
 			<div class="dropzone">
 				<div class="dropzone__hint">Drop cosmetic mods here</div>
-				<button class="btn btn-outline-primary" type="button">Browse Files</button>
-				<div class="dropzone__status">
-					<div>Loaded Mods:</div>
-					<ul>
-						<li>✓ Spooky Hats v1.0</li>
-						<li>✓ Ghost Backpacks v2.1</li>
-					</ul>
+				<InputFile OnChange="HandleCosmeticModsSelected" class="dropzone__input" multiple data-testid="cosmetic-mods-input" />
+				<div class="dropzone__status" data-testid="cosmetic-mods-status">
+					@if (cosmeticFiles is null || cosmeticFiles.Count == 0)
+					{
+						<div>Loaded Mods: none</div>
+					}
+					else
+					{
+						<div>Loaded Mods:</div>
+						<ul>
+							@foreach (var file in cosmeticFiles)
+							{
+								<li>@file.Name (@FormatFileSize(file.Size))</li>
+							}
+						</ul>
+					}
 				</div>
 			</div>
 		</div>
 	</div>
 
 	<div class="landing__cta">
-		<button class="btn btn-primary" type="button" disabled data-testid="continue-button">Continue →</button>
+		<button class="btn btn-primary" type="button" disabled="@(!IsBaseModLoaded)" data-testid="continue-button">Continue →</button>
 		<span class="landing__cta-note">Enabled after base mod is loaded</span>
 	</div>
 </section>
+
+@code {
+	private IBrowserFile? baseModFile;
+	private IReadOnlyList<IBrowserFile>? cosmeticFiles;
+
+	private bool IsBaseModLoaded => baseModFile is not null;
+
+	private void HandleBaseModSelected(InputFileChangeEventArgs args)
+	{
+		baseModFile = args.File;
+	}
+
+	private void HandleCosmeticModsSelected(InputFileChangeEventArgs args)
+	{
+		cosmeticFiles = args.GetMultipleFiles();
+	}
+
+	private static string FormatFileSize(long bytes)
+	{
+		const decimal kilo = 1024m;
+		const decimal mega = 1024m * 1024m;
+
+		if (bytes >= mega)
+		{
+			return $"{bytes / mega:0.##} MB";
+		}
+
+		return $"{bytes / kilo:0.##} KB";
+	}
+}

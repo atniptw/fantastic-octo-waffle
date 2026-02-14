@@ -171,6 +171,14 @@ code {
     color: #334155;
 }
 
+.dropzone__input {
+    width: 100%;
+    padding: 0.4rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    background: #f8fafc;
+}
+
 .dropzone__status {
     font-size: 0.95rem;
     color: #475569;
