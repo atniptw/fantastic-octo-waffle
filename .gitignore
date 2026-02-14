@@ -1,0 +1,53 @@
+# .NET
+bin/
+obj/
+*.user
+*.userosscache
+*.suo
+*.userprefs
+*.dll
+*.exe
+*.pdb
+*.cache
+*.log
+*.vspscc
+*.vssscc
+*.pidb
+*.svclog
+*.sln.docstates
+
+# Rider/VS
+.idea/
+.vs/
+.vscode/
+
+# Node
+node_modules/
+**/node_modules/
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+npm-debug.log*
+
+# Build output
+wwwroot/dist/
+wwwroot/lib/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Playwright
+playwright/.cache/
+
+# Test results
+TestResults/
+
+# Coverage
+coverage/
+coverage*.json
+
+# Misc
+*.tmp
+*.temp
+*.swp
