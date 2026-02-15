@@ -52,3 +52,10 @@
 </section>
 
 <ModsWizard />
+
+@code {
+	protected override async Task OnInitializedAsync()
+	{
+		await DecorationIndex.LoadPersistedAsync();
+	}
+}

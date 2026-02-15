@@ -96,6 +96,13 @@
     gap: 0.5rem;
 }
 
+.wizard-file {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
 .wizard-file__name {
     font-weight: 600;
     color: #0f172a;
@@ -104,4 +111,38 @@
 .wizard-file__meta {
     color: #64748b;
     font-size: 0.85rem;
+}
+
+.wizard-status {
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.wizard-status--queued {
+    color: #64748b;
+    background: #f1f5f9;
+    border-color: #e2e8f0;
+}
+
+.wizard-status--processing {
+    color: #1d4ed8;
+    background: #dbeafe;
+    border-color: #93c5fd;
+}
+
+.wizard-status--done {
+    color: #047857;
+    background: #d1fae5;
+    border-color: #6ee7b7;
+}
+
+.wizard-status--failed {
+    color: #b91c1c;
+    background: #fee2e2;
+    border-color: #fca5a5;
 }

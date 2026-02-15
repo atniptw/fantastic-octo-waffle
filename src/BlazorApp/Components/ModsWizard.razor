@@ -1,6 +1,7 @@
 @using System.Linq
 @inject DecorationIndexService DecorationIndex
 @inject ModalStateService ModalState
+@inject AssetStoreService AssetStore
 @implements IDisposable
 
 <div class="mods-modal-backdrop @(ModalState.IsOpen ? "show" : string.Empty)" data-testid="mods-modal" aria-hidden="@(!ModalState.IsOpen)">
@@ -52,8 +53,13 @@
                                 @foreach (var entry in group.OrderBy(item => item.FilePath))
                                 {
                                     <li>
-                                        <div class="wizard-file__name">@DecorationNameFormatter.GetDisplayName(entry.FilePath)</div>
-                                        <div class="wizard-file__meta">@FormatFileSize(entry.SizeBytes)</div>
+                                        <div class="wizard-file">
+                                            <div>
+                                                <div class="wizard-file__name">@DecorationNameFormatter.GetDisplayName(entry.FilePath)</div>
+                                                <div class="wizard-file__meta">@FormatFileSize(entry.SizeBytes)</div>
+                                            </div>
+                                            <span class="wizard-status @GetStatusClass(entry)">@GetStatusLabel(entry)</span>
+                                        </div>
                                     </li>
                                 }
                             </ul>
@@ -63,8 +69,31 @@
             }
         </div>
         <footer class="mods-modal__footer">
-            <button class="btn btn-outline-secondary" type="button" @onclick="GoBack" disabled="@(currentStep == StepUpload)" data-testid="wizard-back">Back</button>
-            <button class="btn btn-primary" type="button" @onclick="GoNext" disabled="@(currentStep == StepUpload && !CanProceed)" data-testid="wizard-next">@NextLabel</button>
+            @if (currentStep == StepUpload)
+            {
+                <button class="btn btn-outline-secondary" type="button" @onclick="GoBack" disabled data-testid="wizard-back">Back</button>
+                <button class="btn btn-primary" type="button" @onclick="GoNext" disabled="@(!CanProceed)" data-testid="wizard-next">Next</button>
+            }
+            else
+            {
+                if (processingComplete)
+                {
+                    <button class="btn btn-outline-secondary" type="button" @onclick="ResetToUpload" data-testid="wizard-reset">Load new mod</button>
+                }
+                else
+                {
+                    <button class="btn btn-outline-secondary" type="button" @onclick="GoBack" disabled="@isProcessing" data-testid="wizard-back">Back</button>
+                }
+
+                if (processingComplete)
+                {
+                    <button class="btn btn-primary" type="button" @onclick="CloseModal" data-testid="wizard-close">Close</button>
+                }
+                else
+                {
+                    <button class="btn btn-primary" type="button" @onclick="ProcessAllAsync" disabled="@(!CanProcess)" data-testid="wizard-process">@(isProcessing ? "Processing..." : "Process")</button>
+                }
+            }
         </footer>
     </div>
 </div>
@@ -77,9 +106,13 @@
     private bool isBaseModScanning;
     private bool baseModScanSucceeded;
     private string? baseModScanStatus;
+    private bool isProcessing;
+    private bool processingComplete;
+    private readonly Dictionary<string, ProcessStatus> processingStatus = new();
+    private const int ProcessingDelayMs = 120;
 
     private bool CanProceed => DecorationIndex.LastScanSucceeded && DecorationIndex.Entries.Count > 0;
-    private string NextLabel => currentStep == StepReview ? "Close" : "Next";
+    private bool CanProcess => !isProcessing && DecorationIndex.Entries.Count > 0;
 
     protected override void OnInitialized()
     {
@@ -95,6 +128,7 @@
 
         await DecorationIndex.ScanZipAsync(baseModFile);
 
+        ResetProcessingState();
         isBaseModScanning = false;
         baseModScanSucceeded = DecorationIndex.LastScanSucceeded;
         baseModScanStatus = DecorationIndex.LastScanMessage ?? "Scan complete.";
@@ -115,6 +149,7 @@
 
     private void CloseModal()
     {
+        ResetProcessingState();
         currentStep = StepUpload;
         baseModFile = null;
         isBaseModScanning = false;
@@ -145,6 +180,80 @@
         }
     }
 
+    private void ResetToUpload()
+    {
+        ResetProcessingState();
+        currentStep = StepUpload;
+        baseModFile = null;
+        isBaseModScanning = false;
+        baseModScanSucceeded = false;
+        baseModScanStatus = null;
+    }
+
+    private void ResetProcessingState()
+    {
+        isProcessing = false;
+        processingComplete = false;
+        processingStatus.Clear();
+    }
+
+    private string GetStatusKey(DecorationEntry entry)
+        => entry.FilePath;
+
+    private ProcessStatus GetStatus(DecorationEntry entry)
+    {
+        var key = GetStatusKey(entry);
+        return processingStatus.TryGetValue(key, out var status) ? status : ProcessStatus.Queued;
+    }
+
+    private string GetStatusLabel(DecorationEntry entry)
+        => GetStatus(entry).ToString();
+
+    private string GetStatusClass(DecorationEntry entry)
+        => GetStatus(entry) switch
+        {
+            ProcessStatus.Processing => "wizard-status--processing",
+            ProcessStatus.Done => "wizard-status--done",
+            ProcessStatus.Failed => "wizard-status--failed",
+            _ => "wizard-status--queued"
+        };
+
+    private async Task ProcessAllAsync()
+    {
+        isProcessing = true;
+        processingComplete = false;
+
+        foreach (var entry in DecorationIndex.Entries.OrderBy(item => item.FilePath))
+        {
+            var key = GetStatusKey(entry);
+            processingStatus[key] = ProcessStatus.Queued;
+        }
+
+        foreach (var entry in DecorationIndex.Entries.OrderBy(item => item.FilePath))
+        {
+            var key = GetStatusKey(entry);
+            processingStatus[key] = ProcessStatus.Processing;
+            await InvokeAsync(StateHasChanged);
+
+            try
+            {
+                var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                await Task.Delay(ProcessingDelayMs);
+                await AssetStore.TouchProcessedAsync(entry.Sha256, now, now);
+                processingStatus[key] = ProcessStatus.Done;
+            }
+            catch
+            {
+                processingStatus[key] = ProcessStatus.Failed;
+            }
+
+            await InvokeAsync(StateHasChanged);
+        }
+
+        isProcessing = false;
+        processingComplete = true;
+    }
+
     private void HandleModalChange()
     {
         if (ModalState.IsOpen && currentStep != StepUpload)
@@ -158,5 +267,13 @@
     public void Dispose()
     {
         ModalState.OnChange -= HandleModalChange;
+    }
+
+    private enum ProcessStatus
+    {
+        Queued,
+        Processing,
+        Done,
+        Failed
     }
 }
