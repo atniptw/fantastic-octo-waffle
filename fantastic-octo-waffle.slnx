@@ -1,5 +1,9 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/BlazorApp/BlazorApp.csproj" />
+    <Project Path="src/UnityAssetParser/UnityAssetParser.csproj" />
+  </Folder>
+  <Folder Name="/Tests/">
+    <Project Path="Tests/UnityAssetParser.Tests/UnityAssetParser.Tests.csproj" />
   </Folder>
 </Solution>
