@@ -98,6 +98,57 @@
     font-size: 0.9rem;
 }
 
+.mods-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.48);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+    z-index: 2000;
+}
+
+.mods-modal-backdrop.show {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.mods-modal {
+    width: min(720px, 92vw);
+    background: #ffffff;
+    border-radius: 20px;
+    box-shadow: 0 30px 70px rgba(15, 23, 42, 0.24);
+    padding: 1.5rem;
+    display: grid;
+    gap: 1.5rem;
+}
+
+.mods-modal__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.mods-modal__title {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.mods-modal__subtitle {
+    font-size: 0.95rem;
+    color: #64748b;
+}
+
+.mods-modal__content {
+    display: grid;
+    gap: 1rem;
+}
+
 @media (max-width: 1100px) {
     .planner-grid {
         grid-template-columns: 1fr;

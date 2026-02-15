@@ -1,25 +1,74 @@
 ﻿@page "/"
-@inject NavigationManager Navigation
+@layout PlannerLayout
 @inject DecorationIndexService DecorationIndex
+@inject ModalStateService ModalState
+@implements IDisposable
 
-<PageTitle>R.E.P.O Outfit Planner</PageTitle>
+<PageTitle>Outfit Planner</PageTitle>
 
-<section class="landing">
-	<header class="landing__header">
-		<h1>R.E.P.O Outfit Planner</h1>
-		<p>Preview and plan cosmetic loadouts locally in your browser.</p>
-	</header>
+<section class="planner-grid">
+	<aside class="planner-panel planner-slots">
+		<div class="planner-panel__title">Slots</div>
+		<ul class="planner-slots__list">
+			<li><button class="planner-slot" type="button">Head</button></li>
+			<li><button class="planner-slot" type="button">Body</button></li>
+			<li><button class="planner-slot" type="button">Back</button></li>
+			<li><button class="planner-slot" type="button">Legs</button></li>
+			<li><button class="planner-slot" type="button">Feet</button></li>
+		</ul>
 
-	<div class="landing__steps">
-		<div class="step-card">
-			<div class="step-card__title">Step 1: Upload Base Mod</div>
+		<div class="planner-selection">
+			<div class="planner-panel__title">Selected</div>
+			<ul class="planner-selection__list">
+				<li>Head: None</li>
+				<li>Body: None</li>
+				<li>Back: Cape</li>
+				<li>Legs: None</li>
+				<li>Feet: None</li>
+			</ul>
+		</div>
+	</aside>
+
+	<section class="planner-panel planner-preview">
+		<div class="planner-panel__title">Character Preview</div>
+		<div class="planner-viewport">
+			<span>3D Viewport</span>
+		</div>
+	</section>
+
+	<aside class="planner-panel planner-items">
+		<div class="planner-panel__title">Items Panel (@DecorationIndex.Entries.Count loaded)</div>
+		<div class="planner-items__slot">Slot: Head</div>
+
+		<div class="planner-item-card">
+			<div class="planner-item-card__name">Hat 1</div>
+			<div class="planner-item-card__meta">From: ModA</div>
+		</div>
+		<div class="planner-item-card">
+			<div class="planner-item-card__name">Hat 2</div>
+			<div class="planner-item-card__meta">From: ModB</div>
+		</div>
+
+		<button class="btn btn-outline-secondary" type="button" disabled>Remove Item</button>
+	</aside>
+</section>
+
+<div class="mods-modal-backdrop @(ModalState.IsOpen ? "show" : string.Empty)" data-testid="mods-modal" aria-hidden="@(!ModalState.IsOpen)">
+	<div class="mods-modal" role="dialog" aria-modal="true">
+		<header class="mods-modal__header">
+			<div>
+				<div class="mods-modal__title">Load mods</div>
+			</div>
+			<button class="btn btn-outline-secondary" type="button" @onclick="CloseModal">Close</button>
+		</header>
+		<div class="mods-modal__content">
 			<div class="dropzone">
-				<div class="dropzone__hint">Drop MoreHead zip/dll here</div>
+				<div class="dropzone__hint">Drop zip here</div>
 				<InputFile OnChange="HandleBaseModSelected" class="dropzone__input" data-testid="base-mod-input" />
 				<div class="dropzone__status @(IsBaseModLoaded ? "success" : string.Empty)" data-testid="base-mod-status">
 					@if (baseModFile is null)
 					{
-						<span>Status: No base mod selected</span>
+						<span>Status: No mod selected</span>
 					}
 					else
 					{
@@ -45,46 +94,22 @@
 				}
 			</div>
 		</div>
-
-		<div class="step-card">
-			<div class="step-card__title">Step 2: Upload Cosmetic Mods</div>
-			<div class="dropzone">
-				<div class="dropzone__hint">Drop cosmetic mods here</div>
-				<InputFile OnChange="HandleCosmeticModsSelected" class="dropzone__input" multiple data-testid="cosmetic-mods-input" />
-				<div class="dropzone__status" data-testid="cosmetic-mods-status">
-					@if (cosmeticFiles is null || cosmeticFiles.Count == 0)
-					{
-						<div>Loaded Mods: none</div>
-					}
-					else
-					{
-						<div>Loaded Mods:</div>
-						<ul>
-							@foreach (var file in cosmeticFiles)
-							{
-								<li>@file.Name (@FormatFileSize(file.Size))</li>
-							}
-						</ul>
-					}
-				</div>
-			</div>
-		</div>
 	</div>
-
-	<div class="landing__cta">
-		<button class="btn btn-primary" type="button" disabled="@(!IsBaseModLoaded)" @onclick="GoToPlanner" data-testid="continue-button">Continue →</button>
-		<span class="landing__cta-note">Enabled after base mod is loaded</span>
-	</div>
-</section>
+</div>
 
 @code {
 	private IBrowserFile? baseModFile;
-	private IReadOnlyList<IBrowserFile>? cosmeticFiles;
 	private bool isBaseModScanning;
 	private bool baseModScanSucceeded;
 	private string? baseModScanStatus;
 
 	private bool IsBaseModLoaded => baseModFile is not null;
+
+	protected override void OnInitialized()
+	{
+		ModalState.OnChange += HandleModalChange;
+		ModalState.Open();
+	}
 
 	private async Task HandleBaseModSelected(InputFileChangeEventArgs args)
 	{
@@ -100,11 +125,6 @@
 		baseModScanStatus = DecorationIndex.LastScanMessage ?? "Scan complete.";
 	}
 
-	private void HandleCosmeticModsSelected(InputFileChangeEventArgs args)
-	{
-		cosmeticFiles = args.GetMultipleFiles();
-	}
-
 	private static string FormatFileSize(long bytes)
 	{
 		const decimal kilo = 1024m;
@@ -118,14 +138,19 @@
 		return $"{bytes / kilo:0.##} KB";
 	}
 
-	private void GoToPlanner()
+	private void CloseModal()
 	{
-		if (!IsBaseModLoaded)
-		{
-			return;
-		}
+		ModalState.Close();
+	}
 
-		Navigation.NavigateTo("/planner", forceLoad: true);
+	private void HandleModalChange()
+	{
+		_ = InvokeAsync(StateHasChanged);
+	}
+
+	public void Dispose()
+	{
+		ModalState.OnChange -= HandleModalChange;
 	}
 
 }
