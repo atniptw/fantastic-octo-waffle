@@ -63,7 +63,7 @@ public sealed class DecorationIndexService
             }
 
             LastScanSucceeded = true;
-            LastScanMessage = $"Scan complete: {_entries.Count} .hhh file(s) found.";
+            LastScanMessage = "Scan complete.";
         }
         catch (Exception ex)
         {

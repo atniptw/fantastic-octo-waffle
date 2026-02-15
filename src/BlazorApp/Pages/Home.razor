@@ -1,8 +1,6 @@
 ﻿@page "/"
 @layout PlannerLayout
 @inject DecorationIndexService DecorationIndex
-@inject ModalStateService ModalState
-@implements IDisposable
 
 <PageTitle>Outfit Planner</PageTitle>
 
@@ -53,104 +51,4 @@
 	</aside>
 </section>
 
-<div class="mods-modal-backdrop @(ModalState.IsOpen ? "show" : string.Empty)" data-testid="mods-modal" aria-hidden="@(!ModalState.IsOpen)">
-	<div class="mods-modal" role="dialog" aria-modal="true">
-		<header class="mods-modal__header">
-			<div>
-				<div class="mods-modal__title">Load mods</div>
-			</div>
-			<button class="btn btn-outline-secondary" type="button" @onclick="CloseModal">Close</button>
-		</header>
-		<div class="mods-modal__content">
-			<div class="dropzone">
-				<div class="dropzone__hint">Drop zip here</div>
-				<InputFile OnChange="HandleBaseModSelected" class="dropzone__input" data-testid="base-mod-input" />
-				<div class="dropzone__status @(IsBaseModLoaded ? "success" : string.Empty)" data-testid="base-mod-status">
-					@if (baseModFile is null)
-					{
-						<span>Status: No mod selected</span>
-					}
-					else
-					{
-						<span>Status: Loaded @baseModFile.Name (@FormatFileSize(baseModFile.Size))</span>
-					}
-				</div>
-				@if (baseModFile is not null)
-				{
-					<div class="dropzone__status @(baseModScanSucceeded ? "success" : string.Empty)" data-testid="base-mod-scan-status">
-						@if (isBaseModScanning)
-						{
-							<span>Scan: in progress...</span>
-						}
-						else if (!string.IsNullOrWhiteSpace(baseModScanStatus))
-						{
-							<span>@baseModScanStatus</span>
-						}
-						else
-						{
-							<span>Scan: pending</span>
-						}
-					</div>
-				}
-			</div>
-		</div>
-	</div>
-</div>
-
-@code {
-	private IBrowserFile? baseModFile;
-	private bool isBaseModScanning;
-	private bool baseModScanSucceeded;
-	private string? baseModScanStatus;
-
-	private bool IsBaseModLoaded => baseModFile is not null;
-
-	protected override void OnInitialized()
-	{
-		ModalState.OnChange += HandleModalChange;
-		ModalState.Open();
-	}
-
-	private async Task HandleBaseModSelected(InputFileChangeEventArgs args)
-	{
-		baseModFile = args.File;
-		isBaseModScanning = true;
-		baseModScanSucceeded = false;
-		baseModScanStatus = "Scan: starting...";
-
-		await DecorationIndex.ScanZipAsync(baseModFile);
-
-		isBaseModScanning = false;
-		baseModScanSucceeded = DecorationIndex.LastScanSucceeded;
-		baseModScanStatus = DecorationIndex.LastScanMessage ?? "Scan complete.";
-	}
-
-	private static string FormatFileSize(long bytes)
-	{
-		const decimal kilo = 1024m;
-		const decimal mega = 1024m * 1024m;
-
-		if (bytes >= mega)
-		{
-			return $"{bytes / mega:0.##} MB";
-		}
-
-		return $"{bytes / kilo:0.##} KB";
-	}
-
-	private void CloseModal()
-	{
-		ModalState.Close();
-	}
-
-	private void HandleModalChange()
-	{
-		_ = InvokeAsync(StateHasChanged);
-	}
-
-	public void Dispose()
-	{
-		ModalState.OnChange -= HandleModalChange;
-	}
-
-}
+<ModsWizard />
