@@ -2,6 +2,7 @@ using System;
 using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using UnityAssetParser;
 using Xunit;
@@ -59,6 +60,29 @@ public sealed class HhhParserTests
 
         Assert.NotEmpty(context.Containers);
         Assert.Contains(context.Containers, container => container.SourceName == "hhh");
+    }
+
+    [Fact]
+    public void ConvertToGlb_WithContext_DetectsUnityFsEntries()
+    {
+        var fixtures = GetFixtureFilePaths();
+        if (fixtures.Count == 0)
+        {
+            return;
+        }
+
+        var parser = new HhhParser();
+        var context = new BaseAssetsContext();
+
+        foreach (var path in fixtures)
+        {
+            parser.ConvertToGlb(File.ReadAllBytes(path), context);
+        }
+
+        Assert.Contains(context.Containers, container =>
+            container.Kind == ContainerKind.UnityFs
+            && (!string.IsNullOrWhiteSpace(container.UnityRevision)
+                || !string.IsNullOrWhiteSpace(container.UnityVersion)));
     }
 
     private static IReadOnlyList<string> GetFixtureFilePaths()

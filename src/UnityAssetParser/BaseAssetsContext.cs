@@ -51,6 +51,7 @@ public sealed class ContainerEntry
 	public long Offset { get; }
 	public long Size { get; }
 	public uint Flags { get; }
+	public byte[]? Payload { get; set; }
 }
 
 public sealed class SerializedFileInfo

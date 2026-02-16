@@ -6,6 +6,7 @@ namespace UnityAssetParser;
 internal static class SkeletonParser
 {
     private const uint BlocksInfoAtEndFlag = 0x80;
+    private const uint BlockInfoNeedsAlignmentFlag = 0x200;
     private const int BundleSignatureMaxLength = 20;
 
     public static void Parse(byte[] data, string sourceName, BaseAssetsContext context)
@@ -85,14 +86,9 @@ internal static class SkeletonParser
             _ = size;
             _ = uncompressedBlocksInfoSize;
 
-            if ((flags & 0x3F) != 0)
-            {
-                context.Warnings.Add("UnityFS block info is compressed and not yet supported.");
-                context.Containers.Add(container);
-                return;
-            }
-
-            var blocksInfoOffset = (flags & BlocksInfoAtEndFlag) != 0
+            var blockInfoCompression = (int)(flags & 0x3F);
+            var blocksInfoAtEnd = (flags & BlocksInfoAtEndFlag) != 0;
+            var blocksInfoOffset = blocksInfoAtEnd
                 ? checked((int)(data.Length - compressedBlocksInfoSize))
                 : reader.Position;
 
@@ -103,24 +99,72 @@ internal static class SkeletonParser
                 return;
             }
 
-            var blocksInfoReader = new EndianBinaryReader(data) { Position = blocksInfoOffset };
-            blocksInfoReader.ReadBytes(16);
-            var blockCount = blocksInfoReader.ReadInt32();
-            for (var i = 0; i < blockCount; i++)
+            var blockInfoBytes = ReadBlockInfoBytes(
+                data,
+                blocksInfoOffset,
+                (int)compressedBlocksInfoSize,
+                (int)uncompressedBlocksInfoSize,
+                blockInfoCompression,
+                context
+            );
+
+            if (blockInfoBytes is null)
             {
-                blocksInfoReader.ReadUInt32();
-                blocksInfoReader.ReadUInt32();
-                blocksInfoReader.ReadUInt16();
+                context.Containers.Add(container);
+                return;
             }
 
-            var nodeCount = blocksInfoReader.ReadInt32();
-            for (var i = 0; i < nodeCount; i++)
+            var dataOffset = blocksInfoAtEnd
+                ? AlignPosition(reader.Position, 16)
+                : blocksInfoOffset + (int)compressedBlocksInfoSize;
+
+            if (!blocksInfoAtEnd && (flags & BlockInfoNeedsAlignmentFlag) != 0)
             {
-                var offset = blocksInfoReader.ReadInt64();
-                var entrySize = blocksInfoReader.ReadInt64();
-                var entryFlags = blocksInfoReader.ReadUInt32();
-                var path = blocksInfoReader.ReadStringToNull();
-                container.Entries.Add(new ContainerEntry(path, offset, entrySize, entryFlags));
+                dataOffset = AlignPosition(dataOffset, 16);
+            }
+
+            var dataLength = blocksInfoAtEnd
+                ? blocksInfoOffset - dataOffset
+                : data.Length - dataOffset;
+
+            if (dataLength < 0)
+            {
+                context.Warnings.Add("UnityFS data segment is out of range.");
+                context.Containers.Add(container);
+                return;
+            }
+
+            var blockInfo = ParseBlockInfo(blockInfoBytes);
+            var decompressedData = DecompressBlocks(
+                data,
+                dataOffset,
+                dataLength,
+                blockInfo.Blocks,
+                context
+            );
+
+            if (decompressedData is null)
+            {
+                context.Containers.Add(container);
+                return;
+            }
+
+            foreach (var node in blockInfo.Nodes)
+            {
+                var entry = new ContainerEntry(node.Path, node.Offset, node.Size, node.Flags);
+                if (TrySlicePayload(decompressedData, node.Offset, node.Size, out var payload))
+                {
+                    entry.Payload = payload;
+                    if (LooksLikeSerializedAsset(node.Path))
+                    {
+                        SkeletonParser.Parse(payload, node.Path, context);
+                    }
+                }
+                else
+                {
+                    context.Warnings.Add($"UnityFS entry '{node.Path}' is out of range.");
+                }
+                container.Entries.Add(entry);
             }
         }
         else
@@ -405,4 +449,200 @@ internal static class SkeletonParser
         }
         reader.ReadBytes(stringBufferSize);
     }
+
+    private static int AlignPosition(int value, int alignment)
+    {
+        if (alignment <= 1)
+        {
+            return value;
+        }
+        var remainder = value % alignment;
+        return remainder == 0 ? value : value + (alignment - remainder);
+    }
+
+    private static byte[]? ReadBlockInfoBytes(
+        byte[] data,
+        int offset,
+        int compressedSize,
+        int uncompressedSize,
+        int compression,
+        BaseAssetsContext context)
+    {
+        if (compressedSize < 0 || uncompressedSize < 0)
+        {
+            context.Warnings.Add("UnityFS block info sizes are invalid.");
+            return null;
+        }
+
+        if (offset < 0 || offset + compressedSize > data.Length)
+        {
+            context.Warnings.Add("UnityFS block info segment is out of range.");
+            return null;
+        }
+
+        var span = data.AsSpan(offset, compressedSize);
+        switch (compression)
+        {
+            case 0:
+                return span.ToArray();
+            case 2:
+            case 3:
+                return Lz4Decoder.DecodeBlock(span, uncompressedSize);
+            case 1:
+                return TryDecompressLzma(span, uncompressedSize, context);
+            default:
+                context.Warnings.Add($"UnityFS block info compression {compression} is unsupported.");
+                return null;
+        }
+    }
+
+    private static byte[]? TryDecompressLzma(ReadOnlySpan<byte> compressed, int uncompressedSize, BaseAssetsContext context)
+    {
+        context.Warnings.Add("UnityFS LZMA decompression is not implemented.");
+        return null;
+    }
+
+    private static (List<BlockInfo> Blocks, List<NodeInfo> Nodes) ParseBlockInfo(byte[] blockInfoBytes)
+    {
+        var reader = new EndianBinaryReader(blockInfoBytes);
+        reader.ReadBytes(16);
+        var blockCount = reader.ReadInt32();
+        var blocks = new List<BlockInfo>(blockCount);
+        for (var i = 0; i < blockCount; i++)
+        {
+            var uncompressedSize = reader.ReadUInt32();
+            var compressedSize = reader.ReadUInt32();
+            var flags = reader.ReadUInt16();
+            blocks.Add(new BlockInfo(uncompressedSize, compressedSize, flags));
+        }
+
+        var nodeCount = reader.ReadInt32();
+        var nodes = new List<NodeInfo>(nodeCount);
+        for (var i = 0; i < nodeCount; i++)
+        {
+            var offset = reader.ReadInt64();
+            var size = reader.ReadInt64();
+            var flags = reader.ReadUInt32();
+            var path = reader.ReadStringToNull();
+            nodes.Add(new NodeInfo(path, offset, size, flags));
+        }
+
+        return (blocks, nodes);
+    }
+
+    private static byte[]? DecompressBlocks(
+        byte[] data,
+        int dataOffset,
+        int dataLength,
+        List<BlockInfo> blocks,
+        BaseAssetsContext context)
+    {
+        long totalUncompressed = 0;
+        long totalCompressed = 0;
+        foreach (var block in blocks)
+        {
+            totalUncompressed += block.UncompressedSize;
+            totalCompressed += block.CompressedSize;
+        }
+
+        if (totalUncompressed > int.MaxValue)
+        {
+            context.Warnings.Add("UnityFS uncompressed data size exceeds supported limits.");
+            return null;
+        }
+
+        if (totalCompressed > dataLength)
+        {
+            context.Warnings.Add("UnityFS compressed data length exceeds available data.");
+            return null;
+        }
+
+        var output = new byte[(int)totalUncompressed];
+        var inputIndex = dataOffset;
+        var outputIndex = 0;
+
+        foreach (var block in blocks)
+        {
+            if (inputIndex + block.CompressedSize > dataOffset + dataLength)
+            {
+                context.Warnings.Add("UnityFS block data is out of range.");
+                return null;
+            }
+
+            var compressedSpan = data.AsSpan(inputIndex, (int)block.CompressedSize);
+            var compression = block.Flags & 0x3F;
+            byte[] decompressed;
+
+            switch (compression)
+            {
+                case 0:
+                    decompressed = compressedSpan.ToArray();
+                    break;
+                case 2:
+                case 3:
+                    decompressed = Lz4Decoder.DecodeBlock(compressedSpan, (int)block.UncompressedSize);
+                    break;
+                case 1:
+                    context.Warnings.Add("UnityFS LZMA block compression is not implemented.");
+                    return null;
+                default:
+                    context.Warnings.Add($"UnityFS block compression {compression} is unsupported.");
+                    return null;
+            }
+
+            if (decompressed.Length != block.UncompressedSize)
+            {
+                context.Warnings.Add("UnityFS block decompressed size mismatch.");
+                return null;
+            }
+
+            Buffer.BlockCopy(decompressed, 0, output, outputIndex, decompressed.Length);
+            inputIndex += (int)block.CompressedSize;
+            outputIndex += decompressed.Length;
+        }
+
+        return output;
+    }
+
+    private static bool TrySlicePayload(byte[] data, long offset, long size, out byte[] payload)
+    {
+        payload = Array.Empty<byte>();
+        if (offset < 0 || size < 0 || offset > int.MaxValue || size > int.MaxValue)
+        {
+            return false;
+        }
+
+        var end = offset + size;
+        if (end > data.Length)
+        {
+            return false;
+        }
+
+        payload = new byte[size];
+        Buffer.BlockCopy(data, (int)offset, payload, 0, (int)size);
+        return true;
+    }
+
+    private static bool LooksLikeSerializedAsset(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return false;
+        }
+
+        if (path.EndsWith(".assets", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (path.StartsWith("CAB-", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    private sealed record BlockInfo(uint UncompressedSize, uint CompressedSize, ushort Flags);
+    private sealed record NodeInfo(string Path, long Offset, long Size, uint Flags);
 }
