@@ -12,6 +12,11 @@ public sealed class HhhParser
             throw new ArgumentNullException(nameof(hhhBytes));
         }
 
+        if (baseAssets is not null)
+        {
+            SkeletonParser.Parse(hhhBytes, "hhh", baseAssets);
+        }
+
         return GlbBuilder.BuildMinimal();
     }
 

@@ -42,6 +42,25 @@ public sealed class HhhParserTests
         ValidateGlb(glb);
     }
 
+    [Fact]
+    public void ConvertToGlb_WithContext_PopulatesSkeletonContainer()
+    {
+        var fixture = GetFixtureFilePaths();
+        if (fixture.Count == 0)
+        {
+            return;
+        }
+
+        var input = File.ReadAllBytes(fixture[0]);
+        var parser = new HhhParser();
+        var context = new BaseAssetsContext();
+
+        parser.ConvertToGlb(input, context);
+
+        Assert.NotEmpty(context.Containers);
+        Assert.Contains(context.Containers, container => container.SourceName == "hhh");
+    }
+
     private static IReadOnlyList<string> GetFixtureFilePaths()
     {
         if (!Directory.Exists(FixturesRoot))

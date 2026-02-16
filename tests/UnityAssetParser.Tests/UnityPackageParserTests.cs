@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using UnityAssetParser;
 using Xunit;
 
@@ -44,5 +45,9 @@ public sealed class UnityPackageParserTests
         var result = parser.Parse(input);
 
         Assert.NotNull(result);
+        Assert.Contains(result.Containers, container =>
+            container.Kind == ContainerKind.UnityPackageTar && container.Entries.Count > 0);
+        Assert.Contains(result.Containers.SelectMany(container => container.Entries), entry =>
+            entry.Path.EndsWith("/asset", StringComparison.OrdinalIgnoreCase));
     }
 }
