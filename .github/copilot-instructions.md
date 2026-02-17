@@ -20,8 +20,28 @@
 ## Build/run/test workflow
 - Run the app: `dotnet run` from [src/BlazorApp](src/BlazorApp).
 - Build: `dotnet build src/BlazorApp/BlazorApp.csproj`.
-- E2E tests: `npm run test:e2e` (ensure the app is running at the base URL).
+- Unit tests: `dotnet test tests/UnityAssetParser.Tests/UnityAssetParser.Tests.csproj`.
+- E2E tests: `npm run test:e2e`.
 - Required toolchains: .NET 10 LTS and Node 24 LTS (see [README.md](README.md)).
+
+## Agent verification policy (local)
+- Prefer autonomous verification before handoff; do not ask the user to manually run commands unless all local fallback steps fail.
+- For UI or modal flow changes: run at minimum `npm run test:e2e:landing`; run full `npm run test:e2e` when behavior spans multiple steps/components.
+- For parser/service changes: run at minimum `npm run test:unit`; for broad parser refactors, run `npm run verify:parser`.
+- For mixed UI + parser changes: run both `npm run test:unit` and `npm run test:e2e`.
+- Always include command outputs and pass/fail status in the handoff summary.
+
+## Agent issue triage policy (local)
+- Reproduce first using local commands and tests.
+- Collect diagnostics via terminal output and test failures.
+- Apply the narrowest fix possible.
+- Re-run the narrowest relevant test, then a broader check when risk is high.
+- Only request manual logs/input after local reproduction and fallback commands are exhausted.
+
+## Parser oracle policy
+- Treat UnityPy as a reference implementation for parser troubleshooting.
+- When parser behavior is ambiguous, run the UnityPy oracle workflow documented in [docs/parser-oracle-workflow.md](docs/parser-oracle-workflow.md) and compare deterministic outputs.
+- Use oracle comparisons to validate entry paths, sizes, hashes, decompression outcomes, and selected serialized metadata.
 
 ## Integration points
 - App uses Bootstrap 5 from CDN for base styling, plus custom CSS in [src/BlazorApp/wwwroot/css/app.css](src/BlazorApp/wwwroot/css/app.css).

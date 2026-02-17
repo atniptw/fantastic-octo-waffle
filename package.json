@@ -2,7 +2,14 @@
   "name": "fantastic-octo-waffle",
   "private": true,
   "scripts": {
-    "test:e2e": "playwright test"
+    "app:run": "dotnet run --project src/BlazorApp/BlazorApp.csproj --urls http://127.0.0.1:5075",
+    "build:app": "dotnet build src/BlazorApp/BlazorApp.csproj",
+    "test:unit": "dotnet test tests/UnityAssetParser.Tests/UnityAssetParser.Tests.csproj",
+    "test:e2e": "playwright test",
+    "test:e2e:landing": "playwright test tests/e2e/landing.spec.ts",
+    "test:e2e:headed": "playwright test --headed",
+    "verify:parser": "npm run build:app && npm run test:unit",
+    "verify:ui": "npm run test:e2e"
   },
   "devDependencies": {
     "@playwright/test": "^1.50.0"

@@ -14,6 +14,19 @@ cd src/BlazorApp
 dotnet run
 ```
 
+### Run tests
+
+```
+dotnet test tests/UnityAssetParser.Tests/UnityAssetParser.Tests.csproj
+npm run test:e2e
+```
+
+For detailed AI-agent verification and troubleshooting workflows, see:
+
+- [docs/agent-verification-matrix.md](docs/agent-verification-matrix.md)
+- [docs/agent-troubleshooting.md](docs/agent-troubleshooting.md)
+- [docs/parser-oracle-workflow.md](docs/parser-oracle-workflow.md)
+
 ## License
 
 MIT
