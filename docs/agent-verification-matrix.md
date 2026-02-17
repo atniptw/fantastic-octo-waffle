@@ -37,13 +37,13 @@ Do not ask for manual user verification unless local fallback steps are exhauste
 When parser behavior is uncertain or fixtures fail unexpectedly:
 
 1. Generate deterministic UnityPy oracle output for the same fixture.
-2. Compare expected/actual on:
-   - entry path set
-   - entry byte size
-   - SHA-256 hash of key payloads
-   - decompressed block sizes/hashes
-   - selected serialized metadata
-3. Only then decide whether to patch parser logic or fixture/test assumptions.
+2. Store/update the matching committed artifact under `tests/UnityAssetParser.Tests/fixtures/oracle`.
+3. Compare expected/actual on:
+   - fixture hash
+   - top-level entry counts
+   - container kind distribution
+   - selected parser summary metadata
+4. Only then decide whether to patch parser logic or fixture/test assumptions.
 
 See [docs/parser-oracle-workflow.md](docs/parser-oracle-workflow.md).
 

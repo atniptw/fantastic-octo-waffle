@@ -6,30 +6,44 @@ Use UnityPy as a reference implementation when parser behavior is ambiguous or w
 
 Compare this repo's parser output against deterministic UnityPy-derived outputs for the same fixture.
 
-## Deterministic comparison contract
+## Phase 2 scope (current)
+
+- Fixture scope: existing unitypackage fixture(s) in `tests/UnityAssetParser.Tests/fixtures/UnityPackage`.
+- Contract strictness: metadata-only parity.
+- Artifact location: `tests/UnityAssetParser.Tests/fixtures/oracle`.
+- Source model: hybrid (committed baseline artifact + refresh from external UnityPy agent when behavior changes).
+
+## Deterministic comparison contract (phase 2)
 
 For each fixture under investigation, compare:
 
-1. Entry paths discovered.
-2. Entry sizes.
-3. SHA-256 hashes of key payloads.
-4. Decompression output sizes/hashes.
-5. Selected serialized metadata (header version/endian/object count/type hints).
+1. Fixture SHA-256.
+2. Top-level unitypackage container metadata (`entryCount`, `assetEntryCount`).
+3. Container kind distribution.
+4. Parser summary metadata (`warningCount`, `serializedFileCount`, `totalContainerCount`).
 
 Normalize output ordering and avoid timestamps in all artifacts.
+
+## Strictness roadmap
+
+After stable metadata parity, tighten incrementally:
+
+1. Path + size strictness for selected entries.
+2. Payload hash strictness for selected entries.
+3. Expanded serialized metadata strictness.
 
 ## Oracle process
 
 1. Select fixture and record fixture hash.
-2. Generate UnityPy manifest output.
-3. Run local parser tests/commands.
-4. Diff parser output vs oracle output.
-5. Categorize delta:
+2. Generate UnityPy output.
+3. Update committed oracle artifact in `tests/UnityAssetParser.Tests/fixtures/oracle`.
+4. Run local parser tests (`npm run test:unit`).
+5. Diff parser output vs oracle output and categorize delta:
    - parser bug,
    - fixture expectation bug,
    - unsupported feature (document explicitly).
 
-## Output format recommendation
+## Output format recommendation (phase 2)
 
 Prefer JSON with this shape:
 
@@ -37,37 +51,33 @@ Prefer JSON with this shape:
 {
   "schemaVersion": 1,
   "fixture": {
-    "path": "...",
+    "relativePath": "fixtures/UnityPackage/SomeFixture.unitypackage",
     "sha256": "..."
   },
-  "entries": [
-    {
-      "path": "...",
-      "kind": "asset|bundle|web|resource|unknown",
-      "size": 0,
-      "sha256": "..."
+  "summary": {
+    "topContainer": {
+      "kind": "UnityPackageTar",
+      "entryCount": 0,
+      "assetEntryCount": 0
+    },
+    "totalContainerCount": 0,
+    "serializedFileCount": 0,
+    "warningCount": 0,
+    "containerKindCounts": {
+      "UnityPackageTar": 1,
+      "Unknown": 0
     }
-  ],
-  "decompression": [
-    {
-      "context": "...",
-      "algorithm": "lz4|lzma|gzip|brotli|none",
-      "compressedSize": 0,
-      "uncompressedSize": 0,
-      "sha256": "..."
-    }
-  ],
-  "serialized": [
-    {
-      "name": "...",
-      "headerVersion": 0,
-      "endian": "<|>",
-      "objectCount": 0,
-      "externalCount": 0
-    }
-  ]
+  }
 }
 ```
+
+## Refresh workflow (external UnityPy agent)
+
+1. Run the UnityPy prompt(s) for the changed fixture.
+2. Produce deterministic JSON (no timestamps, stable ordering).
+3. Replace the matching artifact in `tests/UnityAssetParser.Tests/fixtures/oracle`.
+4. Run `npm run test:unit`.
+5. If the diff is unexpected, review parser behavior before accepting artifact change.
 
 ## Prompts for UnityPy-focused AI agent
 

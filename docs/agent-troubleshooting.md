@@ -70,8 +70,8 @@ Symptoms:
 Recovery steps:
 
 1. Generate oracle output with UnityPy for the same fixture.
-2. Compare path/size/hash/metadata deltas.
-3. Update parser logic or test expectations based on reference parity.
+2. Refresh the committed oracle artifact in `tests/UnityAssetParser.Tests/fixtures/oracle` if expected behavior changed.
+3. Compare metadata deltas and update parser logic or expectations based on reference parity.
 
 ## Escalation rule
 
