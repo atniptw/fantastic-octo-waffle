@@ -14,14 +14,15 @@ public sealed class ParserOracleContractTests
     private static string FixturePath => Path.Combine(
         AppContext.BaseDirectory,
         "fixtures",
-        "UnityPackage",
+        "MoreHead-UnityPackage",
         "MoreHead-Asset-Pack_v1.3.unitypackage"
     );
 
     private static string OraclePath => Path.Combine(
         AppContext.BaseDirectory,
         "fixtures",
-        "oracle",
+        "MoreHead-Snapshots",
+        "UnityPackage",
         "unitypackage-morehead-v1.json"
     );
 

@@ -37,7 +37,7 @@ Do not ask for manual user verification unless local fallback steps are exhauste
 When parser behavior is uncertain or fixtures fail unexpectedly:
 
 1. Generate deterministic UnityPy oracle output for the same fixture.
-2. Store/update the matching committed artifact under `tests/UnityAssetParser.Tests/fixtures/oracle`.
+2. Store/update the matching committed artifact under `tests/UnityAssetParser.Tests/fixtures/MoreHead-Snapshots/UnityPackage`.
 3. Compare expected/actual on:
    - fixture hash
    - top-level entry counts

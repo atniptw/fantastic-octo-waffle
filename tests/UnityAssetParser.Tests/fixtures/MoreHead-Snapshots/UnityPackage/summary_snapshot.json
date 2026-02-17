@@ -1,0 +1,21 @@
+{
+  "fixture": {
+    "relativePath": "fixtures/MoreHead-UnityPackage/MoreHead-Asset-Pack_v1.3.unitypackage",
+    "sha256": "e946a294647cf69f8cd52462d7dfd5b2a6f642de7d6e6683fe3afbd5d0d2e571"
+  },
+  "schemaVersion": 1,
+  "summary": {
+    "containerKindCounts": {
+      "UnityPackageTar": 1,
+      "Unknown": 35
+    },
+    "serializedFileCount": 0,
+    "topContainer": {
+      "assetEntryCount": 35,
+      "entryCount": 134,
+      "kind": "UnityPackageTar"
+    },
+    "totalContainerCount": 36,
+    "warningCount": 0
+  }
+}

@@ -14,7 +14,7 @@ public sealed class HhhParserTests
     private static string FixturesRoot => Path.Combine(
         AppContext.BaseDirectory,
         "fixtures",
-        "MoreHead"
+        "MoreHead-UnityAssets"
     );
 
     public static IEnumerable<object[]> FixtureFiles()

@@ -8,9 +8,9 @@ Compare this repo's parser output against deterministic UnityPy-derived outputs 
 
 ## Phase 2 scope (current)
 
-- Fixture scope: existing unitypackage fixture(s) in `tests/UnityAssetParser.Tests/fixtures/UnityPackage`.
+- Fixture scope: existing unitypackage fixture(s) in `tests/UnityAssetParser.Tests/fixtures/MoreHead-UnityPackage`.
 - Contract strictness: metadata-only parity.
-- Artifact location: `tests/UnityAssetParser.Tests/fixtures/oracle`.
+- Artifact location: `tests/UnityAssetParser.Tests/fixtures/MoreHead-Snapshots/UnityPackage`.
 - Source model: hybrid (committed baseline artifact + refresh from external UnityPy agent when behavior changes).
 
 ## Deterministic comparison contract (phase 2)
@@ -36,7 +36,7 @@ After stable metadata parity, tighten incrementally:
 
 1. Select fixture and record fixture hash.
 2. Generate UnityPy output.
-3. Update committed oracle artifact in `tests/UnityAssetParser.Tests/fixtures/oracle`.
+3. Update committed oracle artifact in `tests/UnityAssetParser.Tests/fixtures/MoreHead-Snapshots/UnityPackage`.
 4. Run local parser tests (`npm run test:unit`).
 5. Diff parser output vs oracle output and categorize delta:
    - parser bug,
@@ -51,7 +51,7 @@ Prefer JSON with this shape:
 {
   "schemaVersion": 1,
   "fixture": {
-    "relativePath": "fixtures/UnityPackage/SomeFixture.unitypackage",
+    "relativePath": "fixtures/MoreHead-UnityPackage/SomeFixture.unitypackage",
     "sha256": "..."
   },
   "summary": {
@@ -75,7 +75,7 @@ Prefer JSON with this shape:
 
 1. Run the UnityPy prompt(s) for the changed fixture.
 2. Produce deterministic JSON (no timestamps, stable ordering).
-3. Replace the matching artifact in `tests/UnityAssetParser.Tests/fixtures/oracle`.
+3. Replace the matching artifact in `tests/UnityAssetParser.Tests/fixtures/MoreHead-Snapshots/UnityPackage`.
 4. Run `npm run test:unit`.
 5. If the diff is unexpected, review parser behavior before accepting artifact change.
 

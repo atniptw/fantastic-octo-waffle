@@ -11,7 +11,7 @@ public sealed class UnityPackageParserTests
     private static string FixturePath => Path.Combine(
         AppContext.BaseDirectory,
         "fixtures",
-        "UnityPackage",
+        "MoreHead-UnityPackage",
         "MoreHead-Asset-Pack_v1.3.unitypackage"
     );
 
