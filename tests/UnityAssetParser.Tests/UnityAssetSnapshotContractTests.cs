@@ -93,6 +93,7 @@ public sealed class UnityAssetSnapshotContractTests
         _ = parser.ConvertToGlb(fixtureBytes, context);
 
         AssertContainersMatch(root.GetProperty("containers"), context);
+        AssertSerializedFilesMatch(root.GetProperty("serializedFiles"), context);
         AssertSummaryMatches(root.GetProperty("summary"), context);
         AssertObjectsMatch(root.GetProperty("objects"), context);
         AssertEntriesMatch(root.GetProperty("entries"), context);
@@ -101,15 +102,15 @@ public sealed class UnityAssetSnapshotContractTests
 
     private static void AssertContainersMatch(JsonElement snapshotContainersNode, BaseAssetsContext context)
     {
-        var hasLzmaWarning = context.Warnings.Any(item => item.Contains("LZMA", StringComparison.OrdinalIgnoreCase));
-
         var snapshotBundleContainers = snapshotContainersNode
             .EnumerateArray()
             .Where(element => string.Equals(element.GetProperty("kind").GetString(), "BundleFile", StringComparison.Ordinal))
             .Select(element => new SnapshotContainer(
+                element.GetProperty("kind").GetString()!,
                 element.GetProperty("entryCount").GetInt32(),
                 element.GetProperty("sourceName").GetString()!
             ))
+            .OrderBy(item => item.Kind, StringComparer.Ordinal)
             .OrderBy(item => item.EntryCount)
             .ThenBy(item => item.SourceName, StringComparer.Ordinal)
             .ToList();
@@ -117,38 +118,47 @@ public sealed class UnityAssetSnapshotContractTests
         var expectedBundleContainers = context.Containers
             .Where(container => container.Kind == ContainerKind.UnityFs)
             .Select(item => new SnapshotContainer(
+                MapContainerKind(item.Kind),
                 item.Entries.Count,
                 item.SourceName
             ))
+            .OrderBy(item => item.Kind, StringComparer.Ordinal)
             .OrderBy(item => item.EntryCount)
             .ThenBy(item => item.SourceName, StringComparer.Ordinal)
             .ToList();
 
         Assert.Equal(snapshotBundleContainers.Count, expectedBundleContainers.Count);
-
-        if (!hasLzmaWarning)
-        {
-            Assert.Equal(snapshotBundleContainers.Select(item => item.EntryCount), expectedBundleContainers.Select(item => item.EntryCount));
-        }
-        else
-        {
-            Assert.All(expectedBundleContainers, container => Assert.True(container.EntryCount >= 0));
-        }
+        Assert.Equal(snapshotBundleContainers.Select(item => item.EntryCount), expectedBundleContainers.Select(item => item.EntryCount));
 
         var expectedSerializedContainerCount = context.Containers.Count(container => container.Kind == ContainerKind.SerializedFile);
         var snapshotSerializedContainerCount = snapshotContainersNode
             .EnumerateArray()
             .Count(element => string.Equals(element.GetProperty("kind").GetString(), "SerializedFile", StringComparison.Ordinal));
 
-        Assert.True(
-            expectedSerializedContainerCount <= snapshotSerializedContainerCount,
-            $"Parser serialized container count ({expectedSerializedContainerCount}) should not exceed snapshot count ({snapshotSerializedContainerCount})."
-        );
+        Assert.Equal(snapshotSerializedContainerCount, expectedSerializedContainerCount);
+    }
+
+    private static void AssertSerializedFilesMatch(JsonElement snapshotSerializedFilesNode, BaseAssetsContext context)
+    {
+        var snapshotSerializedFiles = snapshotSerializedFilesNode
+            .EnumerateArray()
+            .Select(element => new SnapshotSerializedFile(
+                element.GetProperty("sourceName").GetString()!
+            ))
+            .OrderBy(item => item.SourceName, StringComparer.Ordinal)
+            .ToList();
+
+        var expectedSerializedFiles = context.SerializedFiles
+            .Select(item => new SnapshotSerializedFile(item.SourceName))
+            .OrderBy(item => item.SourceName, StringComparer.Ordinal)
+            .ToList();
+
+        Assert.Equal(expectedSerializedFiles.Count, snapshotSerializedFiles.Count);
+        Assert.Equal(expectedSerializedFiles, snapshotSerializedFiles);
     }
 
     private static void AssertSummaryMatches(JsonElement snapshotSummary, BaseAssetsContext context)
     {
-        var hasLzmaWarning = context.Warnings.Any(item => item.Contains("LZMA", StringComparison.OrdinalIgnoreCase));
         var snapshotTop = new SnapshotTopContainer(
             snapshotSummary.GetProperty("topContainer").GetProperty("kind").GetString()!,
             snapshotSummary.GetProperty("topContainer").GetProperty("entryCount").GetInt32()
@@ -160,19 +170,10 @@ public sealed class UnityAssetSnapshotContractTests
             MapContainerKind(parserTopContainer.Kind),
             parserTopContainer.Entries.Count
         );
-        Assert.Equal(expectedTop.Kind, snapshotTop.Kind);
+        Assert.Equal(expectedTop, snapshotTop);
 
-        if (!hasLzmaWarning)
-        {
-            Assert.Equal(expectedTop.EntryCount, snapshotTop.EntryCount);
-        }
-        else
-        {
-            Assert.True(snapshotTop.EntryCount >= expectedTop.EntryCount);
-        }
-
-        Assert.True(snapshotSummary.GetProperty("totalContainerCount").GetInt32() >= context.Containers.Count);
-        Assert.True(snapshotSummary.GetProperty("serializedFileCount").GetInt32() >= context.SerializedFiles.Count);
+        Assert.Equal(context.Containers.Count, snapshotSummary.GetProperty("totalContainerCount").GetInt32());
+        Assert.Equal(context.SerializedFiles.Count, snapshotSummary.GetProperty("serializedFileCount").GetInt32());
 
         var snapshotKindCounts = snapshotSummary.GetProperty("containerKindCounts")
             .EnumerateObject()
@@ -181,8 +182,7 @@ public sealed class UnityAssetSnapshotContractTests
             .GroupBy(container => MapContainerKind(container.Kind), StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
 
-        Assert.True(snapshotKindCounts.TryGetValue("BundleFile", out var bundleCount));
-        Assert.True(bundleCount >= parserKindCounts.GetValueOrDefault("BundleFile", 0));
+        Assert.Equal(parserKindCounts, snapshotKindCounts);
     }
 
     private static void AssertObjectsMatch(JsonElement snapshotObjectsNode, BaseAssetsContext context)
@@ -221,12 +221,6 @@ public sealed class UnityAssetSnapshotContractTests
             .ThenBy(item => item.ClassId)
             .ToList();
 
-        if (expectedObjects.Count == 0)
-        {
-            Assert.NotEmpty(snapshotObjects);
-            return;
-        }
-
         Assert.Equal(expectedObjects.Count, snapshotObjects.Count);
         Assert.Equal(expectedObjects, snapshotObjects);
     }
@@ -257,12 +251,6 @@ public sealed class UnityAssetSnapshotContractTests
             .ThenBy(item => item.Kind)
             .ToList();
 
-        if (expectedEntries.Count == 0)
-        {
-            Assert.NotEmpty(snapshotEntries);
-            return;
-        }
-
         Assert.Equal(expectedEntries.Count, snapshotEntries.Count);
         Assert.Equal(expectedEntries, snapshotEntries);
     }
@@ -281,19 +269,7 @@ public sealed class UnityAssetSnapshotContractTests
 
         Assert.True(snapshotCodes.Count <= snapshotCount || snapshotCount == 0);
 
-        _ = context.Warnings
-            .Select(NormalizeWarningCode)
-            .Distinct(StringComparer.Ordinal)
-            .OrderBy(item => item, StringComparer.Ordinal)
-            .ToList();
-
-        if (context.SerializedFiles.Count == 0)
-        {
-            Assert.Contains(
-                context.Warnings,
-                warning => warning.Contains("LZMA", StringComparison.OrdinalIgnoreCase)
-            );
-        }
+        _ = context.Warnings;
     }
 
     private static void AssertSnapshotInternalConsistency(JsonElement root)
@@ -371,7 +347,8 @@ public sealed class UnityAssetSnapshotContractTests
     }
 
     private sealed record SelectedFixture(string Name, string SnapshotFile, string Sha256);
-    private sealed record SnapshotContainer(int EntryCount, string SourceName);
+    private sealed record SnapshotContainer(string Kind, int EntryCount, string SourceName);
+    private sealed record SnapshotSerializedFile(string SourceName);
     private sealed record SnapshotTopContainer(string Kind, int EntryCount);
     private sealed record SnapshotObject(long PathId, long ByteStart, uint ByteSize, int TypeId, int? ClassId);
     private sealed record SnapshotEntry(int Kind, string Path, uint Size);

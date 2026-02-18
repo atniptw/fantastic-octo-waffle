@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using SevenZip.Compression.LZMA;
 
 namespace UnityAssetParser;
 
@@ -173,72 +175,32 @@ internal static class SkeletonParser
 
     private static bool IsSerializedFile(byte[] data)
     {
-        if (data.Length < 20)
-        {
-            return false;
-        }
-
-        var reader = new EndianBinaryReader(data);
-        var metadataSize = reader.ReadUInt32();
-        var fileSize = (long)reader.ReadUInt32();
-        var version = reader.ReadUInt32();
-        var dataOffset = (long)reader.ReadUInt32();
-        reader.ReadByte();
-        reader.ReadBytes(3);
-
-        if (version >= 22)
-        {
-            if (data.Length < 48)
-            {
-                return false;
-            }
-            metadataSize = reader.ReadUInt32();
-            fileSize = reader.ReadInt64();
-            dataOffset = reader.ReadInt64();
-        }
-
-        if (fileSize <= 0 || fileSize > data.Length)
-        {
-            return false;
-        }
-
-        if (dataOffset > fileSize)
-        {
-            return false;
-        }
-
-        return metadataSize <= fileSize;
+        return TryReadSerializedHeader(data, isBigEndian: false, out _)
+            || TryReadSerializedHeader(data, isBigEndian: true, out _);
     }
 
     private static void ParseSerializedFile(byte[] data, string sourceName, BaseAssetsContext context, string? serializedFileSourceName = null)
     {
-        var reader = new EndianBinaryReader(data);
-        var metadataSize = reader.ReadUInt32();
-        var fileSize = (long)reader.ReadUInt32();
-        var version = reader.ReadUInt32();
-        var dataOffset = (long)reader.ReadUInt32();
-        var endianFlag = (byte)0;
+        var hasLittleHeader = TryReadSerializedHeader(data, isBigEndian: false, out var littleHeader);
+        var hasBigHeader = TryReadSerializedHeader(data, isBigEndian: true, out var bigHeader);
 
-        if (version >= 9)
+        if (!hasLittleHeader && !hasBigHeader)
         {
-            endianFlag = reader.ReadByte();
-            reader.ReadBytes(3);
-        }
-        else
-        {
-            reader.Position = (int)fileSize - (int)metadataSize;
-            endianFlag = reader.ReadByte();
+            throw new InvalidDataException("Invalid serialized file header.");
         }
 
-        if (version >= 22)
-        {
-            metadataSize = reader.ReadUInt32();
-            fileSize = reader.ReadInt64();
-            dataOffset = reader.ReadInt64();
-            reader.ReadInt64();
-        }
+        var header = hasLittleHeader ? littleHeader : bigHeader;
 
-        reader.IsBigEndian = endianFlag != 0;
+        var reader = new EndianBinaryReader(data)
+        {
+            IsBigEndian = header.EndianFlag != 0,
+            Position = header.HeaderSize
+        };
+
+        var metadataSize = header.MetadataSize;
+        var fileSize = header.FileSize;
+        var version = header.Version;
+        var dataOffset = header.DataOffset;
 
         var info = new SerializedFileInfo(serializedFileSourceName ?? sourceName)
         {
@@ -246,7 +208,7 @@ internal static class SkeletonParser
             FileSize = fileSize,
             MetadataSize = metadataSize,
             DataOffset = dataOffset,
-            BigEndian = reader.IsBigEndian
+            BigEndian = header.EndianFlag != 0
         };
 
         if (version >= 7)
@@ -264,9 +226,10 @@ internal static class SkeletonParser
         }
 
         var typeCount = reader.ReadInt32();
+        var typeClassIds = new List<int>(typeCount);
         for (var i = 0; i < typeCount; i++)
         {
-            SkipSerializedType(reader, version, enableTypeTree, isRefType: false);
+            typeClassIds.Add(ReadSerializedTypeClassId(reader, version, enableTypeTree, isRefType: false));
         }
 
         var bigIdEnabled = 0;
@@ -287,6 +250,10 @@ internal static class SkeletonParser
             if (version < 16)
             {
                 classId = reader.ReadUInt16();
+            }
+            else if (typeId >= 0 && typeId < typeClassIds.Count)
+            {
+                classId = typeClassIds[typeId];
             }
             if (version < 11)
             {
@@ -358,6 +325,73 @@ internal static class SkeletonParser
         });
     }
 
+    private static bool TryReadSerializedHeader(byte[] data, bool isBigEndian, out SerializedHeader header)
+    {
+        header = default;
+        if (data.Length < 20)
+        {
+            return false;
+        }
+
+        var reader = new EndianBinaryReader(data)
+        {
+            IsBigEndian = isBigEndian
+        };
+
+        var metadataSize = reader.ReadUInt32();
+        var fileSize = (long)reader.ReadUInt32();
+        var version = reader.ReadUInt32();
+        var dataOffset = (long)reader.ReadUInt32();
+        var endianFlag = (byte)0;
+
+        if (version >= 9)
+        {
+            if (reader.Position + 4 > data.Length)
+            {
+                return false;
+            }
+
+            endianFlag = reader.ReadByte();
+            reader.ReadBytes(3);
+        }
+
+        if (version >= 22)
+        {
+            if (reader.Position + 24 > data.Length)
+            {
+                return false;
+            }
+
+            metadataSize = reader.ReadUInt32();
+            fileSize = reader.ReadInt64();
+            dataOffset = reader.ReadInt64();
+            reader.ReadInt64();
+        }
+
+        if (version == 0 || version > 1000)
+        {
+            return false;
+        }
+
+        if (fileSize <= 0 || fileSize > data.Length)
+        {
+            return false;
+        }
+
+        if (dataOffset < 0 || dataOffset > fileSize)
+        {
+            return false;
+        }
+
+        if (metadataSize > fileSize)
+        {
+            return false;
+        }
+
+        header = new SerializedHeader(metadataSize, fileSize, version, dataOffset, isBigEndian, endianFlag, reader.Position);
+        return true;
+    }
+
     private static long ReadPathId(EndianBinaryReader reader, uint version, int bigIdEnabled)
     {
         if (bigIdEnabled != 0)
@@ -373,6 +407,11 @@ internal static class SkeletonParser
     }
 
     private static void SkipSerializedType(EndianBinaryReader reader, uint version, bool enableTypeTree, bool isRefType)
+    {
+        _ = ReadSerializedTypeClassId(reader, version, enableTypeTree, isRefType);
+    }
+
+    private static int ReadSerializedTypeClassId(EndianBinaryReader reader, uint version, bool enableTypeTree, bool isRefType)
     {
         var classId = reader.ReadInt32();
 
@@ -422,6 +461,8 @@ internal static class SkeletonParser
             reader.ReadStringToNull();
             reader.ReadStringToNull();
         }
+
+        return classId;
     }
 
     private static void SkipTypeTreeBlob(EndianBinaryReader reader, uint version)
@@ -494,8 +535,48 @@ internal static class SkeletonParser
 
     private static byte[]? TryDecompressLzma(ReadOnlySpan<byte> compressed, int uncompressedSize, BaseAssetsContext context)
     {
-        context.Warnings.Add("UnityFS LZMA decompression is not implemented.");
-        return null;
+        if (uncompressedSize < 0)
+        {
+            context.Warnings.Add("UnityFS LZMA uncompressed size is invalid.");
+            return null;
+        }
+
+        if (compressed.Length < 5)
+        {
+            context.Warnings.Add("UnityFS LZMA payload is too short.");
+            return null;
+        }
+
+        try
+        {
+            using var input = new MemoryStream(compressed.ToArray(), writable: false);
+            using var output = new MemoryStream(uncompressedSize);
+
+            var properties = new byte[5];
+            if (input.Read(properties, 0, properties.Length) != properties.Length)
+            {
+                context.Warnings.Add("UnityFS LZMA properties are invalid.");
+                return null;
+            }
+
+            var decoder = new Decoder();
+            decoder.SetDecoderProperties(properties);
+            decoder.Code(input, output, input.Length - input.Position, uncompressedSize, null);
+
+            var decoded = output.ToArray();
+            if (decoded.Length != uncompressedSize)
+            {
+                context.Warnings.Add("UnityFS LZMA decompressed size mismatch.");
+                return null;
+            }
+
+            return decoded;
+        }
+        catch (Exception)
+        {
+            context.Warnings.Add("UnityFS LZMA decompression failed.");
+            return null;
+        }
     }
 
     private static (List<BlockInfo> Blocks, List<NodeInfo> Nodes) ParseBlockInfo(byte[] blockInfoBytes)
@@ -568,7 +649,7 @@ internal static class SkeletonParser
 
             var compressedSpan = data.AsSpan(inputIndex, (int)block.CompressedSize);
             var compression = block.Flags & 0x3F;
-            byte[] decompressed;
+            byte[]? decompressed;
 
             switch (compression)
             {
@@ -580,8 +661,12 @@ internal static class SkeletonParser
                     decompressed = Lz4Decoder.DecodeBlock(compressedSpan, (int)block.UncompressedSize);
                     break;
                 case 1:
-                    context.Warnings.Add("UnityFS LZMA block compression is not implemented.");
-                    return null;
+                    decompressed = TryDecompressLzma(compressedSpan, (int)block.UncompressedSize, context);
+                    if (decompressed is null)
+                    {
+                        return null;
+                    }
+                    break;
                 default:
                     context.Warnings.Add($"UnityFS block compression {compression} is unsupported.");
                     return null;
@@ -668,4 +753,13 @@ internal static class SkeletonParser
 
     private sealed record BlockInfo(uint UncompressedSize, uint CompressedSize, ushort Flags);
     private sealed record NodeInfo(string Path, long Offset, long Size, uint Flags);
+    private readonly record struct SerializedHeader(
+        uint MetadataSize,
+        long FileSize,
+        uint Version,
+        long DataOffset,
+        bool BigEndian,
+        byte EndianFlag,
+        int HeaderSize
+    );
 }
