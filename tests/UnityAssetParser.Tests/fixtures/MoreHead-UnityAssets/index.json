@@ -4,37 +4,37 @@
     "passed": true
   },
   "generatedAt": "2026-02-17T00:00:00Z",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "selectedFixtures": [
     {
       "hasSpace": false,
       "name": "BambooCopter_head.hhh",
       "sha256": "7bc2347ff8cc285ffe406faf8ac8913c8a3f97f8779f06a17051c38a7c9debe2",
-      "snapshotFile": "BambooCopter_head-unityasset-v1.json"
+      "snapshotFile": "BambooCopter_head-unityasset-v2.json"
     },
     {
       "hasSpace": false,
       "name": "BlindEye_body.hhh",
       "sha256": "9116a445d85b48bf25d9a1553515b7ad301fb34d8d4b6d4a695fb2e771054459",
-      "snapshotFile": "BlindEye_body-unityasset-v1.json"
+      "snapshotFile": "BlindEye_body-unityasset-v2.json"
     },
     {
       "hasSpace": false,
       "name": "BrowSad_head.hhh",
       "sha256": "76baa14914a70e91984bed5a1a9a3e51c67fc588e731c9745832ed1125e8e0fd",
-      "snapshotFile": "BrowSad_head-unityasset-v1.json"
+      "snapshotFile": "BrowSad_head-unityasset-v2.json"
     },
     {
       "hasSpace": false,
       "name": "Cigar_neck.hhh",
       "sha256": "0bc0e71dc78f19028f9b261f469f159926ce5a5cc8f72367813b2610967fc55c",
-      "snapshotFile": "Cigar_neck-unityasset-v1.json"
+      "snapshotFile": "Cigar_neck-unityasset-v2.json"
     },
     {
       "hasSpace": true,
       "name": "Sakuyas hairdo_head.hhh",
       "sha256": "fb536cd21b0a0e82e5dc97fddc7db15e21d1ae4caa52a8a7eb7516189d538a1c",
-      "snapshotFile": "Sakuyas hairdo_head-unityasset-v1.json"
+      "snapshotFile": "Sakuyas hairdo_head-unityasset-v2.json"
     }
   ]
 }

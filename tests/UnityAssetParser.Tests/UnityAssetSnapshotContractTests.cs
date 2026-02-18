@@ -41,7 +41,8 @@ public sealed class UnityAssetSnapshotContractTests
         using var document = JsonDocument.Parse(File.ReadAllText(IndexPath));
         var root = document.RootElement;
 
-        Assert.Equal(1, root.GetProperty("schemaVersion").GetInt32());
+        var schemaVersion = root.GetProperty("schemaVersion").GetInt32();
+        Assert.True(schemaVersion is 1 or 2, $"Unsupported index schemaVersion: {schemaVersion}");
 
         var determinismNode = root.GetProperty("determinismCheck");
         Assert.True(determinismNode.GetProperty("passed").GetBoolean());
@@ -77,9 +78,10 @@ public sealed class UnityAssetSnapshotContractTests
 
         using var snapshotDocument = JsonDocument.Parse(File.ReadAllText(snapshotPath));
         var root = snapshotDocument.RootElement;
+        var schemaVersion = root.GetProperty("schemaVersion").GetInt32();
 
-        Assert.Equal(1, root.GetProperty("schemaVersion").GetInt32());
-        AssertSnapshotInternalConsistency(root);
+        Assert.True(schemaVersion is 1 or 2, $"Unsupported snapshot schemaVersion: {schemaVersion}");
+        AssertSnapshotInternalConsistency(root, schemaVersion);
 
         var fixtureNode = root.GetProperty("fixture");
         Assert.Equal(actualFixtureSha256, fixtureNode.GetProperty("sha256").GetString());
@@ -92,12 +94,197 @@ public sealed class UnityAssetSnapshotContractTests
         var context = new BaseAssetsContext();
         _ = parser.ConvertToGlb(fixtureBytes, context);
 
-        AssertContainersMatch(root.GetProperty("containers"), context);
-        AssertSerializedFilesMatch(root.GetProperty("serializedFiles"), context);
-        AssertSummaryMatches(root.GetProperty("summary"), context);
-        AssertObjectsMatch(root.GetProperty("objects"), context);
-        AssertEntriesMatch(root.GetProperty("entries"), context);
-        AssertWarningsMatch(root.GetProperty("warnings"), context);
+        if (schemaVersion == 1)
+        {
+            AssertContainersMatch(root.GetProperty("containers"), context);
+            AssertSerializedFilesMatch(root.GetProperty("serializedFiles"), context);
+            AssertSummaryMatches(root.GetProperty("summary"), context);
+            AssertObjectsMatch(root.GetProperty("objects"), context);
+            AssertEntriesMatch(root.GetProperty("entries"), context);
+            AssertWarningsMatch(root.GetProperty("warnings"), context);
+            return;
+        }
+
+        AssertObjectsByPathIdClassIdMatch(root.GetProperty("objects"), context);
+        AssertV2HierarchyConsistency(root.GetProperty("hierarchy"), root.GetProperty("objects"));
+        AssertV2MaterialConsistency(root.GetProperty("materials"), root.GetProperty("objects"));
+        AssertV2MeshConsistency(root.GetProperty("meshes"), root.GetProperty("objects"));
+        AssertV2TextureConsistency(root.GetProperty("textures"), root.GetProperty("objects"));
+        AssertV2WarningsConsistency(root.GetProperty("warnings"));
+    }
+
+    private static void AssertObjectsByPathIdClassIdMatch(JsonElement snapshotObjectsNode, BaseAssetsContext context)
+    {
+        var snapshotObjects = snapshotObjectsNode
+            .EnumerateArray()
+            .Select(element => (PathId: element.GetProperty("pathId").GetInt64(), ClassId: (int?)element.GetProperty("classId").GetInt32()))
+            .OrderBy(item => item.PathId)
+            .ThenBy(item => item.ClassId)
+            .ToList();
+
+        var parserObjects = context.SerializedFiles
+            .SelectMany(file => file.Objects)
+            .Select(item => (item.PathId, item.ClassId))
+            .OrderBy(item => item.PathId)
+            .ThenBy(item => item.ClassId)
+            .ToList();
+
+        Assert.Equal(snapshotObjects.Count, parserObjects.Count);
+        Assert.Equal(snapshotObjects, parserObjects);
+    }
+
+    private static void AssertV2HierarchyConsistency(JsonElement hierarchyNode, JsonElement snapshotObjectsNode)
+    {
+        var objectMap = snapshotObjectsNode
+            .EnumerateArray()
+            .ToDictionary(
+                element => element.GetProperty("pathId").GetInt64(),
+                element => element.GetProperty("classId").GetInt32());
+
+        var gameObjects = hierarchyNode.GetProperty("gameObjects").EnumerateArray().ToList();
+        var transforms = hierarchyNode.GetProperty("transforms").EnumerateArray().ToList();
+
+        var gameObjectIds = gameObjects.Select(item => item.GetProperty("pathId").GetInt64()).ToHashSet();
+        var transformIds = transforms.Select(item => item.GetProperty("pathId").GetInt64()).ToHashSet();
+
+        Assert.Equal(gameObjectIds.Count, gameObjects.Count);
+        Assert.Equal(transformIds.Count, transforms.Count);
+
+        foreach (var gameObject in gameObjects)
+        {
+            var pathId = gameObject.GetProperty("pathId").GetInt64();
+            Assert.True(objectMap.TryGetValue(pathId, out var classId));
+            Assert.Equal(1, classId);
+            Assert.Equal(JsonValueKind.Array, gameObject.GetProperty("components").ValueKind);
+            _ = gameObject.GetProperty("isActive").GetBoolean();
+            _ = gameObject.GetProperty("layer").GetInt32();
+            Assert.False(string.IsNullOrWhiteSpace(gameObject.GetProperty("name").GetString()));
+        }
+
+        foreach (var transform in transforms)
+        {
+            var pathId = transform.GetProperty("pathId").GetInt64();
+            Assert.True(objectMap.TryGetValue(pathId, out var classId));
+            Assert.Equal(4, classId);
+
+            var gameObjectPathId = transform.GetProperty("gameObjectPathId").GetInt64();
+            Assert.Contains(gameObjectPathId, gameObjectIds);
+
+            var parentNode = transform.GetProperty("parentPathId");
+            if (parentNode.ValueKind != JsonValueKind.Null)
+            {
+                Assert.Contains(parentNode.GetInt64(), transformIds);
+            }
+
+            foreach (var childNode in transform.GetProperty("childrenPathIds").EnumerateArray())
+            {
+                Assert.Contains(childNode.GetInt64(), transformIds);
+            }
+
+            AssertVector3Node(transform.GetProperty("localPosition"));
+            AssertQuaternionNode(transform.GetProperty("localRotation"));
+            AssertVector3Node(transform.GetProperty("localScale"));
+        }
+    }
+
+    private static void AssertV2MaterialConsistency(JsonElement materialsNode, JsonElement snapshotObjectsNode)
+    {
+        var objectMap = snapshotObjectsNode
+            .EnumerateArray()
+            .ToDictionary(
+                element => element.GetProperty("pathId").GetInt64(),
+                element => element.GetProperty("classId").GetInt32());
+
+        foreach (var material in materialsNode.EnumerateArray())
+        {
+            var pathId = material.GetProperty("pathId").GetInt64();
+            Assert.True(objectMap.TryGetValue(pathId, out var classId));
+            Assert.Equal(21, classId);
+
+            var shaderPathIdNode = material.GetProperty("shaderPathId");
+            if (shaderPathIdNode.ValueKind != JsonValueKind.Null)
+            {
+                var shaderPathId = shaderPathIdNode.GetInt64();
+                Assert.True(objectMap.TryGetValue(shaderPathId, out var shaderClassId));
+                Assert.Equal(48, shaderClassId);
+            }
+
+            _ = material.GetProperty("name").GetString();
+            var properties = material.GetProperty("properties");
+            _ = properties.GetProperty("scalars").EnumerateObject().Count();
+            _ = properties.GetProperty("vectors").EnumerateObject().Count();
+
+            foreach (var textureProperty in properties.GetProperty("textures").EnumerateObject())
+            {
+                var textureNode = textureProperty.Value;
+                AssertVector2Node(textureNode.GetProperty("offset"));
+                AssertVector2Node(textureNode.GetProperty("scale"));
+
+                var texturePathIdNode = textureNode.GetProperty("texturePathId");
+                if (texturePathIdNode.ValueKind != JsonValueKind.Null)
+                {
+                    Assert.True(objectMap.TryGetValue(texturePathIdNode.GetInt64(), out _));
+                }
+            }
+        }
+    }
+
+    private static void AssertV2MeshConsistency(JsonElement meshesNode, JsonElement snapshotObjectsNode)
+    {
+        var objectMap = snapshotObjectsNode
+            .EnumerateArray()
+            .ToDictionary(
+                element => element.GetProperty("pathId").GetInt64(),
+                element => element.GetProperty("classId").GetInt32());
+
+        foreach (var mesh in meshesNode.EnumerateArray())
+        {
+            var pathId = mesh.GetProperty("pathId").GetInt64();
+            Assert.True(objectMap.TryGetValue(pathId, out var classId));
+            Assert.Equal(43, classId);
+
+            var subMeshCount = mesh.GetProperty("subMeshCount").GetInt32();
+            Assert.True(subMeshCount >= 0);
+            Assert.Equal(subMeshCount, mesh.GetProperty("topology").GetArrayLength());
+
+            Assert.True(mesh.GetProperty("vertexCount").GetInt32() >= 0);
+            Assert.True(mesh.GetProperty("indexCount").GetInt32() >= 0);
+
+            AssertVector3Node(mesh.GetProperty("bounds").GetProperty("center"));
+            AssertVector3Node(mesh.GetProperty("bounds").GetProperty("extent"));
+        }
+    }
+
+    private static void AssertV2TextureConsistency(JsonElement texturesNode, JsonElement snapshotObjectsNode)
+    {
+        var objectMap = snapshotObjectsNode
+            .EnumerateArray()
+            .ToDictionary(
+                element => element.GetProperty("pathId").GetInt64(),
+                element => element.GetProperty("classId").GetInt32());
+
+        foreach (var texture in texturesNode.EnumerateArray())
+        {
+            var pathId = texture.GetProperty("pathId").GetInt64();
+            Assert.True(objectMap.TryGetValue(pathId, out var classId));
+            Assert.Equal(28, classId);
+
+            Assert.True(texture.GetProperty("width").GetInt32() >= 0);
+            Assert.True(texture.GetProperty("height").GetInt32() >= 0);
+            Assert.True(texture.GetProperty("mipCount").GetInt32() >= 0);
+            Assert.False(string.IsNullOrWhiteSpace(texture.GetProperty("name").GetString()));
+            _ = texture.GetProperty("format").GetInt32();
+        }
+    }
+
+    private static void AssertV2WarningsConsistency(JsonElement warningsNode)
+    {
+        Assert.Equal(JsonValueKind.Array, warningsNode.ValueKind);
+        foreach (var warning in warningsNode.EnumerateArray())
+        {
+            Assert.Equal(JsonValueKind.String, warning.ValueKind);
+            Assert.False(string.IsNullOrWhiteSpace(warning.GetString()));
+        }
     }
 
     private static void AssertContainersMatch(JsonElement snapshotContainersNode, BaseAssetsContext context)
@@ -272,7 +459,18 @@ public sealed class UnityAssetSnapshotContractTests
         _ = context.Warnings;
     }
 
-    private static void AssertSnapshotInternalConsistency(JsonElement root)
+    private static void AssertSnapshotInternalConsistency(JsonElement root, int schemaVersion)
+    {
+        if (schemaVersion == 1)
+        {
+            AssertSnapshotInternalConsistencyV1(root);
+            return;
+        }
+
+        AssertSnapshotInternalConsistencyV2(root);
+    }
+
+    private static void AssertSnapshotInternalConsistencyV1(JsonElement root)
     {
         var summary = root.GetProperty("summary");
         var serializedFiles = root.GetProperty("serializedFiles").EnumerateArray().ToList();
@@ -292,6 +490,54 @@ public sealed class UnityAssetSnapshotContractTests
             .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
 
         Assert.Equal(containerKindCounts, snapshotContainers);
+    }
+
+    private static void AssertSnapshotInternalConsistencyV2(JsonElement root)
+    {
+        Assert.Equal(JsonValueKind.Array, root.GetProperty("warnings").ValueKind);
+        Assert.Equal(JsonValueKind.Array, root.GetProperty("skinning").ValueKind);
+        Assert.Equal(JsonValueKind.Array, root.GetProperty("serializedFiles").ValueKind);
+        Assert.Equal(JsonValueKind.Array, root.GetProperty("containers").ValueKind);
+
+        var summary = root.GetProperty("summary");
+        var objects = root.GetProperty("objects").EnumerateArray().ToList();
+
+        Assert.Equal(objects.Count, summary.GetProperty("objectCount").GetInt32());
+
+        var snapshotTypeCounts = objects
+            .GroupBy(item => item.GetProperty("type").GetString() ?? string.Empty)
+            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
+
+        var summaryTypeCounts = summary.GetProperty("objectTypeCount")
+            .EnumerateObject()
+            .ToDictionary(property => property.Name, property => property.Value.GetInt32(), StringComparer.Ordinal);
+
+        Assert.Equal(summaryTypeCounts, snapshotTypeCounts);
+
+        var determinismCheckNode = root.GetProperty("determinismCheck");
+        Assert.Equal(JsonValueKind.String, determinismCheckNode.ValueKind);
+        Assert.False(string.IsNullOrWhiteSpace(determinismCheckNode.GetString()));
+    }
+
+    private static void AssertVector3Node(JsonElement node)
+    {
+        _ = node.GetProperty("x").GetDouble();
+        _ = node.GetProperty("y").GetDouble();
+        _ = node.GetProperty("z").GetDouble();
+    }
+
+    private static void AssertQuaternionNode(JsonElement node)
+    {
+        _ = node.GetProperty("w").GetDouble();
+        _ = node.GetProperty("x").GetDouble();
+        _ = node.GetProperty("y").GetDouble();
+        _ = node.GetProperty("z").GetDouble();
+    }
+
+    private static void AssertVector2Node(JsonElement node)
+    {
+        _ = node.GetProperty("x").GetDouble();
+        _ = node.GetProperty("y").GetDouble();
     }
 
     private static string MapContainerKind(ContainerKind kind)
