@@ -10,7 +10,8 @@
         "ms-dotnettools.vscode-razor",
         "ms-playwright.playwright",
         "dbaeumer.vscode-eslint",
-        "github.vscode-github-actions"
+        "github.vscode-github-actions",
+        "ms-dotnettools.csdevkit"
       ]
     }
   },
