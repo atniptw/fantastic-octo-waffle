@@ -1,0 +1,206 @@
+{
+  "containers": [
+    {
+      "entryCount": 2,
+      "kind": "BundleFile",
+      "size": 0,
+      "sourceName": "17437914199422039"
+    },
+    {
+      "entryCount": 12,
+      "kind": "SerializedFile",
+      "sourceName": "serialized_asset_0",
+      "unityVersion": "2022.3.21f1",
+      "version": "UnityVersion 2022.3f1"
+    }
+  ],
+  "entries": [
+    {
+      "kind": 5,
+      "offset": null,
+      "path": "-2144871566240954979",
+      "size": 39
+    },
+    {
+      "kind": 4,
+      "offset": null,
+      "path": "-4403336042406081332",
+      "size": 156
+    },
+    {
+      "kind": 3,
+      "offset": null,
+      "path": "-4850512016903265157",
+      "size": 49372
+    },
+    {
+      "kind": 2,
+      "offset": null,
+      "path": "-5993842382815103843",
+      "size": 1796
+    },
+    {
+      "kind": 1,
+      "offset": null,
+      "path": "-6221287752729522348",
+      "size": 24
+    },
+    {
+      "kind": 0,
+      "offset": null,
+      "path": "-9124120592443794959",
+      "size": 68
+    },
+    {
+      "kind": 6,
+      "offset": null,
+      "path": "1",
+      "size": 280
+    },
+    {
+      "kind": 7,
+      "offset": null,
+      "path": "266610216543733026",
+      "size": 900
+    },
+    {
+      "kind": 5,
+      "offset": null,
+      "path": "4218713472869369053",
+      "size": 63
+    },
+    {
+      "kind": 5,
+      "offset": null,
+      "path": "4356191117846539824",
+      "size": 35
+    },
+    {
+      "kind": 0,
+      "offset": null,
+      "path": "5539321300952030076",
+      "size": 80
+    },
+    {
+      "kind": 0,
+      "offset": null,
+      "path": "9177534806433023563",
+      "size": 80
+    }
+  ],
+  "fixture": {
+    "relativePath": "tests/UnityAssetParser.Tests/fixtures/MoreHead-UnityAssets/BrowSad_head.hhh",
+    "sha256": "76baa14914a70e91984bed5a1a9a3e51c67fc588e731c9745832ed1125e8e0fd"
+  },
+  "objects": [
+    {
+      "byteSize": 68,
+      "byteStart": 96304,
+      "classId": 4,
+      "pathId": -9124120592443794959,
+      "typeId": 0
+    },
+    {
+      "byteSize": 24,
+      "byteStart": 96376,
+      "classId": 33,
+      "pathId": -6221287752729522348,
+      "typeId": 1
+    },
+    {
+      "byteSize": 1796,
+      "byteStart": 96400,
+      "classId": 43,
+      "pathId": -5993842382815103843,
+      "typeId": 2
+    },
+    {
+      "byteSize": 49372,
+      "byteStart": 98200,
+      "classId": 48,
+      "pathId": -4850512016903265157,
+      "typeId": 3
+    },
+    {
+      "byteSize": 156,
+      "byteStart": 147576,
+      "classId": 23,
+      "pathId": -4403336042406081332,
+      "typeId": 4
+    },
+    {
+      "byteSize": 39,
+      "byteStart": 147736,
+      "classId": 1,
+      "pathId": -2144871566240954979,
+      "typeId": 5
+    },
+    {
+      "byteSize": 280,
+      "byteStart": 147776,
+      "classId": 142,
+      "pathId": 1,
+      "typeId": 6
+    },
+    {
+      "byteSize": 900,
+      "byteStart": 148056,
+      "classId": 21,
+      "pathId": 266610216543733026,
+      "typeId": 7
+    },
+    {
+      "byteSize": 63,
+      "byteStart": 148960,
+      "classId": 1,
+      "pathId": 4218713472869369053,
+      "typeId": 5
+    },
+    {
+      "byteSize": 35,
+      "byteStart": 149024,
+      "classId": 1,
+      "pathId": 4356191117846539824,
+      "typeId": 5
+    },
+    {
+      "byteSize": 80,
+      "byteStart": 149064,
+      "classId": 4,
+      "pathId": 5539321300952030076,
+      "typeId": 0
+    },
+    {
+      "byteSize": 80,
+      "byteStart": 149144,
+      "classId": 4,
+      "pathId": 9177534806433023563,
+      "typeId": 0
+    }
+  ],
+  "schemaVersion": 1,
+  "serializedFiles": [
+    {
+      "sourceName": "asset_0",
+      "unityVersion": "2022.3.21f1",
+      "version": "UnityVersion 2022.3f1"
+    }
+  ],
+  "summary": {
+    "containerKindCounts": {
+      "BundleFile": 1,
+      "SerializedFile": 1
+    },
+    "serializedFileCount": 1,
+    "topContainer": {
+      "entryCount": 2,
+      "kind": "BundleFile"
+    },
+    "totalContainerCount": 2,
+    "warningCount": 0
+  },
+  "warnings": {
+    "codes": [],
+    "count": 0
+  }
+}

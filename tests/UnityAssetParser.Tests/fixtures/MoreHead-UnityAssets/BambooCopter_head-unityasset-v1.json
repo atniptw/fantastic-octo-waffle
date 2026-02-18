@@ -1,0 +1,219 @@
+{
+  "containers": [
+    {
+      "entryCount": 2,
+      "kind": "BundleFile",
+      "size": 0,
+      "sourceName": "878540127322392686"
+    },
+    {
+      "entryCount": 13,
+      "kind": "SerializedFile",
+      "sourceName": "serialized_asset_0",
+      "unityVersion": "2020.3.3f1c1",
+      "version": "UnityVersion 2020.3f1c1"
+    }
+  ],
+  "entries": [
+    {
+      "kind": 5,
+      "offset": null,
+      "path": "-2634883155746090489",
+      "size": 440
+    },
+    {
+      "kind": 4,
+      "offset": null,
+      "path": "-3164586831722678914",
+      "size": 2452
+    },
+    {
+      "kind": 3,
+      "offset": null,
+      "path": "-4850512016903265157",
+      "size": 47864
+    },
+    {
+      "kind": 2,
+      "offset": null,
+      "path": "-7175832566522114417",
+      "size": 87
+    },
+    {
+      "kind": 6,
+      "offset": null,
+      "path": "-797510951273198726",
+      "size": 156
+    },
+    {
+      "kind": 1,
+      "offset": null,
+      "path": "-8194234979324779347",
+      "size": 56
+    },
+    {
+      "kind": 0,
+      "offset": null,
+      "path": "-8403107082501273168",
+      "size": 24
+    },
+    {
+      "kind": 7,
+      "offset": null,
+      "path": "1",
+      "size": 336
+    },
+    {
+      "kind": 9,
+      "offset": null,
+      "path": "2959835936093411156",
+      "size": 68
+    },
+    {
+      "kind": 10,
+      "offset": null,
+      "path": "3036998545299196508",
+      "size": 2508
+    },
+    {
+      "kind": 8,
+      "offset": null,
+      "path": "547260694816892257",
+      "size": 908
+    },
+    {
+      "kind": 9,
+      "offset": null,
+      "path": "7061383004192045992",
+      "size": 80
+    },
+    {
+      "kind": 2,
+      "offset": null,
+      "path": "7648173231481533602",
+      "size": 39
+    }
+  ],
+  "fixture": {
+    "relativePath": "tests/UnityAssetParser.Tests/fixtures/MoreHead-UnityAssets/BambooCopter_head.hhh",
+    "sha256": "7bc2347ff8cc285ffe406faf8ac8913c8a3f97f8779f06a17051c38a7c9debe2"
+  },
+  "objects": [
+    {
+      "byteSize": 24,
+      "byteStart": 121376,
+      "classId": 33,
+      "pathId": -8403107082501273168,
+      "typeId": 0
+    },
+    {
+      "byteSize": 56,
+      "byteStart": 121400,
+      "classId": 95,
+      "pathId": -8194234979324779347,
+      "typeId": 1
+    },
+    {
+      "byteSize": 87,
+      "byteStart": 121456,
+      "classId": 1,
+      "pathId": -7175832566522114417,
+      "typeId": 2
+    },
+    {
+      "byteSize": 47864,
+      "byteStart": 121544,
+      "classId": 48,
+      "pathId": -4850512016903265157,
+      "typeId": 3
+    },
+    {
+      "byteSize": 2452,
+      "byteStart": 169408,
+      "classId": 43,
+      "pathId": -3164586831722678914,
+      "typeId": 4
+    },
+    {
+      "byteSize": 440,
+      "byteStart": 171864,
+      "classId": 91,
+      "pathId": -2634883155746090489,
+      "typeId": 5
+    },
+    {
+      "byteSize": 156,
+      "byteStart": 172304,
+      "classId": 23,
+      "pathId": -797510951273198726,
+      "typeId": 6
+    },
+    {
+      "byteSize": 336,
+      "byteStart": 172464,
+      "classId": 142,
+      "pathId": 1,
+      "typeId": 7
+    },
+    {
+      "byteSize": 908,
+      "byteStart": 172800,
+      "classId": 21,
+      "pathId": 547260694816892257,
+      "typeId": 8
+    },
+    {
+      "byteSize": 68,
+      "byteStart": 173712,
+      "classId": 4,
+      "pathId": 2959835936093411156,
+      "typeId": 9
+    },
+    {
+      "byteSize": 2508,
+      "byteStart": 173784,
+      "classId": 74,
+      "pathId": 3036998545299196508,
+      "typeId": 10
+    },
+    {
+      "byteSize": 80,
+      "byteStart": 176296,
+      "classId": 4,
+      "pathId": 7061383004192045992,
+      "typeId": 9
+    },
+    {
+      "byteSize": 39,
+      "byteStart": 176376,
+      "classId": 1,
+      "pathId": 7648173231481533602,
+      "typeId": 2
+    }
+  ],
+  "schemaVersion": 1,
+  "serializedFiles": [
+    {
+      "sourceName": "asset_0",
+      "unityVersion": "2020.3.3f1c1",
+      "version": "UnityVersion 2020.3f1c1"
+    }
+  ],
+  "summary": {
+    "containerKindCounts": {
+      "BundleFile": 1,
+      "SerializedFile": 1
+    },
+    "serializedFileCount": 1,
+    "topContainer": {
+      "entryCount": 2,
+      "kind": "BundleFile"
+    },
+    "totalContainerCount": 2,
+    "warningCount": 0
+  },
+  "warnings": {
+    "codes": [],
+    "count": 0
+  }
+}

@@ -1,0 +1,271 @@
+{
+  "containers": [
+    {
+      "entryCount": 2,
+      "kind": "BundleFile",
+      "size": 0,
+      "sourceName": "4899035707931689272"
+    },
+    {
+      "entryCount": 17,
+      "kind": "SerializedFile",
+      "sourceName": "serialized_asset_0",
+      "unityVersion": "2022.3.40f1c1",
+      "version": "UnityVersion 2022.3f1c1"
+    }
+  ],
+  "entries": [
+    {
+      "kind": 3,
+      "offset": null,
+      "path": "-3876313651872223835",
+      "size": 1528
+    },
+    {
+      "kind": 2,
+      "offset": null,
+      "path": "-4850512016903265157",
+      "size": 57648
+    },
+    {
+      "kind": 1,
+      "offset": null,
+      "path": "-485849750995343602",
+      "size": 916
+    },
+    {
+      "kind": 1,
+      "offset": null,
+      "path": "-5058973919022195266",
+      "size": 908
+    },
+    {
+      "kind": 0,
+      "offset": null,
+      "path": "-5336330473934095272",
+      "size": 59
+    },
+    {
+      "kind": 4,
+      "offset": null,
+      "path": "1",
+      "size": 340
+    },
+    {
+      "kind": 0,
+      "offset": null,
+      "path": "2030470580032934200",
+      "size": 35
+    },
+    {
+      "kind": 5,
+      "offset": null,
+      "path": "2208493091909205671",
+      "size": 80
+    },
+    {
+      "kind": 5,
+      "offset": null,
+      "path": "3472461429971101586",
+      "size": 68
+    },
+    {
+      "kind": 1,
+      "offset": null,
+      "path": "3809002687882517104",
+      "size": 980
+    },
+    {
+      "kind": 6,
+      "offset": null,
+      "path": "4326092090928775552",
+      "size": 308
+    },
+    {
+      "kind": 7,
+      "offset": null,
+      "path": "4602561411803575503",
+      "size": 7300
+    },
+    {
+      "kind": 1,
+      "offset": null,
+      "path": "5826309719414673988",
+      "size": 908
+    },
+    {
+      "kind": 8,
+      "offset": null,
+      "path": "6646797874605830890",
+      "size": 24
+    },
+    {
+      "kind": 0,
+      "offset": null,
+      "path": "673506148854230287",
+      "size": 59
+    },
+    {
+      "kind": 9,
+      "offset": null,
+      "path": "6899310923290839771",
+      "size": 180
+    },
+    {
+      "kind": 5,
+      "offset": null,
+      "path": "8013472977279897671",
+      "size": 80
+    }
+  ],
+  "fixture": {
+    "relativePath": "tests/UnityAssetParser.Tests/fixtures/MoreHead-UnityAssets/Cigar_neck.hhh",
+    "sha256": "0bc0e71dc78f19028f9b261f469f159926ce5a5cc8f72367813b2610967fc55c"
+  },
+  "objects": [
+    {
+      "byteSize": 59,
+      "byteStart": 227680,
+      "classId": 1,
+      "pathId": -5336330473934095272,
+      "typeId": 0
+    },
+    {
+      "byteSize": 908,
+      "byteStart": 227744,
+      "classId": 21,
+      "pathId": -5058973919022195266,
+      "typeId": 1
+    },
+    {
+      "byteSize": 57648,
+      "byteStart": 228656,
+      "classId": 48,
+      "pathId": -4850512016903265157,
+      "typeId": 2
+    },
+    {
+      "byteSize": 1528,
+      "byteStart": 286304,
+      "classId": 43,
+      "pathId": -3876313651872223835,
+      "typeId": 3
+    },
+    {
+      "byteSize": 916,
+      "byteStart": 287832,
+      "classId": 21,
+      "pathId": -485849750995343602,
+      "typeId": 1
+    },
+    {
+      "byteSize": 340,
+      "byteStart": 288752,
+      "classId": 142,
+      "pathId": 1,
+      "typeId": 4
+    },
+    {
+      "byteSize": 59,
+      "byteStart": 289096,
+      "classId": 1,
+      "pathId": 673506148854230287,
+      "typeId": 0
+    },
+    {
+      "byteSize": 35,
+      "byteStart": 289160,
+      "classId": 1,
+      "pathId": 2030470580032934200,
+      "typeId": 0
+    },
+    {
+      "byteSize": 80,
+      "byteStart": 289200,
+      "classId": 4,
+      "pathId": 2208493091909205671,
+      "typeId": 5
+    },
+    {
+      "byteSize": 68,
+      "byteStart": 289280,
+      "classId": 4,
+      "pathId": 3472461429971101586,
+      "typeId": 5
+    },
+    {
+      "byteSize": 980,
+      "byteStart": 289352,
+      "classId": 21,
+      "pathId": 3809002687882517104,
+      "typeId": 1
+    },
+    {
+      "byteSize": 308,
+      "byteStart": 290336,
+      "classId": 199,
+      "pathId": 4326092090928775552,
+      "typeId": 6
+    },
+    {
+      "byteSize": 7300,
+      "byteStart": 290648,
+      "classId": 198,
+      "pathId": 4602561411803575503,
+      "typeId": 7
+    },
+    {
+      "byteSize": 908,
+      "byteStart": 297952,
+      "classId": 21,
+      "pathId": 5826309719414673988,
+      "typeId": 1
+    },
+    {
+      "byteSize": 24,
+      "byteStart": 298864,
+      "classId": 33,
+      "pathId": 6646797874605830890,
+      "typeId": 8
+    },
+    {
+      "byteSize": 180,
+      "byteStart": 298888,
+      "classId": 23,
+      "pathId": 6899310923290839771,
+      "typeId": 9
+    },
+    {
+      "byteSize": 80,
+      "byteStart": 299072,
+      "classId": 4,
+      "pathId": 8013472977279897671,
+      "typeId": 5
+    }
+  ],
+  "schemaVersion": 1,
+  "serializedFiles": [
+    {
+      "sourceName": "asset_0",
+      "unityVersion": "2022.3.40f1c1",
+      "version": "UnityVersion 2022.3f1c1"
+    }
+  ],
+  "summary": {
+    "containerKindCounts": {
+      "BundleFile": 1,
+      "SerializedFile": 1
+    },
+    "serializedFileCount": 1,
+    "topContainer": {
+      "entryCount": 2,
+      "kind": "BundleFile"
+    },
+    "totalContainerCount": 2,
+    "warningCount": 0
+  },
+  "warnings": {
+    "codes": [],
+    "count": 0
+  }
+}
