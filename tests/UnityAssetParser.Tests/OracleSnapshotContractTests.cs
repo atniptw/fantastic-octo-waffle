@@ -44,6 +44,8 @@ public sealed class OracleSnapshotContractTests
             using var document = JsonDocument.Parse(File.ReadAllText(path));
             var root = document.RootElement;
 
+            Assert.Equal(1, root.GetProperty("schemaVersion").GetInt32());
+
             Assert.True(root.TryGetProperty("fixture", out var fixtureNode), $"Snapshot {path} is missing fixture metadata.");
             Assert.True(fixtureNode.TryGetProperty("sha256", out var shaNode), $"Snapshot {path} fixture metadata is missing sha256.");
             Assert.Equal(fixtureHash, shaNode.GetString());

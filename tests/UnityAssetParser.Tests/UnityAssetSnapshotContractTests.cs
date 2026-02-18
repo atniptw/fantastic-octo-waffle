@@ -78,6 +78,9 @@ public sealed class UnityAssetSnapshotContractTests
         using var snapshotDocument = JsonDocument.Parse(File.ReadAllText(snapshotPath));
         var root = snapshotDocument.RootElement;
 
+        Assert.Equal(1, root.GetProperty("schemaVersion").GetInt32());
+        AssertSnapshotInternalConsistency(root);
+
         var fixtureNode = root.GetProperty("fixture");
         Assert.Equal(actualFixtureSha256, fixtureNode.GetProperty("sha256").GetString());
 
@@ -228,6 +231,28 @@ public sealed class UnityAssetSnapshotContractTests
         {
             Assert.Contains(snapshotCode, expectedCodes);
         }
+    }
+
+    private static void AssertSnapshotInternalConsistency(JsonElement root)
+    {
+        var summary = root.GetProperty("summary");
+        var serializedFiles = root.GetProperty("serializedFiles").EnumerateArray().ToList();
+        var warnings = root.GetProperty("warnings");
+
+        Assert.Equal(serializedFiles.Count, summary.GetProperty("serializedFileCount").GetInt32());
+        Assert.Equal(warnings.GetProperty("count").GetInt32(), summary.GetProperty("warningCount").GetInt32());
+
+        var containerKindCounts = summary.GetProperty("containerKindCounts")
+            .EnumerateObject()
+            .ToDictionary(property => property.Name, property => property.Value.GetInt32(), StringComparer.Ordinal);
+
+        var snapshotContainers = root.GetProperty("containers")
+            .EnumerateArray()
+            .Select(item => item.GetProperty("kind").GetString() ?? string.Empty)
+            .GroupBy(item => item)
+            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
+
+        Assert.Equal(containerKindCounts, snapshotContainers);
     }
 
     private static string MapContainerKind(ContainerKind kind)
