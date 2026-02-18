@@ -78,6 +78,8 @@ internal static class SkeletonParser
             UnityRevision = unityRevision
         };
 
+        context.Containers.Add(container);
+
         if (kind == ContainerKind.UnityFs)
         {
             var size = reader.ReadInt64();
@@ -96,7 +98,6 @@ internal static class SkeletonParser
             if (blocksInfoOffset < 0 || blocksInfoOffset + compressedBlocksInfoSize > data.Length)
             {
                 context.Warnings.Add("UnityFS block info offsets are out of range.");
-                context.Containers.Add(container);
                 return;
             }
 
@@ -111,7 +112,6 @@ internal static class SkeletonParser
 
             if (blockInfoBytes is null)
             {
-                context.Containers.Add(container);
                 return;
             }
 
@@ -131,7 +131,6 @@ internal static class SkeletonParser
             if (dataLength < 0)
             {
                 context.Warnings.Add("UnityFS data segment is out of range.");
-                context.Containers.Add(container);
                 return;
             }
 
@@ -146,7 +145,6 @@ internal static class SkeletonParser
 
             if (decompressedData is null)
             {
-                context.Containers.Add(container);
                 return;
             }
 
@@ -157,10 +155,8 @@ internal static class SkeletonParser
                 if (TrySlicePayload(decompressedData, node.Offset, node.Size, out var payload))
                 {
                     entry.Payload = payload;
-                    if (TryParseSerializedPayload(payload, serializedAssetIndex, context))
-                    {
-                        serializedAssetIndex++;
-                    }
+                    _ = TryParseSerializedPayload(payload, serializedAssetIndex, context);
+                    serializedAssetIndex++;
                 }
                 else
                 {
@@ -173,8 +169,6 @@ internal static class SkeletonParser
         {
             context.Warnings.Add($"Bundle signature '{signature}' parsing is not implemented yet.");
         }
-
-        context.Containers.Add(container);
     }
 
     private static bool IsSerializedFile(byte[] data)
@@ -624,26 +618,6 @@ internal static class SkeletonParser
         payload = new byte[size];
         Buffer.BlockCopy(data, (int)offset, payload, 0, (int)size);
         return true;
-    }
-
-    private static bool LooksLikeSerializedAsset(string path)
-    {
-        if (string.IsNullOrWhiteSpace(path))
-        {
-            return false;
-        }
-
-        if (path.EndsWith(".assets", StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        if (path.StartsWith("CAB-", StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        return false;
     }
 
     private static bool TryParseSerializedPayload(byte[] payload, int serializedAssetIndex, BaseAssetsContext context)
