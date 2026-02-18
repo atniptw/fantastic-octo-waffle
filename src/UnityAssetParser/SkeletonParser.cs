@@ -66,6 +66,7 @@ internal static class SkeletonParser
     {
         var reader = new EndianBinaryReader(data);
         var signature = reader.ReadStringToNull(BundleSignatureMaxLength);
+        reader.IsBigEndian = true;
         var version = reader.ReadUInt32();
         var unityVersion = reader.ReadStringToNull();
         var unityRevision = reader.ReadStringToNull();
@@ -90,7 +91,7 @@ internal static class SkeletonParser
             var blocksInfoAtEnd = (flags & BlocksInfoAtEndFlag) != 0;
             var blocksInfoOffset = blocksInfoAtEnd
                 ? checked((int)(data.Length - compressedBlocksInfoSize))
-                : reader.Position;
+                : AlignPosition(reader.Position, 16);
 
             if (blocksInfoOffset < 0 || blocksInfoOffset + compressedBlocksInfoSize > data.Length)
             {
@@ -149,15 +150,16 @@ internal static class SkeletonParser
                 return;
             }
 
+            var serializedAssetIndex = 0;
             foreach (var node in blockInfo.Nodes)
             {
                 var entry = new ContainerEntry(node.Path, node.Offset, node.Size, node.Flags);
                 if (TrySlicePayload(decompressedData, node.Offset, node.Size, out var payload))
                 {
                     entry.Payload = payload;
-                    if (LooksLikeSerializedAsset(node.Path))
+                    if (TryParseSerializedPayload(payload, serializedAssetIndex, context))
                     {
-                        SkeletonParser.Parse(payload, node.Path, context);
+                        serializedAssetIndex++;
                     }
                 }
                 else
@@ -201,20 +203,20 @@ internal static class SkeletonParser
             dataOffset = reader.ReadInt64();
         }
 
-        if (fileSize != data.Length)
+        if (fileSize <= 0 || fileSize > data.Length)
         {
             return false;
         }
 
-        if (dataOffset > data.Length)
+        if (dataOffset > fileSize)
         {
             return false;
         }
 
-        return metadataSize <= data.Length;
+        return metadataSize <= fileSize;
     }
 
-    private static void ParseSerializedFile(byte[] data, string sourceName, BaseAssetsContext context)
+    private static void ParseSerializedFile(byte[] data, string sourceName, BaseAssetsContext context, string? serializedFileSourceName = null)
     {
         var reader = new EndianBinaryReader(data);
         var metadataSize = reader.ReadUInt32();
@@ -244,7 +246,7 @@ internal static class SkeletonParser
 
         reader.IsBigEndian = endianFlag != 0;
 
-        var info = new SerializedFileInfo(sourceName)
+        var info = new SerializedFileInfo(serializedFileSourceName ?? sourceName)
         {
             Version = version,
             FileSize = fileSize,
@@ -505,6 +507,7 @@ internal static class SkeletonParser
     private static (List<BlockInfo> Blocks, List<NodeInfo> Nodes) ParseBlockInfo(byte[] blockInfoBytes)
     {
         var reader = new EndianBinaryReader(blockInfoBytes);
+        reader.IsBigEndian = true;
         reader.ReadBytes(16);
         var blockCount = reader.ReadInt32();
         var blocks = new List<BlockInfo>(blockCount);
@@ -641,6 +644,52 @@ internal static class SkeletonParser
         }
 
         return false;
+    }
+
+    private static bool TryParseSerializedPayload(byte[] payload, int serializedAssetIndex, BaseAssetsContext context)
+    {
+        var serializedBefore = context.SerializedFiles.Count;
+        var containersBefore = context.Containers.Count;
+
+        try
+        {
+            var containerSourceName = $"serialized_asset_{serializedAssetIndex}";
+            var serializedSourceName = $"asset_{serializedAssetIndex}";
+            ParseSerializedFile(payload, containerSourceName, context, serializedSourceName);
+        }
+        catch
+        {
+            while (context.SerializedFiles.Count > serializedBefore)
+            {
+                context.SerializedFiles.RemoveAt(context.SerializedFiles.Count - 1);
+            }
+
+            while (context.Containers.Count > containersBefore)
+            {
+                context.Containers.RemoveAt(context.Containers.Count - 1);
+            }
+
+            return false;
+        }
+
+        if (context.SerializedFiles.Count == serializedBefore)
+        {
+            return false;
+        }
+
+        if (context.SerializedFiles[^1].Objects.Count == 0)
+        {
+            context.SerializedFiles.RemoveAt(context.SerializedFiles.Count - 1);
+
+            while (context.Containers.Count > containersBefore)
+            {
+                context.Containers.RemoveAt(context.Containers.Count - 1);
+            }
+
+            return false;
+        }
+
+        return true;
     }
 
     private sealed record BlockInfo(uint UncompressedSize, uint CompressedSize, ushort Flags);
