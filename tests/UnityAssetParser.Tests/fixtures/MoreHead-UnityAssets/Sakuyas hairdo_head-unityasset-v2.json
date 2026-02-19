@@ -1,0 +1,768 @@
+{
+  "containers": [],
+  "determinismCheck": "passed",
+  "fixture": {
+    "relativePath": "Sakuyas hairdo_head.hhh",
+    "sha256": "fb536cd21b0a0e82e5dc97fddc7db15e21d1ae4caa52a8a7eb7516189d538a1c"
+  },
+  "hierarchy": {
+    "gameObjects": [
+      {
+        "components": [],
+        "isActive": true,
+        "layer": 0,
+        "name": "Sakuyas hairdo",
+        "pathId": -5008178189856246251
+      },
+      {
+        "components": [],
+        "isActive": true,
+        "layer": 0,
+        "name": "Sakuyas hairdo \u5b8c\u7f8e\u7684\u5341\u516d\u591c\u5934\u9970",
+        "pathId": -3546758782495037057
+      }
+    ],
+    "transforms": [
+      {
+        "childrenPathIds": [],
+        "gameObjectPathId": -3546758782495037057,
+        "localPosition": {
+          "x": 0.232167,
+          "y": 0.311,
+          "z": 0.269
+        },
+        "localRotation": {
+          "w": 0.733556,
+          "x": 0.265738,
+          "y": 0.558698,
+          "z": 0.281311
+        },
+        "localScale": {
+          "x": 77.398369,
+          "y": 77.398376,
+          "z": 77.398369
+        },
+        "parentPathId": 7139993707584079094,
+        "pathId": -7432953632856159301
+      },
+      {
+        "childrenPathIds": [
+          -7432953632856159301
+        ],
+        "gameObjectPathId": -5008178189856246251,
+        "localPosition": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "localRotation": {
+          "w": 1.0,
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "localScale": {
+          "x": 1.0,
+          "y": 1.0,
+          "z": 1.0
+        },
+        "parentPathId": null,
+        "pathId": 7139993707584079094
+      }
+    ]
+  },
+  "materials": [
+    {
+      "name": "Green braids.005",
+      "pathId": -8679341040142950498,
+      "properties": {
+        "scalars": {
+          "_BumpScale": 1.0,
+          "_Cutoff": 0.5,
+          "_DetailNormalMapScale": 1.0,
+          "_DstBlend": 0.0,
+          "_GlossMapScale": 1.0,
+          "_Glossiness": 0.0,
+          "_GlossyReflections": 1.0,
+          "_Metallic": 0.0,
+          "_Mode": 0.0,
+          "_OcclusionStrength": 1.0,
+          "_Parallax": 0.02,
+          "_SmoothnessTextureChannel": 0.0,
+          "_SpecularHighlights": 1.0,
+          "_SrcBlend": 1.0,
+          "_UVSec": 0.0,
+          "_ZWrite": 1.0
+        },
+        "textures": {
+          "_BumpMap": {
+            "offset": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "texturePathId": null
+          },
+          "_DetailAlbedoMap": {
+            "offset": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "texturePathId": null
+          },
+          "_DetailMask": {
+            "offset": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "texturePathId": null
+          },
+          "_DetailNormalMap": {
+            "offset": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "texturePathId": null
+          },
+          "_EmissionMap": {
+            "offset": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "texturePathId": null
+          },
+          "_MainTex": {
+            "offset": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "texturePathId": null
+          },
+          "_MetallicGlossMap": {
+            "offset": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "texturePathId": null
+          },
+          "_OcclusionMap": {
+            "offset": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "texturePathId": null
+          },
+          "_ParallaxMap": {
+            "offset": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "texturePathId": null
+          }
+        },
+        "vectors": {
+          "_Color": {
+            "a": 1.0,
+            "b": 0.204896,
+            "g": 0.398739,
+            "r": 0.048758
+          },
+          "_EmissionColor": {
+            "a": 0.0,
+            "b": 0.0,
+            "g": 0.0,
+            "r": 0.0
+          }
+        }
+      },
+      "shaderName": null,
+      "shaderPathId": -4850512016903265157
+    },
+    {
+      "name": "white braids.002",
+      "pathId": -1348570689054545932,
+      "properties": {
+        "scalars": {
+          "_BumpScale": 1.0,
+          "_Cutoff": 0.5,
+          "_DetailNormalMapScale": 1.0,
+          "_DstBlend": 0.0,
+          "_GlossMapScale": 1.0,
+          "_Glossiness": 0.0,
+          "_GlossyReflections": 1.0,
+          "_Metallic": 0.0,
+          "_Mode": 0.0,
+          "_OcclusionStrength": 1.0,
+          "_Parallax": 0.02,
+          "_SmoothnessTextureChannel": 0.0,
+          "_SpecularHighlights": 1.0,
+          "_SrcBlend": 1.0,
+          "_UVSec": 0.0,
+          "_ZWrite": 1.0
+        },
+        "textures": {
+          "_BumpMap": {
+            "offset": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "texturePathId": null
+          },
+          "_DetailAlbedoMap": {
+            "offset": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "texturePathId": null
+          },
+          "_DetailMask": {
+            "offset": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "texturePathId": null
+          },
+          "_DetailNormalMap": {
+            "offset": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "texturePathId": null
+          },
+          "_EmissionMap": {
+            "offset": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "texturePathId": null
+          },
+          "_MainTex": {
+            "offset": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "texturePathId": null
+          },
+          "_MetallicGlossMap": {
+            "offset": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "texturePathId": null
+          },
+          "_OcclusionMap": {
+            "offset": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "texturePathId": null
+          },
+          "_ParallaxMap": {
+            "offset": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "texturePathId": null
+          }
+        },
+        "vectors": {
+          "_Color": {
+            "a": 1.0,
+            "b": 0.898733,
+            "g": 0.898733,
+            "r": 0.898733
+          },
+          "_EmissionColor": {
+            "a": 0.0,
+            "b": 0.0,
+            "g": 0.0,
+            "r": 0.0
+          }
+        }
+      },
+      "shaderName": null,
+      "shaderPathId": -4850512016903265157
+    },
+    {
+      "name": "Gray braids.010",
+      "pathId": 4296653989617751014,
+      "properties": {
+        "scalars": {
+          "_BumpScale": 1.0,
+          "_Cutoff": 0.5,
+          "_DetailNormalMapScale": 1.0,
+          "_DstBlend": 0.0,
+          "_GlossMapScale": 1.0,
+          "_Glossiness": 0.0,
+          "_GlossyReflections": 1.0,
+          "_Metallic": 0.0,
+          "_Mode": 0.0,
+          "_OcclusionStrength": 1.0,
+          "_Parallax": 0.02,
+          "_SmoothnessTextureChannel": 0.0,
+          "_SpecularHighlights": 1.0,
+          "_SrcBlend": 1.0,
+          "_UVSec": 0.0,
+          "_ZWrite": 1.0
+        },
+        "textures": {
+          "_BumpMap": {
+            "offset": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "texturePathId": null
+          },
+          "_DetailAlbedoMap": {
+            "offset": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "texturePathId": null
+          },
+          "_DetailMask": {
+            "offset": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "texturePathId": null
+          },
+          "_DetailNormalMap": {
+            "offset": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "texturePathId": null
+          },
+          "_EmissionMap": {
+            "offset": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "texturePathId": null
+          },
+          "_MainTex": {
+            "offset": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "texturePathId": null
+          },
+          "_MetallicGlossMap": {
+            "offset": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "texturePathId": null
+          },
+          "_OcclusionMap": {
+            "offset": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "texturePathId": null
+          },
+          "_ParallaxMap": {
+            "offset": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "texturePathId": null
+          }
+        },
+        "vectors": {
+          "_Color": {
+            "a": 1.0,
+            "b": 0.86087,
+            "g": 0.72753,
+            "r": 0.712642
+          },
+          "_EmissionColor": {
+            "a": 0.0,
+            "b": 0.0,
+            "g": 0.0,
+            "r": 0.0
+          }
+        }
+      },
+      "shaderName": null,
+      "shaderPathId": -4850512016903265157
+    },
+    {
+      "name": "Gray braids.011",
+      "pathId": 7176365157312280559,
+      "properties": {
+        "scalars": {
+          "_BumpScale": 1.0,
+          "_Cutoff": 0.5,
+          "_DetailNormalMapScale": 1.0,
+          "_DstBlend": 0.0,
+          "_GlossMapScale": 1.0,
+          "_Glossiness": 0.0,
+          "_GlossyReflections": 1.0,
+          "_Metallic": 0.0,
+          "_Mode": 0.0,
+          "_OcclusionStrength": 1.0,
+          "_Parallax": 0.02,
+          "_SmoothnessTextureChannel": 0.0,
+          "_SpecularHighlights": 1.0,
+          "_SrcBlend": 1.0,
+          "_UVSec": 0.0,
+          "_ZWrite": 1.0
+        },
+        "textures": {
+          "_BumpMap": {
+            "offset": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "texturePathId": null
+          },
+          "_DetailAlbedoMap": {
+            "offset": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "texturePathId": null
+          },
+          "_DetailMask": {
+            "offset": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "texturePathId": null
+          },
+          "_DetailNormalMap": {
+            "offset": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "texturePathId": null
+          },
+          "_EmissionMap": {
+            "offset": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "texturePathId": null
+          },
+          "_MainTex": {
+            "offset": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "texturePathId": null
+          },
+          "_MetallicGlossMap": {
+            "offset": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "texturePathId": null
+          },
+          "_OcclusionMap": {
+            "offset": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "texturePathId": null
+          },
+          "_ParallaxMap": {
+            "offset": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "texturePathId": null
+          }
+        },
+        "vectors": {
+          "_Color": {
+            "a": 1.0,
+            "b": 0.86087,
+            "g": 0.72753,
+            "r": 0.712642
+          },
+          "_EmissionColor": {
+            "a": 0.0,
+            "b": 0.0,
+            "g": 0.0,
+            "r": 0.0
+          }
+        }
+      },
+      "shaderName": null,
+      "shaderPathId": -4850512016903265157
+    }
+  ],
+  "meshes": [
+    {
+      "bounds": {
+        "center": {
+          "x": -0.003005,
+          "y": -0.000962,
+          "z": -0.002554
+        },
+        "extent": {
+          "x": 0.005105,
+          "y": 0.004057,
+          "z": 0.005925
+        }
+      },
+      "bufferHashes": {
+        "indices": "65c5ccc1703e979734d6c2c2b2e57bef08cc17891fc2278cd59ef77c99d30439",
+        "vertexData": ""
+      },
+      "bufferLengths": {
+        "indices": 114480,
+        "vertexData": 0
+      },
+      "channels": {
+        "colors": false,
+        "normals": false,
+        "positions": true,
+        "tangents": false,
+        "uv0": false,
+        "uv1": false
+      },
+      "indexCount": 114480,
+      "name": "Sakuyas hairdo \u5b8c\u7f8e\u7684\u5341\u516d\u591c\u5934\u9970\u4fee\u6539\u5e95\u90e8\u5934\u53d1",
+      "pathId": -9055711993948854630,
+      "subMeshCount": 4,
+      "topology": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "vertexCount": 36175
+    }
+  ],
+  "objects": [
+    {
+      "classId": 43,
+      "pathId": -9055711993948854630,
+      "type": "Mesh"
+    },
+    {
+      "classId": 21,
+      "pathId": -8679341040142950498,
+      "type": "Material"
+    },
+    {
+      "classId": 4,
+      "pathId": -7432953632856159301,
+      "type": "Transform"
+    },
+    {
+      "classId": 33,
+      "pathId": -5596618206339405454,
+      "type": "MeshFilter"
+    },
+    {
+      "classId": 1,
+      "pathId": -5008178189856246251,
+      "type": "GameObject"
+    },
+    {
+      "classId": 48,
+      "pathId": -4850512016903265157,
+      "type": "Shader"
+    },
+    {
+      "classId": 1,
+      "pathId": -3546758782495037057,
+      "type": "GameObject"
+    },
+    {
+      "classId": 21,
+      "pathId": -1348570689054545932,
+      "type": "Material"
+    },
+    {
+      "classId": 23,
+      "pathId": -1088383753166655498,
+      "type": "MeshRenderer"
+    },
+    {
+      "classId": 142,
+      "pathId": 1,
+      "type": "AssetBundle"
+    },
+    {
+      "classId": 21,
+      "pathId": 4296653989617751014,
+      "type": "Material"
+    },
+    {
+      "classId": 4,
+      "pathId": 7139993707584079094,
+      "type": "Transform"
+    },
+    {
+      "classId": 21,
+      "pathId": 7176365157312280559,
+      "type": "Material"
+    }
+  ],
+  "schemaVersion": 2,
+  "serializedFiles": [],
+  "skinning": [],
+  "summary": {
+    "objectCount": 13,
+    "objectTypeCount": {
+      "AssetBundle": 1,
+      "GameObject": 2,
+      "Material": 4,
+      "Mesh": 1,
+      "MeshFilter": 1,
+      "MeshRenderer": 1,
+      "Shader": 1,
+      "Transform": 2
+    }
+  },
+  "textures": [],
+  "warnings": []
+}

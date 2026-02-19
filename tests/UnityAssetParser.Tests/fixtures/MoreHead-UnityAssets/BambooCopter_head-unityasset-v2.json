@@ -1,0 +1,345 @@
+{
+  "containers": [],
+  "determinismCheck": "passed",
+  "fixture": {
+    "relativePath": "BambooCopter_head.hhh",
+    "sha256": "7bc2347ff8cc285ffe406faf8ac8913c8a3f97f8779f06a17051c38a7c9debe2"
+  },
+  "hierarchy": {
+    "gameObjects": [
+      {
+        "components": [],
+        "isActive": true,
+        "layer": 0,
+        "name": "BambooCopter\u7af9\u873b\u8713",
+        "pathId": -7175832566522114417
+      },
+      {
+        "components": [],
+        "isActive": false,
+        "layer": 0,
+        "name": "BambooCopter",
+        "pathId": 7648173231481533602
+      }
+    ],
+    "transforms": [
+      {
+        "childrenPathIds": [],
+        "gameObjectPathId": -7175832566522114417,
+        "localPosition": {
+          "x": 0.0,
+          "y": 0.485,
+          "z": 0.265
+        },
+        "localRotation": {
+          "w": 0.707481,
+          "x": -0.706732,
+          "y": 0.0,
+          "z": -0.0
+        },
+        "localScale": {
+          "x": 1634.520752,
+          "y": 100.0,
+          "z": 59.638763
+        },
+        "parentPathId": 7061383004192045992,
+        "pathId": 2959835936093411156
+      },
+      {
+        "childrenPathIds": [
+          2959835936093411156
+        ],
+        "gameObjectPathId": 7648173231481533602,
+        "localPosition": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "localRotation": {
+          "w": 1.0,
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "localScale": {
+          "x": 1.0,
+          "y": 1.0,
+          "z": 1.0
+        },
+        "parentPathId": null,
+        "pathId": 7061383004192045992
+      }
+    ]
+  },
+  "materials": [
+    {
+      "name": "Small device yellow",
+      "pathId": 547260694816892257,
+      "properties": {
+        "scalars": {
+          "_BumpScale": 1.0,
+          "_Cutoff": 0.5,
+          "_DetailNormalMapScale": 1.0,
+          "_DstBlend": 0.0,
+          "_GlossMapScale": 1.0,
+          "_Glossiness": 0.0,
+          "_GlossyReflections": 1.0,
+          "_Metallic": 0.0,
+          "_Mode": 0.0,
+          "_OcclusionStrength": 1.0,
+          "_Parallax": 0.02,
+          "_SmoothnessTextureChannel": 0.0,
+          "_SpecularHighlights": 1.0,
+          "_SrcBlend": 1.0,
+          "_UVSec": 0.0,
+          "_ZWrite": 1.0
+        },
+        "textures": {
+          "_BumpMap": {
+            "offset": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "texturePathId": null
+          },
+          "_DetailAlbedoMap": {
+            "offset": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "texturePathId": null
+          },
+          "_DetailMask": {
+            "offset": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "texturePathId": null
+          },
+          "_DetailNormalMap": {
+            "offset": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "texturePathId": null
+          },
+          "_EmissionMap": {
+            "offset": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "texturePathId": null
+          },
+          "_MainTex": {
+            "offset": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "texturePathId": null
+          },
+          "_MetallicGlossMap": {
+            "offset": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "texturePathId": null
+          },
+          "_OcclusionMap": {
+            "offset": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "texturePathId": null
+          },
+          "_ParallaxMap": {
+            "offset": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "texturePathId": null
+          }
+        },
+        "vectors": {
+          "_Color": {
+            "a": 1.0,
+            "b": 0.311438,
+            "g": 0.703342,
+            "r": 0.906403
+          },
+          "_EmissionColor": {
+            "a": 0.0,
+            "b": 0.0,
+            "g": 0.0,
+            "r": 0.0
+          }
+        }
+      },
+      "shaderName": null,
+      "shaderPathId": -4850512016903265157
+    }
+  ],
+  "meshes": [
+    {
+      "bounds": {
+        "center": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": -0.000938
+        },
+        "extent": {
+          "x": 0.0001,
+          "y": 0.00027,
+          "z": 0.001273
+        }
+      },
+      "bufferHashes": {
+        "indices": "ccaf3766ac68143cbbafd80c5755e8b864c25f3751d45a25fa68dd963e3233f3",
+        "vertexData": ""
+      },
+      "bufferLengths": {
+        "indices": 1944,
+        "vertexData": 0
+      },
+      "channels": {
+        "colors": false,
+        "normals": false,
+        "positions": true,
+        "tangents": false,
+        "uv0": false,
+        "uv1": false
+      },
+      "indexCount": 1944,
+      "name": "BambooCopter\u7af9\u873b\u8713",
+      "pathId": -3164586831722678914,
+      "subMeshCount": 1,
+      "topology": [
+        0
+      ],
+      "vertexCount": 533
+    }
+  ],
+  "objects": [
+    {
+      "classId": 33,
+      "pathId": -8403107082501273168,
+      "type": "MeshFilter"
+    },
+    {
+      "classId": 95,
+      "pathId": -8194234979324779347,
+      "type": "Animator"
+    },
+    {
+      "classId": 1,
+      "pathId": -7175832566522114417,
+      "type": "GameObject"
+    },
+    {
+      "classId": 48,
+      "pathId": -4850512016903265157,
+      "type": "Shader"
+    },
+    {
+      "classId": 43,
+      "pathId": -3164586831722678914,
+      "type": "Mesh"
+    },
+    {
+      "classId": 91,
+      "pathId": -2634883155746090489,
+      "type": "AnimatorController"
+    },
+    {
+      "classId": 23,
+      "pathId": -797510951273198726,
+      "type": "MeshRenderer"
+    },
+    {
+      "classId": 142,
+      "pathId": 1,
+      "type": "AssetBundle"
+    },
+    {
+      "classId": 21,
+      "pathId": 547260694816892257,
+      "type": "Material"
+    },
+    {
+      "classId": 4,
+      "pathId": 2959835936093411156,
+      "type": "Transform"
+    },
+    {
+      "classId": 74,
+      "pathId": 3036998545299196508,
+      "type": "AnimationClip"
+    },
+    {
+      "classId": 4,
+      "pathId": 7061383004192045992,
+      "type": "Transform"
+    },
+    {
+      "classId": 1,
+      "pathId": 7648173231481533602,
+      "type": "GameObject"
+    }
+  ],
+  "schemaVersion": 2,
+  "serializedFiles": [],
+  "skinning": [],
+  "summary": {
+    "objectCount": 13,
+    "objectTypeCount": {
+      "AnimationClip": 1,
+      "Animator": 1,
+      "AnimatorController": 1,
+      "AssetBundle": 1,
+      "GameObject": 2,
+      "Material": 1,
+      "Mesh": 1,
+      "MeshFilter": 1,
+      "MeshRenderer": 1,
+      "Shader": 1,
+      "Transform": 2
+    }
+  },
+  "textures": [],
+  "warnings": []
+}

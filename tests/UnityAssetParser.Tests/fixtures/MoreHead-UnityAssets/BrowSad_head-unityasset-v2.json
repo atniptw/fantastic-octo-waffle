@@ -1,0 +1,368 @@
+{
+  "containers": [],
+  "determinismCheck": "passed",
+  "fixture": {
+    "relativePath": "BrowSad_head.hhh",
+    "sha256": "76baa14914a70e91984bed5a1a9a3e51c67fc588e731c9745832ed1125e8e0fd"
+  },
+  "hierarchy": {
+    "gameObjects": [
+      {
+        "components": [],
+        "isActive": true,
+        "layer": 0,
+        "name": "\u7709\u6bdb\u7236\u4eb2",
+        "pathId": -2144871566240954979
+      },
+      {
+        "components": [],
+        "isActive": true,
+        "layer": 0,
+        "name": "brow\u7709\u6bdb",
+        "pathId": 4218713472869369053
+      },
+      {
+        "components": [],
+        "isActive": true,
+        "layer": 0,
+        "name": "BrowSad",
+        "pathId": 4356191117846539824
+      }
+    ],
+    "transforms": [
+      {
+        "childrenPathIds": [],
+        "gameObjectPathId": 4218713472869369053,
+        "localPosition": {
+          "x": -0.934655,
+          "y": 1.199549,
+          "z": 0.0
+        },
+        "localRotation": {
+          "w": 0.707101,
+          "x": -0.707101,
+          "y": -0.002883,
+          "z": 0.002883
+        },
+        "localScale": {
+          "x": 100.0,
+          "y": 43.643242,
+          "z": 100.0
+        },
+        "parentPathId": 9177534806433023563,
+        "pathId": -9124120592443794959
+      },
+      {
+        "childrenPathIds": [
+          9177534806433023563
+        ],
+        "gameObjectPathId": 4356191117846539824,
+        "localPosition": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "localRotation": {
+          "w": 1.0,
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "localScale": {
+          "x": 1.0,
+          "y": 1.0,
+          "z": 1.0
+        },
+        "parentPathId": null,
+        "pathId": 5539321300952030076
+      },
+      {
+        "childrenPathIds": [
+          -9124120592443794959
+        ],
+        "gameObjectPathId": -2144871566240954979,
+        "localPosition": {
+          "x": 0.115,
+          "y": 0.139,
+          "z": 0.44
+        },
+        "localRotation": {
+          "w": 1.0,
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "localScale": {
+          "x": 0.125,
+          "y": 0.125,
+          "z": 0.125
+        },
+        "parentPathId": 5539321300952030076,
+        "pathId": 9177534806433023563
+      }
+    ]
+  },
+  "materials": [
+    {
+      "name": "brow",
+      "pathId": 266610216543733026,
+      "properties": {
+        "scalars": {
+          "_BumpScale": 1.0,
+          "_Cutoff": 0.5,
+          "_DetailNormalMapScale": 1.0,
+          "_DstBlend": 0.0,
+          "_GlossMapScale": 1.0,
+          "_Glossiness": 0.0,
+          "_GlossyReflections": 1.0,
+          "_Metallic": 0.0,
+          "_Mode": 0.0,
+          "_OcclusionStrength": 1.0,
+          "_Parallax": 0.02,
+          "_SmoothnessTextureChannel": 0.0,
+          "_SpecularHighlights": 1.0,
+          "_SrcBlend": 1.0,
+          "_UVSec": 0.0,
+          "_ZWrite": 1.0
+        },
+        "textures": {
+          "_BumpMap": {
+            "offset": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "texturePathId": null
+          },
+          "_DetailAlbedoMap": {
+            "offset": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "texturePathId": null
+          },
+          "_DetailMask": {
+            "offset": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "texturePathId": null
+          },
+          "_DetailNormalMap": {
+            "offset": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "texturePathId": null
+          },
+          "_EmissionMap": {
+            "offset": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "texturePathId": null
+          },
+          "_MainTex": {
+            "offset": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "texturePathId": null
+          },
+          "_MetallicGlossMap": {
+            "offset": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "texturePathId": null
+          },
+          "_OcclusionMap": {
+            "offset": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "texturePathId": null
+          },
+          "_ParallaxMap": {
+            "offset": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "texturePathId": null
+          }
+        },
+        "vectors": {
+          "_Color": {
+            "a": 1.0,
+            "b": 0.0,
+            "g": 0.0,
+            "r": 0.0
+          },
+          "_EmissionColor": {
+            "a": 0.0,
+            "b": 0.0,
+            "g": 0.0,
+            "r": 0.0
+          }
+        }
+      },
+      "shaderName": null,
+      "shaderPathId": -4850512016903265157
+    }
+  ],
+  "meshes": [
+    {
+      "bounds": {
+        "center": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": -0.00054
+        },
+        "extent": {
+          "x": 0.020132,
+          "y": 0.0025,
+          "z": 0.003441
+        }
+      },
+      "bufferHashes": {
+        "indices": "6a268e2369c76bcb587092538d4709bab4e885276dc5abf938d51fc512f8f3e2",
+        "vertexData": ""
+      },
+      "bufferLengths": {
+        "indices": 1296,
+        "vertexData": 0
+      },
+      "channels": {
+        "colors": false,
+        "normals": false,
+        "positions": true,
+        "tangents": false,
+        "uv0": false,
+        "uv1": false
+      },
+      "indexCount": 1296,
+      "name": "brow \u7709\u6bdb",
+      "pathId": -5993842382815103843,
+      "subMeshCount": 1,
+      "topology": [
+        0
+      ],
+      "vertexCount": 428
+    }
+  ],
+  "objects": [
+    {
+      "classId": 4,
+      "pathId": -9124120592443794959,
+      "type": "Transform"
+    },
+    {
+      "classId": 33,
+      "pathId": -6221287752729522348,
+      "type": "MeshFilter"
+    },
+    {
+      "classId": 43,
+      "pathId": -5993842382815103843,
+      "type": "Mesh"
+    },
+    {
+      "classId": 48,
+      "pathId": -4850512016903265157,
+      "type": "Shader"
+    },
+    {
+      "classId": 23,
+      "pathId": -4403336042406081332,
+      "type": "MeshRenderer"
+    },
+    {
+      "classId": 1,
+      "pathId": -2144871566240954979,
+      "type": "GameObject"
+    },
+    {
+      "classId": 142,
+      "pathId": 1,
+      "type": "AssetBundle"
+    },
+    {
+      "classId": 21,
+      "pathId": 266610216543733026,
+      "type": "Material"
+    },
+    {
+      "classId": 1,
+      "pathId": 4218713472869369053,
+      "type": "GameObject"
+    },
+    {
+      "classId": 1,
+      "pathId": 4356191117846539824,
+      "type": "GameObject"
+    },
+    {
+      "classId": 4,
+      "pathId": 5539321300952030076,
+      "type": "Transform"
+    },
+    {
+      "classId": 4,
+      "pathId": 9177534806433023563,
+      "type": "Transform"
+    }
+  ],
+  "schemaVersion": 2,
+  "serializedFiles": [],
+  "skinning": [],
+  "summary": {
+    "objectCount": 12,
+    "objectTypeCount": {
+      "AssetBundle": 1,
+      "GameObject": 3,
+      "Material": 1,
+      "Mesh": 1,
+      "MeshFilter": 1,
+      "MeshRenderer": 1,
+      "Shader": 1,
+      "Transform": 3
+    }
+  },
+  "textures": [],
+  "warnings": []
+}

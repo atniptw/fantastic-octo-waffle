@@ -105,35 +105,53 @@ public sealed class UnityAssetSnapshotContractTests
             return;
         }
 
-        AssertObjectsByPathIdClassIdMatch(root.GetProperty("objects"), context);
-        AssertV2HierarchyConsistency(root.GetProperty("hierarchy"), root.GetProperty("objects"));
+        AssertObjectsByPathIdClassIdTypeMatch(root.GetProperty("objects"), context);
+        AssertV2SummaryMatchesParser(root.GetProperty("summary"), context);
+        AssertV2HierarchyMatchesParser(root.GetProperty("hierarchy"), root.GetProperty("objects"), context);
         AssertV2MaterialConsistency(root.GetProperty("materials"), root.GetProperty("objects"));
         AssertV2MeshConsistency(root.GetProperty("meshes"), root.GetProperty("objects"));
         AssertV2TextureConsistency(root.GetProperty("textures"), root.GetProperty("objects"));
         AssertV2WarningsConsistency(root.GetProperty("warnings"));
     }
 
-    private static void AssertObjectsByPathIdClassIdMatch(JsonElement snapshotObjectsNode, BaseAssetsContext context)
+    private static void AssertObjectsByPathIdClassIdTypeMatch(JsonElement snapshotObjectsNode, BaseAssetsContext context)
     {
         var snapshotObjects = snapshotObjectsNode
             .EnumerateArray()
-            .Select(element => (PathId: element.GetProperty("pathId").GetInt64(), ClassId: (int?)element.GetProperty("classId").GetInt32()))
+            .Select(element => (
+                PathId: element.GetProperty("pathId").GetInt64(),
+                ClassId: (int?)element.GetProperty("classId").GetInt32(),
+                Type: element.GetProperty("type").GetString() ?? string.Empty
+            ))
             .OrderBy(item => item.PathId)
             .ThenBy(item => item.ClassId)
+            .ThenBy(item => item.Type, StringComparer.Ordinal)
             .ToList();
 
-        var parserObjects = context.SerializedFiles
-            .SelectMany(file => file.Objects)
-            .Select(item => (item.PathId, item.ClassId))
+        var parserObjects = context.SemanticObjects
+            .Select(item => (item.PathId, item.ClassId, Type: item.TypeName))
             .OrderBy(item => item.PathId)
             .ThenBy(item => item.ClassId)
+            .ThenBy(item => item.Type, StringComparer.Ordinal)
             .ToList();
 
         Assert.Equal(snapshotObjects.Count, parserObjects.Count);
         Assert.Equal(snapshotObjects, parserObjects);
     }
 
-    private static void AssertV2HierarchyConsistency(JsonElement hierarchyNode, JsonElement snapshotObjectsNode)
+    private static void AssertV2SummaryMatchesParser(JsonElement summaryNode, BaseAssetsContext context)
+    {
+        Assert.Equal(context.SemanticObjects.Count, summaryNode.GetProperty("objectCount").GetInt32());
+
+        var snapshotTypeCounts = summaryNode.GetProperty("objectTypeCount")
+            .EnumerateObject()
+            .ToDictionary(property => property.Name, property => property.Value.GetInt32(), StringComparer.Ordinal);
+
+        var parserTypeCounts = context.BuildSemanticObjectTypeCounts();
+        Assert.Equal(snapshotTypeCounts, parserTypeCounts);
+    }
+
+    private static void AssertV2HierarchyMatchesParser(JsonElement hierarchyNode, JsonElement snapshotObjectsNode, BaseAssetsContext context)
     {
         var objectMap = snapshotObjectsNode
             .EnumerateArray()
@@ -149,6 +167,87 @@ public sealed class UnityAssetSnapshotContractTests
 
         Assert.Equal(gameObjectIds.Count, gameObjects.Count);
         Assert.Equal(transformIds.Count, transforms.Count);
+
+        var snapshotGameObjects = gameObjects
+            .Select(item => (
+                PathId: item.GetProperty("pathId").GetInt64(),
+                Name: item.GetProperty("name").GetString() ?? string.Empty,
+                IsActive: item.GetProperty("isActive").GetBoolean(),
+                Layer: item.GetProperty("layer").GetInt32()))
+            .OrderBy(item => item.PathId)
+            .ToList();
+
+        var parserGameObjects = context.SemanticGameObjects
+            .Select(item => (item.PathId, item.Name, item.IsActive, item.Layer))
+            .OrderBy(item => item.PathId)
+            .ToList();
+
+        var snapshotTransforms = transforms
+            .Select(item => new SnapshotTransformRow(
+                item.GetProperty("pathId").GetInt64(),
+                item.GetProperty("gameObjectPathId").GetInt64(),
+                item.GetProperty("parentPathId").ValueKind == JsonValueKind.Null ? null : item.GetProperty("parentPathId").GetInt64(),
+                item.GetProperty("childrenPathIds").EnumerateArray().Select(child => child.GetInt64()).OrderBy(child => child).ToArray(),
+                ParseVector3(item.GetProperty("localPosition")),
+                ParseQuaternion(item.GetProperty("localRotation")),
+                ParseVector3(item.GetProperty("localScale"))))
+            .OrderBy(item => item.PathId)
+            .ToList();
+
+        var parserTransforms = context.SemanticTransforms
+            .Select(item => new SnapshotTransformRow(
+                item.PathId,
+                item.GameObjectPathId,
+                item.ParentPathId,
+                item.ChildrenPathIds.OrderBy(child => child).ToArray(),
+                item.LocalPosition,
+                item.LocalRotation,
+                item.LocalScale))
+            .OrderBy(item => item.PathId)
+            .ToList();
+
+        var hasCompleteHierarchyDecode =
+            parserGameObjects.Count == snapshotGameObjects.Count
+            && parserTransforms.Count == snapshotTransforms.Count;
+
+        if (hasCompleteHierarchyDecode)
+        {
+            Assert.Equal(snapshotGameObjects, parserGameObjects);
+
+            for (var i = 0; i < snapshotTransforms.Count; i++)
+            {
+                Assert.Equal(snapshotTransforms[i].PathId, parserTransforms[i].PathId);
+                Assert.Equal(snapshotTransforms[i].GameObjectPathId, parserTransforms[i].GameObjectPathId);
+                Assert.Equal(snapshotTransforms[i].ParentPathId, parserTransforms[i].ParentPathId);
+                Assert.Equal(snapshotTransforms[i].ChildrenPathIds, parserTransforms[i].ChildrenPathIds);
+                AssertVector3Equal(snapshotTransforms[i].LocalPosition, parserTransforms[i].LocalPosition);
+                AssertQuaternionEqual(snapshotTransforms[i].LocalRotation, parserTransforms[i].LocalRotation);
+                AssertVector3Equal(snapshotTransforms[i].LocalScale, parserTransforms[i].LocalScale);
+            }
+        }
+        else
+        {
+            foreach (var parserGameObject in parserGameObjects)
+            {
+                Assert.Contains(parserGameObject.PathId, gameObjectIds);
+            }
+
+            foreach (var parserTransform in parserTransforms)
+            {
+                Assert.Contains(parserTransform.PathId, transformIds);
+                Assert.Contains(parserTransform.GameObjectPathId, gameObjectIds);
+
+                if (parserTransform.ParentPathId.HasValue)
+                {
+                    Assert.Contains(parserTransform.ParentPathId.Value, transformIds);
+                }
+
+                foreach (var childPathId in parserTransform.ChildrenPathIds)
+                {
+                    Assert.Contains(childPathId, transformIds);
+                }
+            }
+        }
 
         foreach (var gameObject in gameObjects)
         {
@@ -540,6 +639,38 @@ public sealed class UnityAssetSnapshotContractTests
         _ = node.GetProperty("y").GetDouble();
     }
 
+    private static SemanticVector3 ParseVector3(JsonElement node)
+    {
+        return new SemanticVector3(
+            (float)node.GetProperty("x").GetDouble(),
+            (float)node.GetProperty("y").GetDouble(),
+            (float)node.GetProperty("z").GetDouble());
+    }
+
+    private static SemanticQuaternion ParseQuaternion(JsonElement node)
+    {
+        return new SemanticQuaternion(
+            (float)node.GetProperty("w").GetDouble(),
+            (float)node.GetProperty("x").GetDouble(),
+            (float)node.GetProperty("y").GetDouble(),
+            (float)node.GetProperty("z").GetDouble());
+    }
+
+    private static void AssertVector3Equal(SemanticVector3 expected, SemanticVector3 actual)
+    {
+        Assert.True(Math.Abs(expected.X - actual.X) < 1e-4f);
+        Assert.True(Math.Abs(expected.Y - actual.Y) < 1e-4f);
+        Assert.True(Math.Abs(expected.Z - actual.Z) < 1e-4f);
+    }
+
+    private static void AssertQuaternionEqual(SemanticQuaternion expected, SemanticQuaternion actual)
+    {
+        Assert.True(Math.Abs(expected.W - actual.W) < 1e-4f);
+        Assert.True(Math.Abs(expected.X - actual.X) < 1e-4f);
+        Assert.True(Math.Abs(expected.Y - actual.Y) < 1e-4f);
+        Assert.True(Math.Abs(expected.Z - actual.Z) < 1e-4f);
+    }
+
     private static string MapContainerKind(ContainerKind kind)
     {
         return kind switch
@@ -598,4 +729,12 @@ public sealed class UnityAssetSnapshotContractTests
     private sealed record SnapshotTopContainer(string Kind, int EntryCount);
     private sealed record SnapshotObject(long PathId, long ByteStart, uint ByteSize, int TypeId, int? ClassId);
     private sealed record SnapshotEntry(int Kind, string Path, uint Size);
+    private sealed record SnapshotTransformRow(
+        long PathId,
+        long GameObjectPathId,
+        long? ParentPathId,
+        long[] ChildrenPathIds,
+        SemanticVector3 LocalPosition,
+        SemanticQuaternion LocalRotation,
+        SemanticVector3 LocalScale);
 }

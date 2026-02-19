@@ -269,6 +269,7 @@ internal static class SkeletonParser
             }
 
             info.Objects.Add(new SerializedObjectInfo(pathId, byteStart, byteSize, typeId, classId));
+            context.SemanticObjects.Add(new SemanticObjectInfo(pathId, classId, ResolveTypeName(classId)));
         }
 
         if (version >= 11)
@@ -317,6 +318,8 @@ internal static class SkeletonParser
         {
             reader.ReadStringToNull();
         }
+
+        PopulateHierarchySemantics(data, info, context);
 
         context.SerializedFiles.Add(info);
         context.Containers.Add(new ParsedContainer(sourceName, ContainerKind.SerializedFile, data.Length)
@@ -709,6 +712,9 @@ internal static class SkeletonParser
     {
         var serializedBefore = context.SerializedFiles.Count;
         var containersBefore = context.Containers.Count;
+        var semanticObjectsBefore = context.SemanticObjects.Count;
+        var semanticGameObjectsBefore = context.SemanticGameObjects.Count;
+        var semanticTransformsBefore = context.SemanticTransforms.Count;
 
         try
         {
@@ -728,6 +734,21 @@ internal static class SkeletonParser
                 context.Containers.RemoveAt(context.Containers.Count - 1);
             }
 
+            while (context.SemanticObjects.Count > semanticObjectsBefore)
+            {
+                context.SemanticObjects.RemoveAt(context.SemanticObjects.Count - 1);
+            }
+
+            while (context.SemanticGameObjects.Count > semanticGameObjectsBefore)
+            {
+                context.SemanticGameObjects.RemoveAt(context.SemanticGameObjects.Count - 1);
+            }
+
+            while (context.SemanticTransforms.Count > semanticTransformsBefore)
+            {
+                context.SemanticTransforms.RemoveAt(context.SemanticTransforms.Count - 1);
+            }
+
             return false;
         }
 
@@ -745,7 +766,361 @@ internal static class SkeletonParser
                 context.Containers.RemoveAt(context.Containers.Count - 1);
             }
 
+            while (context.SemanticObjects.Count > semanticObjectsBefore)
+            {
+                context.SemanticObjects.RemoveAt(context.SemanticObjects.Count - 1);
+            }
+
+            while (context.SemanticGameObjects.Count > semanticGameObjectsBefore)
+            {
+                context.SemanticGameObjects.RemoveAt(context.SemanticGameObjects.Count - 1);
+            }
+
+            while (context.SemanticTransforms.Count > semanticTransformsBefore)
+            {
+                context.SemanticTransforms.RemoveAt(context.SemanticTransforms.Count - 1);
+            }
+
             return false;
+        }
+
+        return true;
+    }
+
+    private static string ResolveTypeName(int? classId)
+    {
+        if (!classId.HasValue)
+        {
+            return "Unknown";
+        }
+
+        return classId.Value switch
+        {
+            1 => "GameObject",
+            4 => "Transform",
+            21 => "Material",
+            23 => "MeshRenderer",
+            28 => "Texture2D",
+            33 => "MeshFilter",
+            43 => "Mesh",
+            48 => "Shader",
+            74 => "AnimationClip",
+            91 => "AnimatorController",
+            95 => "Animator",
+            114 => "MonoBehaviour",
+            142 => "AssetBundle",
+            198 => "ParticleSystem",
+            199 => "ParticleSystemRenderer",
+            _ => $"Class{classId.Value}"
+        };
+    }
+
+    private static void PopulateHierarchySemantics(byte[] data, SerializedFileInfo info, BaseAssetsContext context)
+    {
+        var gameObjectPathIds = new HashSet<long>(
+            info.Objects
+                .FindAll(item => item.ClassId == 1)
+                .ConvertAll(item => item.PathId));
+
+        var transformPathIds = new HashSet<long>(
+            info.Objects
+                .FindAll(item => item.ClassId == 4)
+                .ConvertAll(item => item.PathId));
+
+        foreach (var obj in info.Objects)
+        {
+            if (obj.ClassId != 1 && obj.ClassId != 4)
+            {
+                continue;
+            }
+
+            if (!TrySlicePayload(data, obj.ByteStart, obj.ByteSize, out var payload))
+            {
+                continue;
+            }
+
+            try
+            {
+                if (obj.ClassId == 1)
+                {
+                    var gameObject = TryReadGameObject(payload, obj.PathId, info.Version, info.BigEndian);
+                    if (gameObject is not null)
+                    {
+                        context.SemanticGameObjects.Add(gameObject);
+                    }
+                }
+                else if (obj.ClassId == 4)
+                {
+                    var transform = TryReadTransform(payload, obj.PathId, info.Version, info.BigEndian, gameObjectPathIds, transformPathIds);
+                    if (transform is not null)
+                    {
+                        context.SemanticTransforms.Add(transform);
+                    }
+                }
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    private static SemanticGameObjectInfo? TryReadGameObject(byte[] payload, long pathId, uint version, bool isBigEndian)
+    {
+        var bestScore = int.MinValue;
+        SemanticGameObjectInfo? bestCandidate = null;
+
+        foreach (var offset in BuildCandidateOffsets(payload.Length, version))
+        {
+            if (!TryReadGameObjectCandidate(payload, pathId, version, isBigEndian, offset, out var candidate, out var score))
+            {
+                continue;
+            }
+
+            if (score > bestScore)
+            {
+                bestScore = score;
+                bestCandidate = candidate;
+            }
+        }
+
+        return bestScore >= 4 ? bestCandidate : null;
+    }
+
+    private static bool TryReadGameObjectCandidate(byte[] payload, long pathId, uint version, bool isBigEndian, int startOffset, out SemanticGameObjectInfo candidate, out int score)
+    {
+        candidate = default!;
+        score = int.MinValue;
+
+        try
+        {
+            var reader = new EndianBinaryReader(payload)
+            {
+                IsBigEndian = isBigEndian,
+                Position = startOffset
+            };
+
+            var componentCount = reader.ReadInt32();
+            if (componentCount < 0 || componentCount > 1024)
+            {
+                return false;
+            }
+
+            for (var i = 0; i < componentCount; i++)
+            {
+                reader.ReadInt32();
+                _ = ReadPPtrPathId(reader, version);
+            }
+
+            var layer = reader.ReadInt32();
+            var name = ReadAlignedString(reader);
+
+            if (reader.Position + 3 > reader.Length)
+            {
+                return false;
+            }
+
+            _ = reader.ReadUInt16();
+            var isActive = reader.ReadByte() != 0;
+
+            score = 0;
+            score += componentCount <= 128 ? 1 : 0;
+            score += layer is >= 0 and <= 31 ? 2 : -2;
+            score += IsReasonableName(name) ? 4 : -3;
+            score += reader.Position <= reader.Length ? 1 : 0;
+
+            candidate = new SemanticGameObjectInfo(pathId, name, isActive, layer);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static SemanticTransformInfo? TryReadTransform(
+        byte[] payload,
+        long pathId,
+        uint version,
+        bool isBigEndian,
+        HashSet<long> gameObjectPathIds,
+        HashSet<long> transformPathIds)
+    {
+        var bestScore = int.MinValue;
+        SemanticTransformInfo? bestCandidate = null;
+
+        foreach (var offset in BuildCandidateOffsets(payload.Length, version))
+        {
+            if (!TryReadTransformCandidate(payload, pathId, version, isBigEndian, offset, gameObjectPathIds, transformPathIds, out var candidate, out var score))
+            {
+                continue;
+            }
+
+            if (score > bestScore)
+            {
+                bestScore = score;
+                bestCandidate = candidate;
+            }
+        }
+
+        return bestScore >= 5 ? bestCandidate : null;
+    }
+
+    private static bool TryReadTransformCandidate(
+        byte[] payload,
+        long pathId,
+        uint version,
+        bool isBigEndian,
+        int startOffset,
+        HashSet<long> gameObjectPathIds,
+        HashSet<long> transformPathIds,
+        out SemanticTransformInfo candidate,
+        out int score)
+    {
+        candidate = default!;
+        score = int.MinValue;
+
+        try
+        {
+            var reader = new EndianBinaryReader(payload)
+            {
+                IsBigEndian = isBigEndian,
+                Position = startOffset
+            };
+
+            var gameObjectPathId = ReadPPtrPathId(reader, version);
+
+            var rotationX = reader.ReadSingle();
+            var rotationY = reader.ReadSingle();
+            var rotationZ = reader.ReadSingle();
+            var rotationW = reader.ReadSingle();
+
+            var positionX = reader.ReadSingle();
+            var positionY = reader.ReadSingle();
+            var positionZ = reader.ReadSingle();
+
+            var scaleX = reader.ReadSingle();
+            var scaleY = reader.ReadSingle();
+            var scaleZ = reader.ReadSingle();
+
+            var childCount = reader.ReadInt32();
+            if (childCount < 0 || childCount > 1024)
+            {
+                return false;
+            }
+
+            var children = new List<long>(childCount);
+            for (var i = 0; i < childCount; i++)
+            {
+                children.Add(ReadPPtrPathId(reader, version));
+            }
+
+            var parentPathId = ReadPPtrPathId(reader, version);
+
+            score = 0;
+            score += gameObjectPathIds.Contains(gameObjectPathId) ? 4 : -4;
+            score += childCount <= 64 ? 1 : 0;
+            score += parentPathId == 0 || transformPathIds.Contains(parentPathId) ? 2 : -2;
+            score += children.TrueForAll(child => transformPathIds.Contains(child)) ? 2 : -2;
+            score += AreFinite(rotationX, rotationY, rotationZ, rotationW, positionX, positionY, positionZ, scaleX, scaleY, scaleZ) ? 2 : -3;
+
+            candidate = new SemanticTransformInfo(
+                pathId,
+                gameObjectPathId,
+                parentPathId == 0 ? null : parentPathId,
+                children,
+                new SemanticVector3(positionX, positionY, positionZ),
+                new SemanticQuaternion(rotationW, rotationX, rotationY, rotationZ),
+                new SemanticVector3(scaleX, scaleY, scaleZ));
+
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static IEnumerable<int> BuildCandidateOffsets(int payloadLength, uint version)
+    {
+        var objectPrefixSize = 4 + 3 * (version >= 14 ? 12 : 8);
+        var candidates = new List<int>
+        {
+            0,
+            objectPrefixSize,
+            4,
+            8,
+            12,
+            16,
+            20,
+            24,
+            28,
+            32,
+            36,
+            40,
+            44
+        };
+
+        var seen = new HashSet<int>();
+        foreach (var candidate in candidates)
+        {
+            if (candidate < 0 || candidate >= payloadLength)
+            {
+                continue;
+            }
+
+            if (seen.Add(candidate))
+            {
+                yield return candidate;
+            }
+        }
+    }
+
+    private static bool AreFinite(params float[] values)
+    {
+        foreach (var value in values)
+        {
+            if (float.IsNaN(value) || float.IsInfinity(value))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static long ReadPPtrPathId(EndianBinaryReader reader, uint version)
+    {
+        _ = reader.ReadInt32();
+        return version >= 5 ? reader.ReadInt64() : reader.ReadInt32();
+    }
+
+    private static string ReadAlignedString(EndianBinaryReader reader)
+    {
+        var byteCount = reader.ReadInt32();
+        if (byteCount <= 0)
+        {
+            reader.Align(4);
+            return string.Empty;
+        }
+
+        var bytes = reader.ReadBytes(byteCount);
+        reader.Align(4);
+        return System.Text.Encoding.UTF8.GetString(bytes);
+    }
+
+    private static bool IsReasonableName(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value) || value.Length > 256)
+        {
+            return false;
+        }
+
+        foreach (var character in value)
+        {
+            if (char.IsControl(character) && !char.IsWhiteSpace(character))
+            {
+                return false;
+            }
         }
 
         return true;

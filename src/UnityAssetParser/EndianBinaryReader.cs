@@ -101,6 +101,21 @@ internal sealed class EndianBinaryReader
             : BinaryPrimitives.ReadInt64LittleEndian(span);
     }
 
+    public float ReadSingle()
+    {
+        EnsureAvailable(sizeof(float));
+        var span = _buffer.AsSpan(_position, sizeof(float));
+        _position += sizeof(float);
+
+        if (IsBigEndian)
+        {
+            var raw = BinaryPrimitives.ReadUInt32BigEndian(span);
+            return BitConverter.Int32BitsToSingle(unchecked((int)raw));
+        }
+
+        return BitConverter.ToSingle(span);
+    }
+
     public string ReadStringToNull(int maxBytes = 0)
     {
         var start = _position;
