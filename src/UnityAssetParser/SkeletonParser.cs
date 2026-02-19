@@ -1438,6 +1438,7 @@ internal static class SkeletonParser
 
             int? indexFormat = null;
             IReadOnlyList<uint> decodedIndices = Array.Empty<uint>();
+            var indexBufferEndOffset = -1;
             if (TryReadMeshIndexBuffer(
                 payload,
                 isBigEndian,
@@ -1445,10 +1446,26 @@ internal static class SkeletonParser
                 (int)indexCountBytes,
                 (int)indexElementCountTotal,
                 out var parsedIndexFormat,
-                out var parsedIndices))
+                out var parsedIndices,
+                out var parsedIndexBufferEndOffset))
             {
                 indexFormat = parsedIndexFormat;
                 decodedIndices = parsedIndices;
+                indexBufferEndOffset = parsedIndexBufferEndOffset;
+            }
+
+            var vertexDataByteLength = 0;
+            IReadOnlyList<SemanticVector3> decodedPositions = Array.Empty<SemanticVector3>();
+            if (TryReadMeshVertexData(
+                payload,
+                isBigEndian,
+                indexBufferEndOffset,
+                (int)vertexCountMax,
+                out var parsedVertexDataByteLength,
+                out var parsedPositions))
+            {
+                vertexDataByteLength = parsedVertexDataByteLength;
+                decodedPositions = parsedPositions;
             }
 
             var boundsCenter = new SemanticVector3(
@@ -1467,6 +1484,8 @@ internal static class SkeletonParser
                 new SemanticBoundsInfo(boundsCenter, boundsExtent),
                 indexFormat,
                 decodedIndices,
+                vertexDataByteLength,
+                decodedPositions,
                 indexElementSize,
                 (int)indexElementCountTotal,
                 (int)indexCountBytes,
@@ -1490,10 +1509,12 @@ internal static class SkeletonParser
         int expectedIndexBytes,
         int expectedIndexElements,
         out int indexFormat,
-        out IReadOnlyList<uint> decodedIndices)
+        out IReadOnlyList<uint> decodedIndices,
+        out int indexBufferEndOffset)
     {
         indexFormat = default;
         decodedIndices = Array.Empty<uint>();
+        indexBufferEndOffset = -1;
 
         if (expectedIndexBytes <= 0 || expectedIndexElements <= 0)
         {
@@ -1552,6 +1573,69 @@ internal static class SkeletonParser
 
             indexFormat = candidateFormat;
             decodedIndices = indices;
+            indexBufferEndOffset = offset + 8 + candidateLength;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryReadMeshVertexData(
+        byte[] payload,
+        bool isBigEndian,
+        int indexBufferEndOffset,
+        int vertexCount,
+        out int vertexDataByteLength,
+        out IReadOnlyList<SemanticVector3> decodedPositions)
+    {
+        vertexDataByteLength = 0;
+        decodedPositions = Array.Empty<SemanticVector3>();
+
+        if (indexBufferEndOffset < 0 || vertexCount < 0)
+        {
+            return false;
+        }
+
+        var reader = new EndianBinaryReader(payload)
+        {
+            IsBigEndian = isBigEndian
+        };
+
+        var scanStart = AlignPosition(indexBufferEndOffset, 4);
+        var scanEnd = Math.Min(payload.Length - 4, scanStart + 512);
+        if (scanStart > scanEnd)
+        {
+            return false;
+        }
+
+        for (var offset = scanStart; offset <= scanEnd; offset += 4)
+        {
+            reader.Position = offset;
+            var candidateLength = reader.ReadInt32();
+            if (candidateLength < 0)
+            {
+                continue;
+            }
+
+            if (offset + 4 + candidateLength > payload.Length)
+            {
+                continue;
+            }
+
+            vertexDataByteLength = candidateLength;
+
+            if (vertexCount > 0 && candidateLength == vertexCount * 12)
+            {
+                reader.Position = offset + 4;
+                var positions = new List<SemanticVector3>(vertexCount);
+                for (var i = 0; i < vertexCount; i++)
+                {
+                    positions.Add(new SemanticVector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle()));
+                }
+
+                decodedPositions = positions;
+            }
+
             return true;
         }
 

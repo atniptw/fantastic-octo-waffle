@@ -203,6 +203,8 @@ public sealed class SemanticMeshInfo
 		SemanticBoundsInfo bounds,
 		int? indexFormat,
 		IReadOnlyList<uint> decodedIndices,
+		int vertexDataByteLength,
+		IReadOnlyList<SemanticVector3> decodedPositions,
 		int indexElementSizeBytes,
 		int indexElementCount,
 		int indexCount,
@@ -216,6 +218,8 @@ public sealed class SemanticMeshInfo
 		Bounds = bounds;
 		IndexFormat = indexFormat;
 		DecodedIndices = decodedIndices;
+		VertexDataByteLength = vertexDataByteLength;
+		DecodedPositions = decodedPositions;
 		IndexElementSizeBytes = indexElementSizeBytes;
 		IndexElementCount = indexElementCount;
 		IndexCount = indexCount;
@@ -230,6 +234,8 @@ public sealed class SemanticMeshInfo
 	public SemanticBoundsInfo Bounds { get; }
 	public int? IndexFormat { get; }
 	public IReadOnlyList<uint> DecodedIndices { get; }
+	public int VertexDataByteLength { get; }
+	public IReadOnlyList<SemanticVector3> DecodedPositions { get; }
 	public int IndexElementSizeBytes { get; }
 	public int IndexElementCount { get; }
 	public int IndexCount { get; }
