@@ -1456,16 +1456,19 @@ internal static class SkeletonParser
 
             var vertexDataByteLength = 0;
             IReadOnlyList<SemanticVector3> decodedPositions = Array.Empty<SemanticVector3>();
+            IReadOnlyList<SemanticVertexChannelInfo> vertexChannels = Array.Empty<SemanticVertexChannelInfo>();
             if (TryReadMeshVertexData(
                 payload,
                 isBigEndian,
                 indexBufferEndOffset,
                 (int)vertexCountMax,
                 out var parsedVertexDataByteLength,
-                out var parsedPositions))
+                out var parsedPositions,
+                out var parsedVertexChannels))
             {
                 vertexDataByteLength = parsedVertexDataByteLength;
                 decodedPositions = parsedPositions;
+                vertexChannels = parsedVertexChannels;
             }
 
             var boundsCenter = new SemanticVector3(
@@ -1486,6 +1489,7 @@ internal static class SkeletonParser
                 decodedIndices,
                 vertexDataByteLength,
                 decodedPositions,
+                vertexChannels,
                 indexElementSize,
                 (int)indexElementCountTotal,
                 (int)indexCountBytes,
@@ -1586,10 +1590,12 @@ internal static class SkeletonParser
         int indexBufferEndOffset,
         int vertexCount,
         out int vertexDataByteLength,
-        out IReadOnlyList<SemanticVector3> decodedPositions)
+        out IReadOnlyList<SemanticVector3> decodedPositions,
+        out IReadOnlyList<SemanticVertexChannelInfo> vertexChannels)
     {
         vertexDataByteLength = 0;
         decodedPositions = Array.Empty<SemanticVector3>();
+        vertexChannels = Array.Empty<SemanticVertexChannelInfo>();
 
         if (indexBufferEndOffset < 0 || vertexCount < 0)
         {
@@ -1624,6 +1630,11 @@ internal static class SkeletonParser
 
             vertexDataByteLength = candidateLength;
 
+            if (TryReadMeshVertexChannels(payload, isBigEndian, scanStart, offset, out var parsedChannels))
+            {
+                vertexChannels = parsedChannels;
+            }
+
             if (vertexCount > 0 && candidateLength == vertexCount * 12)
             {
                 reader.Position = offset + 4;
@@ -1636,6 +1647,85 @@ internal static class SkeletonParser
                 decodedPositions = positions;
             }
 
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryReadMeshVertexChannels(
+        byte[] payload,
+        bool isBigEndian,
+        int minOffset,
+        int maxOffset,
+        out IReadOnlyList<SemanticVertexChannelInfo> channels)
+    {
+        channels = Array.Empty<SemanticVertexChannelInfo>();
+        if (minOffset > maxOffset)
+        {
+            return false;
+        }
+
+        var searchStart = AlignPosition(Math.Max(0, minOffset - 256), 4);
+        var searchEnd = Math.Min(payload.Length - 4, maxOffset);
+        if (searchStart > searchEnd)
+        {
+            return false;
+        }
+
+        var reader = new EndianBinaryReader(payload)
+        {
+            IsBigEndian = isBigEndian
+        };
+
+        for (var offset = searchStart; offset <= searchEnd; offset += 4)
+        {
+            reader.Position = offset;
+            var count = reader.ReadInt32();
+            if (count <= 0 || count > 16)
+            {
+                continue;
+            }
+
+            var bytesRequired = 4 + (count * 4);
+            if (offset + bytesRequired > payload.Length)
+            {
+                continue;
+            }
+
+            var parsed = new List<SemanticVertexChannelInfo>(count);
+            var hasLikelyPositionChannel = false;
+            var valid = true;
+
+            for (var i = 0; i < count; i++)
+            {
+                var baseOffset = offset + 4 + (i * 4);
+                var stream = payload[baseOffset];
+                var channelOffset = payload[baseOffset + 1];
+                var format = payload[baseOffset + 2];
+                var rawDimension = payload[baseOffset + 3];
+                var dimension = rawDimension & 0x0F;
+
+                if (stream > 8 || format > 20 || dimension == 0 || dimension > 4)
+                {
+                    valid = false;
+                    break;
+                }
+
+                if (i == 0 && stream == 0 && channelOffset == 0 && dimension >= 3)
+                {
+                    hasLikelyPositionChannel = true;
+                }
+
+                parsed.Add(new SemanticVertexChannelInfo(i, stream, channelOffset, format, dimension));
+            }
+
+            if (!valid || !hasLikelyPositionChannel)
+            {
+                continue;
+            }
+
+            channels = parsed;
             return true;
         }
 

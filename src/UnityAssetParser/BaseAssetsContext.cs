@@ -205,6 +205,7 @@ public sealed class SemanticMeshInfo
 		IReadOnlyList<uint> decodedIndices,
 		int vertexDataByteLength,
 		IReadOnlyList<SemanticVector3> decodedPositions,
+		IReadOnlyList<SemanticVertexChannelInfo> vertexChannels,
 		int indexElementSizeBytes,
 		int indexElementCount,
 		int indexCount,
@@ -220,6 +221,7 @@ public sealed class SemanticMeshInfo
 		DecodedIndices = decodedIndices;
 		VertexDataByteLength = vertexDataByteLength;
 		DecodedPositions = decodedPositions;
+		VertexChannels = vertexChannels;
 		IndexElementSizeBytes = indexElementSizeBytes;
 		IndexElementCount = indexElementCount;
 		IndexCount = indexCount;
@@ -236,6 +238,7 @@ public sealed class SemanticMeshInfo
 	public IReadOnlyList<uint> DecodedIndices { get; }
 	public int VertexDataByteLength { get; }
 	public IReadOnlyList<SemanticVector3> DecodedPositions { get; }
+	public IReadOnlyList<SemanticVertexChannelInfo> VertexChannels { get; }
 	public int IndexElementSizeBytes { get; }
 	public int IndexElementCount { get; }
 	public int IndexCount { get; }
@@ -243,6 +246,24 @@ public sealed class SemanticMeshInfo
 	public IReadOnlyList<SemanticSubMeshInfo> SubMeshes { get; }
 	public IReadOnlyList<int> Topology { get; }
 	public int VertexCount { get; }
+}
+
+public sealed class SemanticVertexChannelInfo
+{
+	public SemanticVertexChannelInfo(int channelIndex, int stream, int offset, int format, int dimension)
+	{
+		ChannelIndex = channelIndex;
+		Stream = stream;
+		Offset = offset;
+		Format = format;
+		Dimension = dimension;
+	}
+
+	public int ChannelIndex { get; }
+	public int Stream { get; }
+	public int Offset { get; }
+	public int Format { get; }
+	public int Dimension { get; }
 }
 
 public sealed class SemanticSubMeshInfo

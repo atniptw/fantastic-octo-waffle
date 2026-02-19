@@ -499,6 +499,19 @@ public sealed class UnityAssetSnapshotContractTests
                 Assert.True(mesh.VertexDataByteLength >= mesh.VertexCount * 12);
             }
 
+            if (mesh.VertexChannels.Count > 0)
+            {
+                Assert.Equal(mesh.VertexChannels.Count, mesh.VertexChannels.Select(channel => channel.ChannelIndex).Distinct().Count());
+                foreach (var channel in mesh.VertexChannels)
+                {
+                    Assert.True(channel.ChannelIndex >= 0);
+                    Assert.True(channel.Stream >= 0);
+                    Assert.True(channel.Offset >= 0);
+                    Assert.True(channel.Format >= 0);
+                    Assert.True(channel.Dimension is >= 1 and <= 4);
+                }
+            }
+
             for (var i = 0; i < mesh.SubMeshes.Count; i++)
             {
                 var subMesh = mesh.SubMeshes[i];
