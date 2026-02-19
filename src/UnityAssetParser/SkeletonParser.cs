@@ -320,6 +320,7 @@ internal static class SkeletonParser
         }
 
         PopulateHierarchySemantics(data, info, context);
+        PopulateRenderLinkSemantics(data, info, context);
 
         context.SerializedFiles.Add(info);
         context.Containers.Add(new ParsedContainer(sourceName, ContainerKind.SerializedFile, data.Length)
@@ -715,6 +716,10 @@ internal static class SkeletonParser
         var semanticObjectsBefore = context.SemanticObjects.Count;
         var semanticGameObjectsBefore = context.SemanticGameObjects.Count;
         var semanticTransformsBefore = context.SemanticTransforms.Count;
+        var semanticMeshFiltersBefore = context.SemanticMeshFilters.Count;
+        var semanticMeshRenderersBefore = context.SemanticMeshRenderers.Count;
+        var semanticMaterialsBefore = context.SemanticMaterials.Count;
+        var semanticTexturesBefore = context.SemanticTextures.Count;
 
         try
         {
@@ -749,6 +754,26 @@ internal static class SkeletonParser
                 context.SemanticTransforms.RemoveAt(context.SemanticTransforms.Count - 1);
             }
 
+            while (context.SemanticMeshFilters.Count > semanticMeshFiltersBefore)
+            {
+                context.SemanticMeshFilters.RemoveAt(context.SemanticMeshFilters.Count - 1);
+            }
+
+            while (context.SemanticMeshRenderers.Count > semanticMeshRenderersBefore)
+            {
+                context.SemanticMeshRenderers.RemoveAt(context.SemanticMeshRenderers.Count - 1);
+            }
+
+            while (context.SemanticMaterials.Count > semanticMaterialsBefore)
+            {
+                context.SemanticMaterials.RemoveAt(context.SemanticMaterials.Count - 1);
+            }
+
+            while (context.SemanticTextures.Count > semanticTexturesBefore)
+            {
+                context.SemanticTextures.RemoveAt(context.SemanticTextures.Count - 1);
+            }
+
             return false;
         }
 
@@ -779,6 +804,26 @@ internal static class SkeletonParser
             while (context.SemanticTransforms.Count > semanticTransformsBefore)
             {
                 context.SemanticTransforms.RemoveAt(context.SemanticTransforms.Count - 1);
+            }
+
+            while (context.SemanticMeshFilters.Count > semanticMeshFiltersBefore)
+            {
+                context.SemanticMeshFilters.RemoveAt(context.SemanticMeshFilters.Count - 1);
+            }
+
+            while (context.SemanticMeshRenderers.Count > semanticMeshRenderersBefore)
+            {
+                context.SemanticMeshRenderers.RemoveAt(context.SemanticMeshRenderers.Count - 1);
+            }
+
+            while (context.SemanticMaterials.Count > semanticMaterialsBefore)
+            {
+                context.SemanticMaterials.RemoveAt(context.SemanticMaterials.Count - 1);
+            }
+
+            while (context.SemanticTextures.Count > semanticTexturesBefore)
+            {
+                context.SemanticTextures.RemoveAt(context.SemanticTextures.Count - 1);
             }
 
             return false;
@@ -861,6 +906,390 @@ internal static class SkeletonParser
             catch
             {
             }
+        }
+    }
+
+    private static void PopulateRenderLinkSemantics(byte[] data, SerializedFileInfo info, BaseAssetsContext context)
+    {
+        var gameObjectPathIds = new HashSet<long>(
+            info.Objects
+                .FindAll(item => item.ClassId == 1)
+                .ConvertAll(item => item.PathId));
+
+        var meshPathIds = new HashSet<long>(
+            info.Objects
+                .FindAll(item => item.ClassId == 43)
+                .ConvertAll(item => item.PathId));
+
+        var materialPathIds = new HashSet<long>(
+            info.Objects
+                .FindAll(item => item.ClassId == 21)
+                .ConvertAll(item => item.PathId));
+
+        var shaderPathIds = new HashSet<long>(
+            info.Objects
+                .FindAll(item => item.ClassId == 48)
+                .ConvertAll(item => item.PathId));
+
+        foreach (var obj in info.Objects)
+        {
+            if (obj.ClassId != 33)
+            {
+                continue;
+            }
+
+            if (!TrySlicePayload(data, obj.ByteStart, obj.ByteSize, out var payload))
+            {
+                continue;
+            }
+
+            var meshFilter = TryReadMeshFilter(payload, obj.PathId, info.Version, info.BigEndian, gameObjectPathIds, meshPathIds);
+            if (meshFilter is not null)
+            {
+                context.SemanticMeshFilters.Add(meshFilter);
+            }
+
+            continue;
+        }
+
+        foreach (var obj in info.Objects)
+        {
+            if (obj.ClassId != 23)
+            {
+                continue;
+            }
+
+            if (!TrySlicePayload(data, obj.ByteStart, obj.ByteSize, out var payload))
+            {
+                continue;
+            }
+
+            var meshRenderer = TryReadMeshRenderer(payload, obj.PathId, info.Version, info.BigEndian, gameObjectPathIds, materialPathIds);
+            if (meshRenderer is not null)
+            {
+                context.SemanticMeshRenderers.Add(meshRenderer);
+            }
+        }
+
+        foreach (var obj in info.Objects)
+        {
+            if (obj.ClassId != 21)
+            {
+                continue;
+            }
+
+            if (!TrySlicePayload(data, obj.ByteStart, obj.ByteSize, out var payload))
+            {
+                continue;
+            }
+
+            var material = TryReadMaterial(payload, obj.PathId, info.Version, info.BigEndian, shaderPathIds);
+            if (material is not null)
+            {
+                context.SemanticMaterials.Add(material);
+            }
+        }
+
+        foreach (var obj in info.Objects)
+        {
+            if (obj.ClassId != 28)
+            {
+                continue;
+            }
+
+            if (!TrySlicePayload(data, obj.ByteStart, obj.ByteSize, out var payload))
+            {
+                continue;
+            }
+
+            var texture = TryReadTexture(payload, obj.PathId, info.Version, info.BigEndian);
+            if (texture is not null)
+            {
+                context.SemanticTextures.Add(texture);
+            }
+        }
+    }
+
+    private static SemanticMeshFilterInfo? TryReadMeshFilter(
+        byte[] payload,
+        long pathId,
+        uint version,
+        bool isBigEndian,
+        HashSet<long> gameObjectPathIds,
+        HashSet<long> meshPathIds)
+    {
+        if (TryReadMeshFilterPayload(payload, pathId, version, isBigEndian, 0, gameObjectPathIds, meshPathIds, out var candidate))
+        {
+            return candidate;
+        }
+
+        var objectPrefixSize = GetObjectPrefixSize(version);
+        if (objectPrefixSize > 0
+            && objectPrefixSize < payload.Length
+            && TryReadMeshFilterPayload(payload, pathId, version, isBigEndian, objectPrefixSize, gameObjectPathIds, meshPathIds, out candidate))
+        {
+            return candidate;
+        }
+
+        return null;
+    }
+
+    private static bool TryReadMeshFilterPayload(
+        byte[] payload,
+        long pathId,
+        uint version,
+        bool isBigEndian,
+        int startOffset,
+        HashSet<long> gameObjectPathIds,
+        HashSet<long> meshPathIds,
+        out SemanticMeshFilterInfo candidate)
+    {
+        candidate = default!;
+
+        try
+        {
+            var reader = new EndianBinaryReader(payload)
+            {
+                IsBigEndian = isBigEndian,
+                Position = startOffset
+            };
+
+            var gameObjectPathId = ReadPPtrPathId(reader, version);
+            var meshPathId = ReadPPtrPathId(reader, version);
+
+            if (!gameObjectPathIds.Contains(gameObjectPathId) || !meshPathIds.Contains(meshPathId))
+            {
+                return false;
+            }
+
+            candidate = new SemanticMeshFilterInfo(pathId, gameObjectPathId, meshPathId);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static SemanticMeshRendererInfo? TryReadMeshRenderer(
+        byte[] payload,
+        long pathId,
+        uint version,
+        bool isBigEndian,
+        HashSet<long> gameObjectPathIds,
+        HashSet<long> materialPathIds)
+    {
+        if (TryReadMeshRendererPayload(payload, pathId, version, isBigEndian, 0, gameObjectPathIds, materialPathIds, out var candidate))
+        {
+            return candidate;
+        }
+
+        var objectPrefixSize = GetObjectPrefixSize(version);
+        if (objectPrefixSize > 0
+            && objectPrefixSize < payload.Length
+            && TryReadMeshRendererPayload(payload, pathId, version, isBigEndian, objectPrefixSize, gameObjectPathIds, materialPathIds, out candidate))
+        {
+            return candidate;
+        }
+
+        return null;
+    }
+
+    private static bool TryReadMeshRendererPayload(
+        byte[] payload,
+        long pathId,
+        uint version,
+        bool isBigEndian,
+        int startOffset,
+        HashSet<long> gameObjectPathIds,
+        HashSet<long> materialPathIds,
+        out SemanticMeshRendererInfo candidate)
+    {
+        candidate = default!;
+
+        try
+        {
+            var reader = new EndianBinaryReader(payload)
+            {
+                IsBigEndian = isBigEndian,
+                Position = startOffset
+            };
+
+            var gameObjectPathId = ReadPPtrPathId(reader, version);
+            if (!gameObjectPathIds.Contains(gameObjectPathId))
+            {
+                return false;
+            }
+
+            var materialsCountOffset = startOffset + 68;
+            if (materialsCountOffset + 4 > payload.Length)
+            {
+                return false;
+            }
+
+            reader.Position = materialsCountOffset;
+            var materialCount = reader.ReadInt32();
+            if (materialCount < 0 || materialCount > 64)
+            {
+                return false;
+            }
+
+            var materials = new List<long>(materialCount);
+            for (var i = 0; i < materialCount; i++)
+            {
+                var materialPathId = ReadPPtrPathId(reader, version);
+                if (!materialPathIds.Contains(materialPathId))
+                {
+                    return false;
+                }
+
+                materials.Add(materialPathId);
+            }
+
+            candidate = new SemanticMeshRendererInfo(pathId, gameObjectPathId, materials);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static SemanticMaterialInfo? TryReadMaterial(
+        byte[] payload,
+        long pathId,
+        uint version,
+        bool isBigEndian,
+        HashSet<long> shaderPathIds)
+    {
+        if (TryReadMaterialPayload(payload, pathId, version, isBigEndian, 0, shaderPathIds, out var candidate))
+        {
+            return candidate;
+        }
+
+        var objectPrefixSize = GetObjectPrefixSize(version);
+        if (objectPrefixSize > 0
+            && objectPrefixSize < payload.Length
+            && TryReadMaterialPayload(payload, pathId, version, isBigEndian, objectPrefixSize, shaderPathIds, out candidate))
+        {
+            return candidate;
+        }
+
+        return null;
+    }
+
+    private static bool TryReadMaterialPayload(
+        byte[] payload,
+        long pathId,
+        uint version,
+        bool isBigEndian,
+        int startOffset,
+        HashSet<long> shaderPathIds,
+        out SemanticMaterialInfo candidate)
+    {
+        candidate = default!;
+
+        try
+        {
+            var reader = new EndianBinaryReader(payload)
+            {
+                IsBigEndian = isBigEndian,
+                Position = startOffset
+            };
+
+            var name = ReadAlignedString(reader);
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                return false;
+            }
+
+            var shaderPathIdRaw = ReadPPtrPathId(reader, version);
+            long? shaderPathId = shaderPathIdRaw == 0 ? null : shaderPathIdRaw;
+
+            if (shaderPathId.HasValue && !shaderPathIds.Contains(shaderPathId.Value))
+            {
+                return false;
+            }
+
+            candidate = new SemanticMaterialInfo(pathId, name, shaderPathId);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static SemanticTextureInfo? TryReadTexture(
+        byte[] payload,
+        long pathId,
+        uint version,
+        bool isBigEndian)
+    {
+        if (TryReadTexturePayload(payload, pathId, version, isBigEndian, 0, out var candidate))
+        {
+            return candidate;
+        }
+
+        var objectPrefixSize = GetObjectPrefixSize(version);
+        if (objectPrefixSize > 0
+            && objectPrefixSize < payload.Length
+            && TryReadTexturePayload(payload, pathId, version, isBigEndian, objectPrefixSize, out candidate))
+        {
+            return candidate;
+        }
+
+        return null;
+    }
+
+    private static bool TryReadTexturePayload(
+        byte[] payload,
+        long pathId,
+        uint version,
+        bool isBigEndian,
+        int startOffset,
+        out SemanticTextureInfo candidate)
+    {
+        candidate = default!;
+
+        try
+        {
+            var reader = new EndianBinaryReader(payload)
+            {
+                IsBigEndian = isBigEndian,
+                Position = startOffset
+            };
+
+            var name = ReadAlignedString(reader);
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                return false;
+            }
+
+            _ = reader.ReadInt32();
+
+            _ = reader.ReadByte();
+            _ = reader.ReadByte();
+            reader.Align(4);
+
+            var width = reader.ReadInt32();
+            var height = reader.ReadInt32();
+            _ = reader.ReadInt32();
+            _ = reader.ReadInt32();
+            var format = reader.ReadInt32();
+            var mipCount = reader.ReadInt32();
+
+            if (width < 0 || height < 0 || format < 0 || mipCount < 0)
+            {
+                return false;
+            }
+
+            candidate = new SemanticTextureInfo(pathId, name, width, height, format, mipCount);
+            return true;
+        }
+        catch
+        {
+            return false;
         }
     }
 

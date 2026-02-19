@@ -108,6 +108,10 @@ public sealed class UnityAssetSnapshotContractTests
         AssertObjectsByPathIdClassIdTypeMatch(root.GetProperty("objects"), context);
         AssertV2SummaryMatchesParser(root.GetProperty("summary"), context);
         AssertV2HierarchyMatchesParser(fixtureName, root.GetProperty("hierarchy"), root.GetProperty("objects"), context);
+        AssertV2MeshFilterLinksMatchParser(root.GetProperty("objects"), context);
+        AssertV2MeshRendererLinksMatchParser(root.GetProperty("objects"), context);
+        AssertV2MaterialCoreMatchesParser(root.GetProperty("materials"), context);
+        AssertV2TextureCoreMatchesParser(root.GetProperty("textures"), context);
         AssertV2MaterialConsistency(root.GetProperty("materials"), root.GetProperty("objects"));
         AssertV2MeshConsistency(root.GetProperty("meshes"), root.GetProperty("objects"));
         AssertV2TextureConsistency(root.GetProperty("textures"), root.GetProperty("objects"));
@@ -343,6 +347,101 @@ public sealed class UnityAssetSnapshotContractTests
                 }
             }
         }
+    }
+
+    private static void AssertV2MeshFilterLinksMatchParser(JsonElement snapshotObjectsNode, BaseAssetsContext context)
+    {
+        var objectMap = snapshotObjectsNode
+            .EnumerateArray()
+            .ToDictionary(
+                element => element.GetProperty("pathId").GetInt64(),
+                element => element.GetProperty("classId").GetInt32());
+
+        var expectedMeshFilterCount = objectMap.Count(item => item.Value == 33);
+        Assert.Equal(expectedMeshFilterCount, context.SemanticMeshFilters.Count);
+
+        foreach (var meshFilter in context.SemanticMeshFilters)
+        {
+            Assert.True(objectMap.TryGetValue(meshFilter.PathId, out var meshFilterClassId));
+            Assert.Equal(33, meshFilterClassId);
+
+            Assert.True(objectMap.TryGetValue(meshFilter.GameObjectPathId, out var gameObjectClassId));
+            Assert.Equal(1, gameObjectClassId);
+
+            Assert.True(objectMap.TryGetValue(meshFilter.MeshPathId, out var meshClassId));
+            Assert.Equal(43, meshClassId);
+        }
+    }
+
+    private static void AssertV2MeshRendererLinksMatchParser(JsonElement snapshotObjectsNode, BaseAssetsContext context)
+    {
+        var objectMap = snapshotObjectsNode
+            .EnumerateArray()
+            .ToDictionary(
+                element => element.GetProperty("pathId").GetInt64(),
+                element => element.GetProperty("classId").GetInt32());
+
+        var expectedMeshRendererCount = objectMap.Count(item => item.Value == 23);
+        Assert.Equal(expectedMeshRendererCount, context.SemanticMeshRenderers.Count);
+
+        foreach (var meshRenderer in context.SemanticMeshRenderers)
+        {
+            Assert.True(objectMap.TryGetValue(meshRenderer.PathId, out var meshRendererClassId));
+            Assert.Equal(23, meshRendererClassId);
+
+            Assert.True(objectMap.TryGetValue(meshRenderer.GameObjectPathId, out var gameObjectClassId));
+            Assert.Equal(1, gameObjectClassId);
+
+            Assert.NotEmpty(meshRenderer.MaterialPathIds);
+            foreach (var materialPathId in meshRenderer.MaterialPathIds)
+            {
+                Assert.True(objectMap.TryGetValue(materialPathId, out var materialClassId));
+                Assert.Equal(21, materialClassId);
+            }
+        }
+    }
+
+    private static void AssertV2MaterialCoreMatchesParser(JsonElement materialsNode, BaseAssetsContext context)
+    {
+        var snapshotMaterials = materialsNode
+            .EnumerateArray()
+            .Select(material => (
+                PathId: material.GetProperty("pathId").GetInt64(),
+                Name: material.GetProperty("name").GetString() ?? string.Empty,
+                ShaderPathId: material.GetProperty("shaderPathId").ValueKind == JsonValueKind.Null
+                    ? (long?)null
+                    : material.GetProperty("shaderPathId").GetInt64()))
+            .OrderBy(item => item.PathId)
+            .ToList();
+
+        var parserMaterials = context.SemanticMaterials
+            .Select(item => (item.PathId, item.Name, item.ShaderPathId))
+            .OrderBy(item => item.PathId)
+            .ToList();
+
+        Assert.Equal(snapshotMaterials, parserMaterials);
+    }
+
+    private static void AssertV2TextureCoreMatchesParser(JsonElement texturesNode, BaseAssetsContext context)
+    {
+        var snapshotTextures = texturesNode
+            .EnumerateArray()
+            .Select(texture => (
+                PathId: texture.GetProperty("pathId").GetInt64(),
+                Name: texture.GetProperty("name").GetString() ?? string.Empty,
+                Width: texture.GetProperty("width").GetInt32(),
+                Height: texture.GetProperty("height").GetInt32(),
+                Format: texture.GetProperty("format").GetInt32(),
+                MipCount: texture.GetProperty("mipCount").GetInt32()))
+            .OrderBy(item => item.PathId)
+            .ToList();
+
+        var parserTextures = context.SemanticTextures
+            .Select(item => (item.PathId, item.Name, item.Width, item.Height, item.Format, item.MipCount))
+            .OrderBy(item => item.PathId)
+            .ToList();
+
+        Assert.Equal(snapshotTextures, parserTextures);
     }
 
     private static void AssertV2MeshConsistency(JsonElement meshesNode, JsonElement snapshotObjectsNode)

@@ -11,6 +11,10 @@ public sealed class BaseAssetsContext
 	public List<SemanticObjectInfo> SemanticObjects { get; } = new();
 	public List<SemanticGameObjectInfo> SemanticGameObjects { get; } = new();
 	public List<SemanticTransformInfo> SemanticTransforms { get; } = new();
+	public List<SemanticMeshFilterInfo> SemanticMeshFilters { get; } = new();
+	public List<SemanticMeshRendererInfo> SemanticMeshRenderers { get; } = new();
+	public List<SemanticMaterialInfo> SemanticMaterials { get; } = new();
+	public List<SemanticTextureInfo> SemanticTextures { get; } = new();
 
 	public IReadOnlyDictionary<string, int> BuildSemanticObjectTypeCounts()
 	{
@@ -161,3 +165,65 @@ public sealed class SemanticTransformInfo
 
 public readonly record struct SemanticVector3(float X, float Y, float Z);
 public readonly record struct SemanticQuaternion(float W, float X, float Y, float Z);
+
+public sealed class SemanticMeshFilterInfo
+{
+	public SemanticMeshFilterInfo(long pathId, long gameObjectPathId, long meshPathId)
+	{
+		PathId = pathId;
+		GameObjectPathId = gameObjectPathId;
+		MeshPathId = meshPathId;
+	}
+
+	public long PathId { get; }
+	public long GameObjectPathId { get; }
+	public long MeshPathId { get; }
+}
+
+public sealed class SemanticMeshRendererInfo
+{
+	public SemanticMeshRendererInfo(long pathId, long gameObjectPathId, IReadOnlyList<long> materialPathIds)
+	{
+		PathId = pathId;
+		GameObjectPathId = gameObjectPathId;
+		MaterialPathIds = materialPathIds;
+	}
+
+	public long PathId { get; }
+	public long GameObjectPathId { get; }
+	public IReadOnlyList<long> MaterialPathIds { get; }
+}
+
+public sealed class SemanticMaterialInfo
+{
+	public SemanticMaterialInfo(long pathId, string name, long? shaderPathId)
+	{
+		PathId = pathId;
+		Name = name;
+		ShaderPathId = shaderPathId;
+	}
+
+	public long PathId { get; }
+	public string Name { get; }
+	public long? ShaderPathId { get; }
+}
+
+public sealed class SemanticTextureInfo
+{
+	public SemanticTextureInfo(long pathId, string name, int width, int height, int format, int mipCount)
+	{
+		PathId = pathId;
+		Name = name;
+		Width = width;
+		Height = height;
+		Format = format;
+		MipCount = mipCount;
+	}
+
+	public long PathId { get; }
+	public string Name { get; }
+	public int Width { get; }
+	public int Height { get; }
+	public int Format { get; }
+	public int MipCount { get; }
+}
