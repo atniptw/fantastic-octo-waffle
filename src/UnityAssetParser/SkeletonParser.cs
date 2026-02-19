@@ -1151,29 +1151,9 @@ internal static class SkeletonParser
                 return false;
             }
 
-            var materialsCountOffset = startOffset + 68;
-            if (materialsCountOffset + 4 > payload.Length)
+            if (!TryReadRendererMaterials(payload, version, isBigEndian, startOffset, materialPathIds, out var materials))
             {
                 return false;
-            }
-
-            reader.Position = materialsCountOffset;
-            var materialCount = reader.ReadInt32();
-            if (materialCount < 0 || materialCount > 64)
-            {
-                return false;
-            }
-
-            var materials = new List<long>(materialCount);
-            for (var i = 0; i < materialCount; i++)
-            {
-                var materialPathId = ReadPPtrPathId(reader, version);
-                if (!materialPathIds.Contains(materialPathId))
-                {
-                    return false;
-                }
-
-                materials.Add(materialPathId);
             }
 
             candidate = new SemanticMeshRendererInfo(pathId, gameObjectPathId, materials);
@@ -1183,6 +1163,72 @@ internal static class SkeletonParser
         {
             return false;
         }
+    }
+
+    private static bool TryReadRendererMaterials(
+        byte[] payload,
+        uint version,
+        bool isBigEndian,
+        int startOffset,
+        HashSet<long> materialPathIds,
+        out List<long> materials)
+    {
+        materials = new List<long>();
+
+        var pptrSize = version >= 5 ? 12 : 8;
+        var searchStart = AlignPosition(startOffset + pptrSize, 4);
+        var searchEnd = Math.Min(payload.Length - 4, searchStart + 256);
+        if (searchStart > searchEnd)
+        {
+            return false;
+        }
+
+        var reader = new EndianBinaryReader(payload)
+        {
+            IsBigEndian = isBigEndian
+        };
+
+        for (var offset = searchStart; offset <= searchEnd; offset += 4)
+        {
+            reader.Position = offset;
+            var materialCount = reader.ReadInt32();
+            if (materialCount <= 0 || materialCount > 64)
+            {
+                continue;
+            }
+
+            var bytesRequired = 4 + (materialCount * pptrSize);
+            if (offset + bytesRequired > payload.Length)
+            {
+                continue;
+            }
+
+            var candidateMaterials = new List<long>(materialCount);
+            var isValid = true;
+
+            reader.Position = offset + 4;
+            for (var i = 0; i < materialCount; i++)
+            {
+                var materialPathId = ReadPPtrPathId(reader, version);
+                if (!materialPathIds.Contains(materialPathId))
+                {
+                    isValid = false;
+                    break;
+                }
+
+                candidateMaterials.Add(materialPathId);
+            }
+
+            if (!isValid)
+            {
+                continue;
+            }
+
+            materials = candidateMaterials;
+            return true;
+        }
+
+        return false;
     }
 
     private static SemanticMaterialInfo? TryReadMaterial(
