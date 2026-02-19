@@ -866,30 +866,27 @@ internal static class SkeletonParser
 
     private static SemanticGameObjectInfo? TryReadGameObject(byte[] payload, long pathId, uint version, bool isBigEndian)
     {
-        var bestScore = int.MinValue;
-        SemanticGameObjectInfo? bestCandidate = null;
-
-        foreach (var offset in BuildCandidateOffsets(payload.Length, version))
+        if (TryReadGameObjectPayload(payload, pathId, version, isBigEndian, 0, preferInt64PathId: true, out var candidate)
+            || TryReadGameObjectPayload(payload, pathId, version, isBigEndian, 0, preferInt64PathId: false, out candidate))
         {
-            if (!TryReadGameObjectCandidate(payload, pathId, version, isBigEndian, offset, out var candidate, out var score))
-            {
-                continue;
-            }
-
-            if (score > bestScore)
-            {
-                bestScore = score;
-                bestCandidate = candidate;
-            }
+            return candidate;
         }
 
-        return bestScore >= 4 ? bestCandidate : null;
+        var objectPrefixSize = GetObjectPrefixSize(version);
+        if (objectPrefixSize > 0
+            && objectPrefixSize < payload.Length
+            && (TryReadGameObjectPayload(payload, pathId, version, isBigEndian, objectPrefixSize, preferInt64PathId: true, out candidate)
+                || TryReadGameObjectPayload(payload, pathId, version, isBigEndian, objectPrefixSize, preferInt64PathId: false, out candidate)))
+        {
+            return candidate;
+        }
+
+        return null;
     }
 
-    private static bool TryReadGameObjectCandidate(byte[] payload, long pathId, uint version, bool isBigEndian, int startOffset, out SemanticGameObjectInfo candidate, out int score)
+    private static bool TryReadGameObjectPayload(byte[] payload, long pathId, uint version, bool isBigEndian, int startOffset, bool preferInt64PathId, out SemanticGameObjectInfo candidate)
     {
         candidate = default!;
-        score = int.MinValue;
 
         try
         {
@@ -908,11 +905,21 @@ internal static class SkeletonParser
             for (var i = 0; i < componentCount; i++)
             {
                 reader.ReadInt32();
-                _ = ReadPPtrPathId(reader, version);
+                _ = ReadPPtrPathId(reader, version, forceInt32PathId: !preferInt64PathId);
             }
 
             var layer = reader.ReadInt32();
             var name = ReadAlignedString(reader);
+
+            if (layer is < 0 or > 31)
+            {
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                return false;
+            }
 
             if (reader.Position + 3 > reader.Length)
             {
@@ -922,11 +929,10 @@ internal static class SkeletonParser
             _ = reader.ReadUInt16();
             var isActive = reader.ReadByte() != 0;
 
-            score = 0;
-            score += componentCount <= 128 ? 1 : 0;
-            score += layer is >= 0 and <= 31 ? 2 : -2;
-            score += IsReasonableName(name) ? 4 : -3;
-            score += reader.Position <= reader.Length ? 1 : 0;
+            if (reader.Position > reader.Length)
+            {
+                return false;
+            }
 
             candidate = new SemanticGameObjectInfo(pathId, name, isActive, layer);
             return true;
@@ -945,27 +951,23 @@ internal static class SkeletonParser
         HashSet<long> gameObjectPathIds,
         HashSet<long> transformPathIds)
     {
-        var bestScore = int.MinValue;
-        SemanticTransformInfo? bestCandidate = null;
-
-        foreach (var offset in BuildCandidateOffsets(payload.Length, version))
+        if (TryReadTransformPayload(payload, pathId, version, isBigEndian, 0, gameObjectPathIds, transformPathIds, out var candidate))
         {
-            if (!TryReadTransformCandidate(payload, pathId, version, isBigEndian, offset, gameObjectPathIds, transformPathIds, out var candidate, out var score))
-            {
-                continue;
-            }
-
-            if (score > bestScore)
-            {
-                bestScore = score;
-                bestCandidate = candidate;
-            }
+            return candidate;
         }
 
-        return bestScore >= 5 ? bestCandidate : null;
+        var objectPrefixSize = GetObjectPrefixSize(version);
+        if (objectPrefixSize > 0
+            && objectPrefixSize < payload.Length
+            && TryReadTransformPayload(payload, pathId, version, isBigEndian, objectPrefixSize, gameObjectPathIds, transformPathIds, out candidate))
+        {
+            return candidate;
+        }
+
+        return null;
     }
 
-    private static bool TryReadTransformCandidate(
+    private static bool TryReadTransformPayload(
         byte[] payload,
         long pathId,
         uint version,
@@ -973,11 +975,9 @@ internal static class SkeletonParser
         int startOffset,
         HashSet<long> gameObjectPathIds,
         HashSet<long> transformPathIds,
-        out SemanticTransformInfo candidate,
-        out int score)
+        out SemanticTransformInfo candidate)
     {
         candidate = default!;
-        score = int.MinValue;
 
         try
         {
@@ -1016,12 +1016,20 @@ internal static class SkeletonParser
 
             var parentPathId = ReadPPtrPathId(reader, version);
 
-            score = 0;
-            score += gameObjectPathIds.Contains(gameObjectPathId) ? 4 : -4;
-            score += childCount <= 64 ? 1 : 0;
-            score += parentPathId == 0 || transformPathIds.Contains(parentPathId) ? 2 : -2;
-            score += children.TrueForAll(child => transformPathIds.Contains(child)) ? 2 : -2;
-            score += AreFinite(rotationX, rotationY, rotationZ, rotationW, positionX, positionY, positionZ, scaleX, scaleY, scaleZ) ? 2 : -3;
+            if (!gameObjectPathIds.Contains(gameObjectPathId))
+            {
+                return false;
+            }
+
+            if (parentPathId != 0 && !transformPathIds.Contains(parentPathId))
+            {
+                return false;
+            }
+
+            if (!children.TrueForAll(child => transformPathIds.Contains(child)))
+            {
+                return false;
+            }
 
             candidate = new SemanticTransformInfo(
                 pathId,
@@ -1040,57 +1048,24 @@ internal static class SkeletonParser
         }
     }
 
-    private static IEnumerable<int> BuildCandidateOffsets(int payloadLength, uint version)
+    private static int GetObjectPrefixSize(uint version)
     {
-        var objectPrefixSize = 4 + 3 * (version >= 14 ? 12 : 8);
-        var candidates = new List<int>
-        {
-            0,
-            objectPrefixSize,
-            4,
-            8,
-            12,
-            16,
-            20,
-            24,
-            28,
-            32,
-            36,
-            40,
-            44
-        };
-
-        var seen = new HashSet<int>();
-        foreach (var candidate in candidates)
-        {
-            if (candidate < 0 || candidate >= payloadLength)
-            {
-                continue;
-            }
-
-            if (seen.Add(candidate))
-            {
-                yield return candidate;
-            }
-        }
-    }
-
-    private static bool AreFinite(params float[] values)
-    {
-        foreach (var value in values)
-        {
-            if (float.IsNaN(value) || float.IsInfinity(value))
-            {
-                return false;
-            }
-        }
-
-        return true;
+        return 4 + (3 * (version >= 14 ? 12 : 8));
     }
 
     private static long ReadPPtrPathId(EndianBinaryReader reader, uint version)
     {
+        return ReadPPtrPathId(reader, version, forceInt32PathId: false);
+    }
+
+    private static long ReadPPtrPathId(EndianBinaryReader reader, uint version, bool forceInt32PathId)
+    {
         _ = reader.ReadInt32();
+        if (forceInt32PathId)
+        {
+            return reader.ReadInt32();
+        }
+
         return version >= 5 ? reader.ReadInt64() : reader.ReadInt32();
     }
 
@@ -1106,24 +1081,6 @@ internal static class SkeletonParser
         var bytes = reader.ReadBytes(byteCount);
         reader.Align(4);
         return System.Text.Encoding.UTF8.GetString(bytes);
-    }
-
-    private static bool IsReasonableName(string value)
-    {
-        if (string.IsNullOrWhiteSpace(value) || value.Length > 256)
-        {
-            return false;
-        }
-
-        foreach (var character in value)
-        {
-            if (char.IsControl(character) && !char.IsWhiteSpace(character))
-            {
-                return false;
-            }
-        }
-
-        return true;
     }
 
     private sealed record BlockInfo(uint UncompressedSize, uint CompressedSize, ushort Flags);

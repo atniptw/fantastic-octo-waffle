@@ -107,11 +107,11 @@ public sealed class UnityAssetSnapshotContractTests
 
         AssertObjectsByPathIdClassIdTypeMatch(root.GetProperty("objects"), context);
         AssertV2SummaryMatchesParser(root.GetProperty("summary"), context);
-        AssertV2HierarchyMatchesParser(root.GetProperty("hierarchy"), root.GetProperty("objects"), context);
+        AssertV2HierarchyMatchesParser(fixtureName, root.GetProperty("hierarchy"), root.GetProperty("objects"), context);
         AssertV2MaterialConsistency(root.GetProperty("materials"), root.GetProperty("objects"));
         AssertV2MeshConsistency(root.GetProperty("meshes"), root.GetProperty("objects"));
         AssertV2TextureConsistency(root.GetProperty("textures"), root.GetProperty("objects"));
-        AssertV2WarningsConsistency(root.GetProperty("warnings"));
+        AssertV2WarningsConsistency(root.GetProperty("warnings"), context);
     }
 
     private static void AssertObjectsByPathIdClassIdTypeMatch(JsonElement snapshotObjectsNode, BaseAssetsContext context)
@@ -151,7 +151,16 @@ public sealed class UnityAssetSnapshotContractTests
         Assert.Equal(snapshotTypeCounts, parserTypeCounts);
     }
 
-    private static void AssertV2HierarchyMatchesParser(JsonElement hierarchyNode, JsonElement snapshotObjectsNode, BaseAssetsContext context)
+    private static readonly HashSet<string> StrictHierarchyFixtures = new(StringComparer.Ordinal)
+    {
+        "BambooCopter_head.hhh",
+        "BlindEye_body.hhh",
+        "BrowSad_head.hhh",
+        "Cigar_neck.hhh",
+        "Sakuyas hairdo_head.hhh"
+    };
+
+    private static void AssertV2HierarchyMatchesParser(string fixtureName, JsonElement hierarchyNode, JsonElement snapshotObjectsNode, BaseAssetsContext context)
     {
         var objectMap = snapshotObjectsNode
             .EnumerateArray()
@@ -182,6 +191,8 @@ public sealed class UnityAssetSnapshotContractTests
             .OrderBy(item => item.PathId)
             .ToList();
 
+        Assert.Equal(parserGameObjects.Count, parserGameObjects.Select(item => item.PathId).Distinct().Count());
+
         var snapshotTransforms = transforms
             .Select(item => new SnapshotTransformRow(
                 item.GetProperty("pathId").GetInt64(),
@@ -206,12 +217,18 @@ public sealed class UnityAssetSnapshotContractTests
             .OrderBy(item => item.PathId)
             .ToList();
 
+        Assert.Equal(parserTransforms.Count, parserTransforms.Select(item => item.PathId).Distinct().Count());
+
         var hasCompleteHierarchyDecode =
             parserGameObjects.Count == snapshotGameObjects.Count
             && parserTransforms.Count == snapshotTransforms.Count;
 
-        if (hasCompleteHierarchyDecode)
+        if (StrictHierarchyFixtures.Contains(fixtureName))
         {
+            Assert.True(
+                hasCompleteHierarchyDecode,
+                $"Fixture '{fixtureName}' must decode full hierarchy. Snapshot GO/Transform counts: {snapshotGameObjects.Count}/{snapshotTransforms.Count}, parser counts: {parserGameObjects.Count}/{parserTransforms.Count}");
+
             Assert.Equal(snapshotGameObjects, parserGameObjects);
 
             for (var i = 0; i < snapshotTransforms.Count; i++)
@@ -376,14 +393,27 @@ public sealed class UnityAssetSnapshotContractTests
         }
     }
 
-    private static void AssertV2WarningsConsistency(JsonElement warningsNode)
+    private static void AssertV2WarningsConsistency(JsonElement warningsNode, BaseAssetsContext context)
     {
         Assert.Equal(JsonValueKind.Array, warningsNode.ValueKind);
-        foreach (var warning in warningsNode.EnumerateArray())
-        {
-            Assert.Equal(JsonValueKind.String, warning.ValueKind);
-            Assert.False(string.IsNullOrWhiteSpace(warning.GetString()));
-        }
+
+        var snapshotCodes = warningsNode.EnumerateArray()
+            .Select(warning =>
+            {
+                Assert.Equal(JsonValueKind.String, warning.ValueKind);
+                var value = warning.GetString();
+                Assert.False(string.IsNullOrWhiteSpace(value));
+                return NormalizeWarningCode(value!);
+            })
+            .OrderBy(item => item, StringComparer.Ordinal)
+            .ToList();
+
+        var parserCodes = context.Warnings
+            .Select(NormalizeWarningCode)
+            .OrderBy(item => item, StringComparer.Ordinal)
+            .ToList();
+
+        Assert.Equal(snapshotCodes, parserCodes);
     }
 
     private static void AssertContainersMatch(JsonElement snapshotContainersNode, BaseAssetsContext context)
@@ -553,9 +583,20 @@ public sealed class UnityAssetSnapshotContractTests
             .OrderBy(item => item, StringComparer.Ordinal)
             .ToList();
 
-        Assert.True(snapshotCodes.Count <= snapshotCount || snapshotCount == 0);
+        var parserCodes = context.Warnings
+            .Select(NormalizeWarningCode)
+            .OrderBy(item => item, StringComparer.Ordinal)
+            .ToList();
 
-        _ = context.Warnings;
+        Assert.Equal(snapshotCount, parserCodes.Count);
+
+        if (snapshotCodes.Count > 0)
+        {
+            Assert.Equal(snapshotCodes, parserCodes);
+            return;
+        }
+
+        Assert.Empty(parserCodes);
     }
 
     private static void AssertSnapshotInternalConsistency(JsonElement root, int schemaVersion)
