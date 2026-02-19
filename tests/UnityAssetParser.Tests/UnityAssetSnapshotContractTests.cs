@@ -477,6 +477,16 @@ public sealed class UnityAssetSnapshotContractTests
             Assert.True(mesh.IndexElementSizeBytes is 2 or 4);
             Assert.Equal(mesh.IndexElementCount * mesh.IndexElementSizeBytes, mesh.IndexCount);
 
+            if (mesh.DecodedIndices.Count > 0)
+            {
+                Assert.Equal(mesh.IndexElementCount, mesh.DecodedIndices.Count);
+                if (mesh.IndexFormat.HasValue)
+                {
+                    Assert.True(mesh.IndexFormat.Value is 0 or 1);
+                    Assert.Equal(mesh.IndexFormat.Value == 0 ? 2 : 4, mesh.IndexElementSizeBytes);
+                }
+            }
+
             for (var i = 0; i < mesh.SubMeshes.Count; i++)
             {
                 var subMesh = mesh.SubMeshes[i];
@@ -484,6 +494,7 @@ public sealed class UnityAssetSnapshotContractTests
                 Assert.True(subMesh.IndexCount >= 0);
                 Assert.True(subMesh.FirstVertex >= 0);
                 Assert.True(subMesh.VertexCount >= 0);
+                Assert.Equal(0, subMesh.FirstByte % mesh.IndexElementSizeBytes);
                 Assert.Equal(mesh.Topology[i], subMesh.Topology);
             }
         }

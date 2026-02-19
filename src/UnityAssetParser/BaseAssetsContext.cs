@@ -201,6 +201,8 @@ public sealed class SemanticMeshInfo
 		long pathId,
 		string name,
 		SemanticBoundsInfo bounds,
+		int? indexFormat,
+		IReadOnlyList<uint> decodedIndices,
 		int indexElementSizeBytes,
 		int indexElementCount,
 		int indexCount,
@@ -212,6 +214,8 @@ public sealed class SemanticMeshInfo
 		PathId = pathId;
 		Name = name;
 		Bounds = bounds;
+		IndexFormat = indexFormat;
+		DecodedIndices = decodedIndices;
 		IndexElementSizeBytes = indexElementSizeBytes;
 		IndexElementCount = indexElementCount;
 		IndexCount = indexCount;
@@ -224,6 +228,8 @@ public sealed class SemanticMeshInfo
 	public long PathId { get; }
 	public string Name { get; }
 	public SemanticBoundsInfo Bounds { get; }
+	public int? IndexFormat { get; }
+	public IReadOnlyList<uint> DecodedIndices { get; }
 	public int IndexElementSizeBytes { get; }
 	public int IndexElementCount { get; }
 	public int IndexCount { get; }

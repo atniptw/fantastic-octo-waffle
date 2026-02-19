@@ -1436,6 +1436,21 @@ internal static class SkeletonParser
                 return false;
             }
 
+            int? indexFormat = null;
+            IReadOnlyList<uint> decodedIndices = Array.Empty<uint>();
+            if (TryReadMeshIndexBuffer(
+                payload,
+                isBigEndian,
+                reader.Position,
+                (int)indexCountBytes,
+                (int)indexElementCountTotal,
+                out var parsedIndexFormat,
+                out var parsedIndices))
+            {
+                indexFormat = parsedIndexFormat;
+                decodedIndices = parsedIndices;
+            }
+
             var boundsCenter = new SemanticVector3(
                 (minX + maxX) * 0.5f,
                 (minY + maxY) * 0.5f,
@@ -1450,6 +1465,8 @@ internal static class SkeletonParser
                 pathId,
                 name,
                 new SemanticBoundsInfo(boundsCenter, boundsExtent),
+                indexFormat,
+                decodedIndices,
                 indexElementSize,
                 (int)indexElementCountTotal,
                 (int)indexCountBytes,
@@ -1464,6 +1481,81 @@ internal static class SkeletonParser
         {
             return false;
         }
+    }
+
+    private static bool TryReadMeshIndexBuffer(
+        byte[] payload,
+        bool isBigEndian,
+        int searchStartOffset,
+        int expectedIndexBytes,
+        int expectedIndexElements,
+        out int indexFormat,
+        out IReadOnlyList<uint> decodedIndices)
+    {
+        indexFormat = default;
+        decodedIndices = Array.Empty<uint>();
+
+        if (expectedIndexBytes <= 0 || expectedIndexElements <= 0)
+        {
+            return false;
+        }
+
+        var searchStart = AlignPosition(searchStartOffset, 4);
+        var searchEnd = Math.Min(payload.Length - 8, searchStart + 4096);
+        if (searchStart > searchEnd)
+        {
+            return false;
+        }
+
+        var reader = new EndianBinaryReader(payload)
+        {
+            IsBigEndian = isBigEndian
+        };
+
+        for (var offset = searchStart; offset <= searchEnd; offset += 4)
+        {
+            reader.Position = offset;
+            var candidateFormat = reader.ReadInt32();
+            if (candidateFormat is not 0 and not 1)
+            {
+                continue;
+            }
+
+            var candidateLength = reader.ReadInt32();
+            if (candidateLength != expectedIndexBytes)
+            {
+                continue;
+            }
+
+            if (offset + 8 + candidateLength > payload.Length)
+            {
+                continue;
+            }
+
+            var elementSize = candidateFormat == 0 ? 2 : 4;
+            if (candidateLength % elementSize != 0)
+            {
+                continue;
+            }
+
+            if ((candidateLength / elementSize) != expectedIndexElements)
+            {
+                continue;
+            }
+
+            reader.Position = offset + 8;
+            var indices = new List<uint>(expectedIndexElements);
+            for (var i = 0; i < expectedIndexElements; i++)
+            {
+                indices.Add(candidateFormat == 0 ? reader.ReadUInt16() : reader.ReadUInt32());
+            }
+
+            indexFormat = candidateFormat;
+            decodedIndices = indices;
+            return true;
+        }
+
+        return false;
     }
 
     private static SemanticTextureInfo? TryReadTexture(
