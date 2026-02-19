@@ -1349,6 +1349,7 @@ internal static class SkeletonParser
             }
 
             var topology = new List<int>(subMeshCount);
+            var subMeshes = new List<SemanticSubMeshInfo>(subMeshCount);
             long indexElementCountTotal = 0;
             long vertexCountMax = 0;
 
@@ -1361,7 +1362,7 @@ internal static class SkeletonParser
 
             for (var i = 0; i < subMeshCount; i++)
             {
-                _ = reader.ReadUInt32();
+                var firstByte = reader.ReadUInt32();
                 var indexCount = reader.ReadUInt32();
                 var topologyValue = reader.ReadInt32();
                 _ = reader.ReadUInt32();
@@ -1380,6 +1381,11 @@ internal static class SkeletonParser
                     return false;
                 }
 
+                if (firstByte > int.MaxValue)
+                {
+                    return false;
+                }
+
                 if (topologyValue < 0 || topologyValue > 10)
                 {
                     return false;
@@ -1388,6 +1394,12 @@ internal static class SkeletonParser
                 topology.Add(topologyValue);
                 indexElementCountTotal += indexCount;
                 vertexCountMax = Math.Max(vertexCountMax, firstVertex + vertexCount);
+                subMeshes.Add(new SemanticSubMeshInfo(
+                    (int)firstByte,
+                    (int)indexCount,
+                    topologyValue,
+                    (int)firstVertex,
+                    (int)vertexCount));
 
                 var aabbMinX = centerX - extentX;
                 var aabbMinY = centerY - extentY;
@@ -1438,8 +1450,11 @@ internal static class SkeletonParser
                 pathId,
                 name,
                 new SemanticBoundsInfo(boundsCenter, boundsExtent),
+                indexElementSize,
+                (int)indexElementCountTotal,
                 (int)indexCountBytes,
                 subMeshCount,
+                subMeshes,
                 topology,
                 (int)vertexCountMax);
 

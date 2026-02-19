@@ -201,16 +201,22 @@ public sealed class SemanticMeshInfo
 		long pathId,
 		string name,
 		SemanticBoundsInfo bounds,
+		int indexElementSizeBytes,
+		int indexElementCount,
 		int indexCount,
 		int subMeshCount,
+		IReadOnlyList<SemanticSubMeshInfo> subMeshes,
 		IReadOnlyList<int> topology,
 		int vertexCount)
 	{
 		PathId = pathId;
 		Name = name;
 		Bounds = bounds;
+		IndexElementSizeBytes = indexElementSizeBytes;
+		IndexElementCount = indexElementCount;
 		IndexCount = indexCount;
 		SubMeshCount = subMeshCount;
+		SubMeshes = subMeshes;
 		Topology = topology;
 		VertexCount = vertexCount;
 	}
@@ -218,9 +224,30 @@ public sealed class SemanticMeshInfo
 	public long PathId { get; }
 	public string Name { get; }
 	public SemanticBoundsInfo Bounds { get; }
+	public int IndexElementSizeBytes { get; }
+	public int IndexElementCount { get; }
 	public int IndexCount { get; }
 	public int SubMeshCount { get; }
+	public IReadOnlyList<SemanticSubMeshInfo> SubMeshes { get; }
 	public IReadOnlyList<int> Topology { get; }
+	public int VertexCount { get; }
+}
+
+public sealed class SemanticSubMeshInfo
+{
+	public SemanticSubMeshInfo(int firstByte, int indexCount, int topology, int firstVertex, int vertexCount)
+	{
+		FirstByte = firstByte;
+		IndexCount = indexCount;
+		Topology = topology;
+		FirstVertex = firstVertex;
+		VertexCount = vertexCount;
+	}
+
+	public int FirstByte { get; }
+	public int IndexCount { get; }
+	public int Topology { get; }
+	public int FirstVertex { get; }
 	public int VertexCount { get; }
 }
 

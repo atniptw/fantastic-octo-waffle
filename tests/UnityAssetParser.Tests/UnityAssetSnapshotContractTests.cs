@@ -111,6 +111,7 @@ public sealed class UnityAssetSnapshotContractTests
         AssertV2MeshFilterLinksMatchParser(root.GetProperty("objects"), context);
         AssertV2MeshRendererLinksMatchParser(root.GetProperty("objects"), context);
         AssertV2MeshCoreMatchesParser(root.GetProperty("meshes"), context);
+        AssertV2MeshRenderableSemantics(context);
         AssertV2MaterialCoreMatchesParser(root.GetProperty("materials"), context);
         AssertV2TextureCoreMatchesParser(root.GetProperty("textures"), context);
         AssertV2MaterialConsistency(root.GetProperty("materials"), root.GetProperty("objects"));
@@ -464,6 +465,27 @@ public sealed class UnityAssetSnapshotContractTests
             Assert.Equal(snapshotMeshes[i].VertexCount, parserMeshes[i].VertexCount);
             AssertVector3Equal(snapshotMeshes[i].Center, parserMeshes[i].Center);
             AssertVector3Equal(snapshotMeshes[i].Extent, parserMeshes[i].Extent);
+        }
+    }
+
+    private static void AssertV2MeshRenderableSemantics(BaseAssetsContext context)
+    {
+        foreach (var mesh in context.SemanticMeshes)
+        {
+            Assert.Equal(mesh.SubMeshCount, mesh.SubMeshes.Count);
+            Assert.Equal(mesh.SubMeshCount, mesh.Topology.Count);
+            Assert.True(mesh.IndexElementSizeBytes is 2 or 4);
+            Assert.Equal(mesh.IndexElementCount * mesh.IndexElementSizeBytes, mesh.IndexCount);
+
+            for (var i = 0; i < mesh.SubMeshes.Count; i++)
+            {
+                var subMesh = mesh.SubMeshes[i];
+                Assert.True(subMesh.FirstByte >= 0);
+                Assert.True(subMesh.IndexCount >= 0);
+                Assert.True(subMesh.FirstVertex >= 0);
+                Assert.True(subMesh.VertexCount >= 0);
+                Assert.Equal(mesh.Topology[i], subMesh.Topology);
+            }
         }
     }
 
