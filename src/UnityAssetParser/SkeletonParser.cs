@@ -718,6 +718,7 @@ internal static class SkeletonParser
         var semanticTransformsBefore = context.SemanticTransforms.Count;
         var semanticMeshFiltersBefore = context.SemanticMeshFilters.Count;
         var semanticMeshRenderersBefore = context.SemanticMeshRenderers.Count;
+        var semanticMeshesBefore = context.SemanticMeshes.Count;
         var semanticMaterialsBefore = context.SemanticMaterials.Count;
         var semanticTexturesBefore = context.SemanticTextures.Count;
 
@@ -762,6 +763,11 @@ internal static class SkeletonParser
             while (context.SemanticMeshRenderers.Count > semanticMeshRenderersBefore)
             {
                 context.SemanticMeshRenderers.RemoveAt(context.SemanticMeshRenderers.Count - 1);
+            }
+
+            while (context.SemanticMeshes.Count > semanticMeshesBefore)
+            {
+                context.SemanticMeshes.RemoveAt(context.SemanticMeshes.Count - 1);
             }
 
             while (context.SemanticMaterials.Count > semanticMaterialsBefore)
@@ -814,6 +820,11 @@ internal static class SkeletonParser
             while (context.SemanticMeshRenderers.Count > semanticMeshRenderersBefore)
             {
                 context.SemanticMeshRenderers.RemoveAt(context.SemanticMeshRenderers.Count - 1);
+            }
+
+            while (context.SemanticMeshes.Count > semanticMeshesBefore)
+            {
+                context.SemanticMeshes.RemoveAt(context.SemanticMeshes.Count - 1);
             }
 
             while (context.SemanticMaterials.Count > semanticMaterialsBefore)
@@ -968,6 +979,25 @@ internal static class SkeletonParser
             if (meshRenderer is not null)
             {
                 context.SemanticMeshRenderers.Add(meshRenderer);
+            }
+        }
+
+        foreach (var obj in info.Objects)
+        {
+            if (obj.ClassId != 43)
+            {
+                continue;
+            }
+
+            if (!TrySlicePayload(data, obj.ByteStart, obj.ByteSize, out var payload))
+            {
+                continue;
+            }
+
+            var mesh = TryReadMesh(payload, obj.PathId, info.Version, info.BigEndian);
+            if (mesh is not null)
+            {
+                context.SemanticMeshes.Add(mesh);
             }
         }
 
@@ -1212,6 +1242,161 @@ internal static class SkeletonParser
             }
 
             candidate = new SemanticMaterialInfo(pathId, name, shaderPathId);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static SemanticMeshInfo? TryReadMesh(
+        byte[] payload,
+        long pathId,
+        uint version,
+        bool isBigEndian)
+    {
+        if (TryReadMeshPayload(payload, pathId, version, isBigEndian, 0, out var candidate))
+        {
+            return candidate;
+        }
+
+        var objectPrefixSize = GetObjectPrefixSize(version);
+        if (objectPrefixSize > 0
+            && objectPrefixSize < payload.Length
+            && TryReadMeshPayload(payload, pathId, version, isBigEndian, objectPrefixSize, out candidate))
+        {
+            return candidate;
+        }
+
+        return null;
+    }
+
+    private static bool TryReadMeshPayload(
+        byte[] payload,
+        long pathId,
+        uint version,
+        bool isBigEndian,
+        int startOffset,
+        out SemanticMeshInfo candidate)
+    {
+        candidate = default!;
+
+        try
+        {
+            var reader = new EndianBinaryReader(payload)
+            {
+                IsBigEndian = isBigEndian,
+                Position = startOffset
+            };
+
+            var name = ReadAlignedString(reader);
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                return false;
+            }
+
+            var subMeshCount = reader.ReadInt32();
+            if (subMeshCount <= 0 || subMeshCount > 1024)
+            {
+                return false;
+            }
+
+            var topology = new List<int>(subMeshCount);
+            long indexElementCountTotal = 0;
+            long vertexCountMax = 0;
+
+            float minX = 0;
+            float minY = 0;
+            float minZ = 0;
+            float maxX = 0;
+            float maxY = 0;
+            float maxZ = 0;
+
+            for (var i = 0; i < subMeshCount; i++)
+            {
+                _ = reader.ReadUInt32();
+                var indexCount = reader.ReadUInt32();
+                var topologyValue = reader.ReadInt32();
+                _ = reader.ReadUInt32();
+                var firstVertex = reader.ReadUInt32();
+                var vertexCount = reader.ReadUInt32();
+
+                var centerX = reader.ReadSingle();
+                var centerY = reader.ReadSingle();
+                var centerZ = reader.ReadSingle();
+                var extentX = reader.ReadSingle();
+                var extentY = reader.ReadSingle();
+                var extentZ = reader.ReadSingle();
+
+                if (indexCount > int.MaxValue || firstVertex > int.MaxValue || vertexCount > int.MaxValue)
+                {
+                    return false;
+                }
+
+                if (topologyValue < 0 || topologyValue > 10)
+                {
+                    return false;
+                }
+
+                topology.Add(topologyValue);
+                indexElementCountTotal += indexCount;
+                vertexCountMax = Math.Max(vertexCountMax, firstVertex + vertexCount);
+
+                var aabbMinX = centerX - extentX;
+                var aabbMinY = centerY - extentY;
+                var aabbMinZ = centerZ - extentZ;
+                var aabbMaxX = centerX + extentX;
+                var aabbMaxY = centerY + extentY;
+                var aabbMaxZ = centerZ + extentZ;
+
+                if (i == 0)
+                {
+                    minX = aabbMinX;
+                    minY = aabbMinY;
+                    minZ = aabbMinZ;
+                    maxX = aabbMaxX;
+                    maxY = aabbMaxY;
+                    maxZ = aabbMaxZ;
+                }
+                else
+                {
+                    minX = Math.Min(minX, aabbMinX);
+                    minY = Math.Min(minY, aabbMinY);
+                    minZ = Math.Min(minZ, aabbMinZ);
+                    maxX = Math.Max(maxX, aabbMaxX);
+                    maxY = Math.Max(maxY, aabbMaxY);
+                    maxZ = Math.Max(maxZ, aabbMaxZ);
+                }
+            }
+
+            var indexElementSize = vertexCountMax > ushort.MaxValue ? 4 : 2;
+            var indexCountBytes = indexElementCountTotal * indexElementSize;
+
+            if (indexCountBytes > int.MaxValue || vertexCountMax > int.MaxValue)
+            {
+                return false;
+            }
+
+            var boundsCenter = new SemanticVector3(
+                (minX + maxX) * 0.5f,
+                (minY + maxY) * 0.5f,
+                (minZ + maxZ) * 0.5f);
+
+            var boundsExtent = new SemanticVector3(
+                (maxX - minX) * 0.5f,
+                (maxY - minY) * 0.5f,
+                (maxZ - minZ) * 0.5f);
+
+            candidate = new SemanticMeshInfo(
+                pathId,
+                name,
+                new SemanticBoundsInfo(boundsCenter, boundsExtent),
+                (int)indexCountBytes,
+                subMeshCount,
+                topology,
+                (int)vertexCountMax);
+
             return true;
         }
         catch

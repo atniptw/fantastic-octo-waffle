@@ -13,6 +13,7 @@ public sealed class BaseAssetsContext
 	public List<SemanticTransformInfo> SemanticTransforms { get; } = new();
 	public List<SemanticMeshFilterInfo> SemanticMeshFilters { get; } = new();
 	public List<SemanticMeshRendererInfo> SemanticMeshRenderers { get; } = new();
+	public List<SemanticMeshInfo> SemanticMeshes { get; } = new();
 	public List<SemanticMaterialInfo> SemanticMaterials { get; } = new();
 	public List<SemanticTextureInfo> SemanticTextures { get; } = new();
 
@@ -192,6 +193,47 @@ public sealed class SemanticMeshRendererInfo
 	public long PathId { get; }
 	public long GameObjectPathId { get; }
 	public IReadOnlyList<long> MaterialPathIds { get; }
+}
+
+public sealed class SemanticMeshInfo
+{
+	public SemanticMeshInfo(
+		long pathId,
+		string name,
+		SemanticBoundsInfo bounds,
+		int indexCount,
+		int subMeshCount,
+		IReadOnlyList<int> topology,
+		int vertexCount)
+	{
+		PathId = pathId;
+		Name = name;
+		Bounds = bounds;
+		IndexCount = indexCount;
+		SubMeshCount = subMeshCount;
+		Topology = topology;
+		VertexCount = vertexCount;
+	}
+
+	public long PathId { get; }
+	public string Name { get; }
+	public SemanticBoundsInfo Bounds { get; }
+	public int IndexCount { get; }
+	public int SubMeshCount { get; }
+	public IReadOnlyList<int> Topology { get; }
+	public int VertexCount { get; }
+}
+
+public sealed class SemanticBoundsInfo
+{
+	public SemanticBoundsInfo(SemanticVector3 center, SemanticVector3 extent)
+	{
+		Center = center;
+		Extent = extent;
+	}
+
+	public SemanticVector3 Center { get; }
+	public SemanticVector3 Extent { get; }
 }
 
 public sealed class SemanticMaterialInfo

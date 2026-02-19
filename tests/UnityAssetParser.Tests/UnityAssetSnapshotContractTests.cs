@@ -110,6 +110,7 @@ public sealed class UnityAssetSnapshotContractTests
         AssertV2HierarchyMatchesParser(fixtureName, root.GetProperty("hierarchy"), root.GetProperty("objects"), context);
         AssertV2MeshFilterLinksMatchParser(root.GetProperty("objects"), context);
         AssertV2MeshRendererLinksMatchParser(root.GetProperty("objects"), context);
+        AssertV2MeshCoreMatchesParser(root.GetProperty("meshes"), context);
         AssertV2MaterialCoreMatchesParser(root.GetProperty("materials"), context);
         AssertV2TextureCoreMatchesParser(root.GetProperty("textures"), context);
         AssertV2MaterialConsistency(root.GetProperty("materials"), root.GetProperty("objects"));
@@ -420,6 +421,50 @@ public sealed class UnityAssetSnapshotContractTests
             .ToList();
 
         Assert.Equal(snapshotMaterials, parserMaterials);
+    }
+
+    private static void AssertV2MeshCoreMatchesParser(JsonElement meshesNode, BaseAssetsContext context)
+    {
+        var snapshotMeshes = meshesNode
+            .EnumerateArray()
+            .Select(mesh => (
+                PathId: mesh.GetProperty("pathId").GetInt64(),
+                Name: mesh.GetProperty("name").GetString() ?? string.Empty,
+                IndexCount: mesh.GetProperty("indexCount").GetInt32(),
+                SubMeshCount: mesh.GetProperty("subMeshCount").GetInt32(),
+                Topology: mesh.GetProperty("topology").EnumerateArray().Select(item => item.GetInt32()).ToArray(),
+                VertexCount: mesh.GetProperty("vertexCount").GetInt32(),
+                Center: ParseVector3(mesh.GetProperty("bounds").GetProperty("center")),
+                Extent: ParseVector3(mesh.GetProperty("bounds").GetProperty("extent"))))
+            .OrderBy(item => item.PathId)
+            .ToList();
+
+        var parserMeshes = context.SemanticMeshes
+            .Select(mesh => (
+                mesh.PathId,
+                mesh.Name,
+                mesh.IndexCount,
+                mesh.SubMeshCount,
+                Topology: mesh.Topology.ToArray(),
+                mesh.VertexCount,
+                mesh.Bounds.Center,
+                mesh.Bounds.Extent))
+            .OrderBy(item => item.PathId)
+            .ToList();
+
+        Assert.Equal(snapshotMeshes.Count, parserMeshes.Count);
+
+        for (var i = 0; i < snapshotMeshes.Count; i++)
+        {
+            Assert.Equal(snapshotMeshes[i].PathId, parserMeshes[i].PathId);
+            Assert.Equal(snapshotMeshes[i].Name, parserMeshes[i].Name);
+            Assert.Equal(snapshotMeshes[i].IndexCount, parserMeshes[i].IndexCount);
+            Assert.Equal(snapshotMeshes[i].SubMeshCount, parserMeshes[i].SubMeshCount);
+            Assert.Equal(snapshotMeshes[i].Topology, parserMeshes[i].Topology);
+            Assert.Equal(snapshotMeshes[i].VertexCount, parserMeshes[i].VertexCount);
+            AssertVector3Equal(snapshotMeshes[i].Center, parserMeshes[i].Center);
+            AssertVector3Equal(snapshotMeshes[i].Extent, parserMeshes[i].Extent);
+        }
     }
 
     private static void AssertV2TextureCoreMatchesParser(JsonElement texturesNode, BaseAssetsContext context)
