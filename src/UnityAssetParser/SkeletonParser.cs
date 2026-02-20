@@ -1455,6 +1455,32 @@ internal static class SkeletonParser
                 indexBufferEndOffset = parsedIndexBufferEndOffset;
             }
 
+            if (decodedIndices.Count > 0)
+            {
+                if (decodedIndices.Count != indexElementCountTotal)
+                {
+                    return false;
+                }
+
+                if (vertexCountMax > 0)
+                {
+                    var maxIndex = decodedIndices.Max();
+                    if (maxIndex >= vertexCountMax)
+                    {
+                        return false;
+                    }
+                }
+
+                foreach (var subMesh in subMeshes)
+                {
+                    var firstIndex = subMesh.FirstByte / indexElementSize;
+                    if (firstIndex < 0 || firstIndex + subMesh.IndexCount > decodedIndices.Count)
+                    {
+                        return false;
+                    }
+                }
+            }
+
             var vertexDataByteLength = 0;
             IReadOnlyList<SemanticVector3> decodedPositions = Array.Empty<SemanticVector3>();
             IReadOnlyList<SemanticVector3> decodedNormals = Array.Empty<SemanticVector3>();
@@ -1476,6 +1502,14 @@ internal static class SkeletonParser
                 decodedNormals = parsedNormals;
                 decodedUv0 = parsedUv0;
                 vertexChannels = parsedVertexChannels;
+            }
+
+            foreach (var subMesh in subMeshes)
+            {
+                if (subMesh.FirstVertex < 0 || subMesh.VertexCount < 0 || subMesh.FirstVertex + subMesh.VertexCount > vertexCountMax)
+                {
+                    return false;
+                }
             }
 
             var boundsCenter = new SemanticVector3(

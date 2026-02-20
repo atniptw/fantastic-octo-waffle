@@ -486,6 +486,11 @@ public sealed class UnityAssetSnapshotContractTests
             if (mesh.DecodedIndices.Count > 0)
             {
                 Assert.Equal(mesh.IndexElementCount, mesh.DecodedIndices.Count);
+                if (mesh.VertexCount > 0)
+                {
+                    Assert.True(mesh.DecodedIndices.Max() < mesh.VertexCount);
+                }
+
                 if (mesh.IndexFormat.HasValue)
                 {
                     Assert.True(mesh.IndexFormat.Value is 0 or 1);
@@ -529,6 +534,7 @@ public sealed class UnityAssetSnapshotContractTests
                 Assert.True(subMesh.IndexCount >= 0);
                 Assert.True(subMesh.FirstVertex >= 0);
                 Assert.True(subMesh.VertexCount >= 0);
+                Assert.True(subMesh.FirstVertex + subMesh.VertexCount <= mesh.VertexCount);
                 Assert.Equal(0, subMesh.FirstByte % mesh.IndexElementSizeBytes);
 
                 var firstIndex = subMesh.FirstByte / mesh.IndexElementSizeBytes;
