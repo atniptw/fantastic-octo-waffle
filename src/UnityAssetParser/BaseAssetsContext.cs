@@ -210,6 +210,7 @@ public sealed class SemanticMeshInfo
 		IReadOnlyList<SemanticVector3> decodedNormals,
 		IReadOnlyList<SemanticVector2> decodedUv0,
 		IReadOnlyList<SemanticVertexChannelInfo> vertexChannels,
+		IReadOnlyList<SemanticVertexStreamInfo> vertexStreams,
 		int indexElementSizeBytes,
 		int indexElementCount,
 		int indexCount,
@@ -229,6 +230,7 @@ public sealed class SemanticMeshInfo
 		DecodedNormals = decodedNormals;
 		DecodedUv0 = decodedUv0;
 		VertexChannels = vertexChannels;
+		VertexStreams = vertexStreams;
 		IndexElementSizeBytes = indexElementSizeBytes;
 		IndexElementCount = indexElementCount;
 		IndexCount = indexCount;
@@ -249,6 +251,7 @@ public sealed class SemanticMeshInfo
 	public IReadOnlyList<SemanticVector3> DecodedNormals { get; }
 	public IReadOnlyList<SemanticVector2> DecodedUv0 { get; }
 	public IReadOnlyList<SemanticVertexChannelInfo> VertexChannels { get; }
+	public IReadOnlyList<SemanticVertexStreamInfo> VertexStreams { get; }
 	public int IndexElementSizeBytes { get; }
 	public int IndexElementCount { get; }
 	public int IndexCount { get; }
@@ -294,6 +297,22 @@ public sealed class SemanticVertexChannelInfo
 	public int Offset { get; }
 	public int Format { get; }
 	public int Dimension { get; }
+}
+
+public sealed class SemanticVertexStreamInfo
+{
+	public SemanticVertexStreamInfo(int stream, int offset, int stride, int byteLength)
+	{
+		Stream = stream;
+		Offset = offset;
+		Stride = stride;
+		ByteLength = byteLength;
+	}
+
+	public int Stream { get; }
+	public int Offset { get; }
+	public int Stride { get; }
+	public int ByteLength { get; }
 }
 
 public sealed class SemanticSubMeshInfo

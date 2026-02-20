@@ -1486,6 +1486,7 @@ internal static class SkeletonParser
             IReadOnlyList<SemanticVector3> decodedNormals = Array.Empty<SemanticVector3>();
             IReadOnlyList<SemanticVector2> decodedUv0 = Array.Empty<SemanticVector2>();
             IReadOnlyList<SemanticVertexChannelInfo> vertexChannels = Array.Empty<SemanticVertexChannelInfo>();
+            IReadOnlyList<SemanticVertexStreamInfo> vertexStreams = Array.Empty<SemanticVertexStreamInfo>();
             if (TryReadMeshVertexData(
                 payload,
                 isBigEndian,
@@ -1495,13 +1496,15 @@ internal static class SkeletonParser
                 out var parsedPositions,
                 out var parsedNormals,
                 out var parsedUv0,
-                out var parsedVertexChannels))
+                out var parsedVertexChannels,
+                out var parsedVertexStreams))
             {
                 vertexDataByteLength = parsedVertexDataByteLength;
                 decodedPositions = parsedPositions;
                 decodedNormals = parsedNormals;
                 decodedUv0 = parsedUv0;
                 vertexChannels = parsedVertexChannels;
+                vertexStreams = parsedVertexStreams;
             }
 
             foreach (var subMesh in subMeshes)
@@ -1536,6 +1539,7 @@ internal static class SkeletonParser
                 decodedNormals,
                 decodedUv0,
                 vertexChannels,
+                vertexStreams,
                 indexElementSize,
                 (int)indexElementCountTotal,
                 (int)indexCountBytes,
@@ -1639,13 +1643,15 @@ internal static class SkeletonParser
         out IReadOnlyList<SemanticVector3> decodedPositions,
         out IReadOnlyList<SemanticVector3> decodedNormals,
         out IReadOnlyList<SemanticVector2> decodedUv0,
-        out IReadOnlyList<SemanticVertexChannelInfo> vertexChannels)
+        out IReadOnlyList<SemanticVertexChannelInfo> vertexChannels,
+        out IReadOnlyList<SemanticVertexStreamInfo> vertexStreams)
     {
         vertexDataByteLength = 0;
         decodedPositions = Array.Empty<SemanticVector3>();
         decodedNormals = Array.Empty<SemanticVector3>();
         decodedUv0 = Array.Empty<SemanticVector2>();
         vertexChannels = Array.Empty<SemanticVertexChannelInfo>();
+        vertexStreams = Array.Empty<SemanticVertexStreamInfo>();
 
         if (indexBufferEndOffset < 0 || vertexCount < 0)
         {
@@ -1683,6 +1689,22 @@ internal static class SkeletonParser
             if (TryReadMeshVertexChannels(payload, isBigEndian, scanStart, offset, out var parsedChannels))
             {
                 vertexChannels = parsedChannels;
+
+                if (TryBuildStreamLayout(
+                    vertexChannels,
+                    vertexCount,
+                    candidateLength,
+                    out var streamLayout))
+                {
+                    vertexStreams = streamLayout
+                        .OrderBy(item => item.Key)
+                        .Select(item => new SemanticVertexStreamInfo(
+                            item.Key,
+                            item.Value.Offset,
+                            item.Value.Stride,
+                            item.Value.Stride * vertexCount))
+                        .ToArray();
+                }
             }
 
             var vertexDataStart = offset + 4;

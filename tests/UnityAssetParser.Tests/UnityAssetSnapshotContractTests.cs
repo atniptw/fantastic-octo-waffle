@@ -548,6 +548,20 @@ public sealed class UnityAssetSnapshotContractTests
                 }
             }
 
+            if (mesh.VertexStreams.Count > 0)
+            {
+                Assert.Equal(mesh.VertexStreams.Count, mesh.VertexStreams.Select(stream => stream.Stream).Distinct().Count());
+                foreach (var stream in mesh.VertexStreams)
+                {
+                    Assert.True(stream.Stream >= 0);
+                    Assert.True(stream.Offset >= 0);
+                    Assert.True(stream.Stride > 0);
+                    Assert.True(stream.ByteLength >= 0);
+                    Assert.Equal(stream.Stride * mesh.VertexCount, stream.ByteLength);
+                    Assert.True(stream.Offset + stream.ByteLength <= mesh.VertexDataByteLength);
+                }
+            }
+
             for (var i = 0; i < mesh.SubMeshes.Count; i++)
             {
                 var subMesh = mesh.SubMeshes[i];
