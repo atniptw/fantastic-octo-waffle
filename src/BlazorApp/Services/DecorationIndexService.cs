@@ -45,6 +45,12 @@ public sealed class DecorationIndexService
         return _loadTask;
     }
 
+    public Task ReloadPersistedAsync(CancellationToken cancellationToken = default)
+    {
+        _loadTask = LoadPersistedInternalAsync(cancellationToken);
+        return _loadTask;
+    }
+
     public async Task ScanZipAsync(IBrowserFile file, CancellationToken cancellationToken = default)
     {
         _entries.Clear();

@@ -1,6 +1,9 @@
 ﻿@page "/"
 @layout PlannerLayout
 @inject DecorationIndexService DecorationIndex
+@inject AssetStoreService AssetStore
+@inject IJSRuntime JS
+@implements IAsyncDisposable
 
 <PageTitle>Outfit Planner</PageTitle>
 
@@ -8,54 +11,223 @@
 	<aside class="planner-panel planner-slots">
 		<div class="planner-panel__title">Slots</div>
 		<ul class="planner-slots__list">
-			<li><button class="planner-slot" type="button">Head</button></li>
-			<li><button class="planner-slot" type="button">Body</button></li>
-			<li><button class="planner-slot" type="button">Back</button></li>
-			<li><button class="planner-slot" type="button">Legs</button></li>
-			<li><button class="planner-slot" type="button">Feet</button></li>
+			@foreach (var bodyPart in BodyPartGroups)
+			{
+				<li>
+					<button
+						class="planner-slot @(activeBodyPart == bodyPart ? "planner-slot--active" : string.Empty)"
+						type="button"
+						@onclick="() => SelectBodyPartAsync(bodyPart)"
+						data-testid="slot-@bodyPart">
+						@bodyPart
+					</button>
+				</li>
+			}
 		</ul>
 
 		<div class="planner-selection">
 			<div class="planner-panel__title">Selected</div>
 			<ul class="planner-selection__list">
-				<li>Head: None</li>
-				<li>Body: None</li>
-				<li>Back: Cape</li>
-				<li>Legs: None</li>
-				<li>Feet: None</li>
+				@foreach (var bodyPart in BodyPartGroups)
+				{
+					var selected = GetSelectedEntry(bodyPart);
+					<li>@bodyPart: @(selected is null ? "None" : DecorationNameFormatter.GetDisplayName(selected.FilePath))</li>
+				}
 			</ul>
+			<button class="btn btn-outline-secondary" type="button" @onclick="ClearLibraryAsync" disabled="@(isClearingLibrary || DecorationIndex.Entries.Count == 0)" data-testid="clear-library-button">
+				@(isClearingLibrary ? "Clearing..." : "Clear library")
+			</button>
 		</div>
 	</aside>
 
 	<section class="planner-panel planner-preview">
 		<div class="planner-panel__title">Character Preview</div>
 		<div class="planner-viewport">
-			<span>3D Viewport</span>
+			<model-viewer
+				id="planner-preview-viewer"
+				class="planner-model-viewer"
+				camera-controls
+				auto-rotate
+				touch-action="pan-y"
+				data-testid="preview-viewer">
+			</model-viewer>
+			@if (!string.IsNullOrWhiteSpace(previewStatusMessage))
+			{
+				<div class="planner-preview__message" data-testid="preview-status">@previewStatusMessage</div>
+			}
 		</div>
 	</section>
 
 	<aside class="planner-panel planner-items">
 		<div class="planner-panel__title">Items Panel (@DecorationIndex.Entries.Count loaded)</div>
-		<div class="planner-items__slot">Slot: Head</div>
+		<div class="planner-items__slot">Slot: @(activeBodyPart ?? "None")</div>
 
-		<div class="planner-item-card">
-			<div class="planner-item-card__name">Hat 1</div>
-			<div class="planner-item-card__meta">From: ModA</div>
-		</div>
-		<div class="planner-item-card">
-			<div class="planner-item-card__name">Hat 2</div>
-			<div class="planner-item-card__meta">From: ModB</div>
-		</div>
-
-		<button class="btn btn-outline-secondary" type="button" disabled>Remove Item</button>
+		@if (CurrentBodyPartEntries.Count == 0)
+		{
+			<div class="planner-item-card planner-item-card--empty">No items for the selected slot.</div>
+		}
+		else
+		{
+			@foreach (var entry in CurrentBodyPartEntries)
+			{
+				var isSelected = IsSelected(entry);
+				<button class="planner-item-card planner-item-card--button @(isSelected ? "planner-item-card--selected" : string.Empty)"
+					type="button"
+					@onclick="() => SelectEntryAsync(entry)"
+					data-testid="item-@entry.Sha256">
+					<div class="planner-item-card__name">@DecorationNameFormatter.GetDisplayName(entry.FilePath)</div>
+					<div class="planner-item-card__meta">@entry.BodyPart • @FormatFileSize(entry.SizeBytes)</div>
+				</button>
+			}
+		}
 	</aside>
 </section>
 
 <ModsWizard />
 
 @code {
+	private const string PreviewElementId = "planner-preview-viewer";
+	private readonly Dictionary<string, string> selectedByBodyPart = new(StringComparer.OrdinalIgnoreCase);
+	private IJSObjectReference? previewModule;
+	private string? activeBodyPart;
+	private bool isClearingLibrary;
+	private string? previewStatusMessage;
+
+	private IReadOnlyList<string> BodyPartGroups => DecorationIndex.Entries
+		.Select(entry => entry.BodyPart)
+		.Distinct(StringComparer.OrdinalIgnoreCase)
+		.OrderBy(item => item, StringComparer.OrdinalIgnoreCase)
+		.ToList();
+
+	private IReadOnlyList<DecorationEntry> CurrentBodyPartEntries =>
+		string.IsNullOrWhiteSpace(activeBodyPart)
+			? Array.Empty<DecorationEntry>()
+			: DecorationIndex.Entries
+				.Where(entry => string.Equals(entry.BodyPart, activeBodyPart, StringComparison.OrdinalIgnoreCase))
+				.OrderBy(entry => entry.FilePath, StringComparer.OrdinalIgnoreCase)
+				.ToList();
+
 	protected override async Task OnInitializedAsync()
 	{
 		await DecorationIndex.LoadPersistedAsync();
+		activeBodyPart = BodyPartGroups.FirstOrDefault();
+		previewStatusMessage = DecorationIndex.Entries.Count == 0
+			? "Load mods to start previewing items."
+			: "Select an item to preview.";
+	}
+
+	protected override async Task OnAfterRenderAsync(bool firstRender)
+	{
+		if (!firstRender)
+		{
+			return;
+		}
+
+		previewModule = await JS.InvokeAsync<IJSObjectReference>("import", "./js/previewInterop.js");
+		if (!string.IsNullOrWhiteSpace(activeBodyPart))
+		{
+			await SyncPreviewToCurrentSelectionAsync();
+		}
+	}
+
+	private DecorationEntry? GetSelectedEntry(string bodyPart)
+	{
+		if (!selectedByBodyPart.TryGetValue(bodyPart, out var selectedId))
+		{
+			return null;
+		}
+
+		return DecorationIndex.Entries.FirstOrDefault(entry =>
+			string.Equals(entry.BodyPart, bodyPart, StringComparison.OrdinalIgnoreCase)
+			&& string.Equals(entry.Sha256, selectedId, StringComparison.OrdinalIgnoreCase));
+	}
+
+	private bool IsSelected(DecorationEntry entry)
+		=> selectedByBodyPart.TryGetValue(entry.BodyPart, out var selectedId)
+			&& string.Equals(selectedId, entry.Sha256, StringComparison.OrdinalIgnoreCase);
+
+	private async Task SelectBodyPartAsync(string bodyPart)
+	{
+		activeBodyPart = bodyPart;
+		await SyncPreviewToCurrentSelectionAsync();
+	}
+
+	private async Task SelectEntryAsync(DecorationEntry entry)
+	{
+		selectedByBodyPart[entry.BodyPart] = entry.Sha256;
+		activeBodyPart = entry.BodyPart;
+		await SyncPreviewToCurrentSelectionAsync();
+	}
+
+	private async Task SyncPreviewToCurrentSelectionAsync()
+	{
+		if (previewModule is null)
+		{
+			return;
+		}
+
+		if (string.IsNullOrWhiteSpace(activeBodyPart))
+		{
+			await previewModule.InvokeVoidAsync("clearPreview", PreviewElementId);
+			previewStatusMessage = "No slot selected.";
+			await InvokeAsync(StateHasChanged);
+			return;
+		}
+
+		var selectedEntry = GetSelectedEntry(activeBodyPart);
+		if (selectedEntry is null)
+		{
+			await previewModule.InvokeVoidAsync("clearPreview", PreviewElementId);
+			previewStatusMessage = "Select an item to preview.";
+			await InvokeAsync(StateHasChanged);
+			return;
+		}
+
+		var loaded = await previewModule.InvokeAsync<bool>("previewAsset", PreviewElementId, selectedEntry.Sha256);
+		previewStatusMessage = loaded
+			? $"Previewing {DecorationNameFormatter.GetDisplayName(selectedEntry.FilePath)}"
+			: "Preview unavailable for selected item.";
+		await InvokeAsync(StateHasChanged);
+	}
+
+	private static string FormatFileSize(long bytes)
+	{
+		const decimal kilo = 1024m;
+		const decimal mega = 1024m * 1024m;
+
+		if (bytes >= mega)
+		{
+			return $"{bytes / mega:0.##} MB";
+		}
+
+		return $"{bytes / kilo:0.##} KB";
+	}
+
+	private async Task ClearLibraryAsync()
+	{
+		isClearingLibrary = true;
+		await AssetStore.ClearAsync();
+		await DecorationIndex.ReloadPersistedAsync();
+		selectedByBodyPart.Clear();
+		activeBodyPart = BodyPartGroups.FirstOrDefault();
+
+		if (previewModule is not null)
+		{
+			await previewModule.InvokeVoidAsync("clearPreview", PreviewElementId);
+		}
+
+		previewStatusMessage = "Library cleared. Load mods to start previewing items.";
+		isClearingLibrary = false;
+	}
+
+	public async ValueTask DisposeAsync()
+	{
+		if (previewModule is null)
+		{
+			return;
+		}
+
+		await previewModule.InvokeVoidAsync("clearPreview", PreviewElementId);
+		await previewModule.DisposeAsync();
 	}
 }
