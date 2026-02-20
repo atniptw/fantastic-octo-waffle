@@ -499,6 +499,16 @@ public sealed class UnityAssetSnapshotContractTests
                 Assert.True(mesh.VertexDataByteLength >= mesh.VertexCount * 12);
             }
 
+            if (mesh.DecodedNormals.Count > 0)
+            {
+                Assert.Equal(mesh.VertexCount, mesh.DecodedNormals.Count);
+            }
+
+            if (mesh.DecodedUv0.Count > 0)
+            {
+                Assert.Equal(mesh.VertexCount, mesh.DecodedUv0.Count);
+            }
+
             if (mesh.VertexChannels.Count > 0)
             {
                 Assert.Equal(mesh.VertexChannels.Count, mesh.VertexChannels.Select(channel => channel.ChannelIndex).Distinct().Count());

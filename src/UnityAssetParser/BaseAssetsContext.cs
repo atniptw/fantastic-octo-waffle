@@ -165,6 +165,7 @@ public sealed class SemanticTransformInfo
 }
 
 public readonly record struct SemanticVector3(float X, float Y, float Z);
+public readonly record struct SemanticVector2(float X, float Y);
 public readonly record struct SemanticQuaternion(float W, float X, float Y, float Z);
 
 public sealed class SemanticMeshFilterInfo
@@ -205,6 +206,8 @@ public sealed class SemanticMeshInfo
 		IReadOnlyList<uint> decodedIndices,
 		int vertexDataByteLength,
 		IReadOnlyList<SemanticVector3> decodedPositions,
+		IReadOnlyList<SemanticVector3> decodedNormals,
+		IReadOnlyList<SemanticVector2> decodedUv0,
 		IReadOnlyList<SemanticVertexChannelInfo> vertexChannels,
 		int indexElementSizeBytes,
 		int indexElementCount,
@@ -221,6 +224,8 @@ public sealed class SemanticMeshInfo
 		DecodedIndices = decodedIndices;
 		VertexDataByteLength = vertexDataByteLength;
 		DecodedPositions = decodedPositions;
+		DecodedNormals = decodedNormals;
+		DecodedUv0 = decodedUv0;
 		VertexChannels = vertexChannels;
 		IndexElementSizeBytes = indexElementSizeBytes;
 		IndexElementCount = indexElementCount;
@@ -238,6 +243,8 @@ public sealed class SemanticMeshInfo
 	public IReadOnlyList<uint> DecodedIndices { get; }
 	public int VertexDataByteLength { get; }
 	public IReadOnlyList<SemanticVector3> DecodedPositions { get; }
+	public IReadOnlyList<SemanticVector3> DecodedNormals { get; }
+	public IReadOnlyList<SemanticVector2> DecodedUv0 { get; }
 	public IReadOnlyList<SemanticVertexChannelInfo> VertexChannels { get; }
 	public int IndexElementSizeBytes { get; }
 	public int IndexElementCount { get; }
