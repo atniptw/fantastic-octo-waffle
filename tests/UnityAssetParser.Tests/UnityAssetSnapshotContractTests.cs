@@ -530,9 +530,24 @@ public sealed class UnityAssetSnapshotContractTests
                 Assert.Equal(mesh.VertexCount, mesh.DecodedNormals.Count);
             }
 
+            if (mesh.DecodedTangents.Count > 0)
+            {
+                Assert.Equal(mesh.VertexCount, mesh.DecodedTangents.Count);
+            }
+
+            if (mesh.DecodedColors.Count > 0)
+            {
+                Assert.Equal(mesh.VertexCount, mesh.DecodedColors.Count);
+            }
+
             if (mesh.DecodedUv0.Count > 0)
             {
                 Assert.Equal(mesh.VertexCount, mesh.DecodedUv0.Count);
+            }
+
+            if (mesh.DecodedUv1.Count > 0)
+            {
+                Assert.Equal(mesh.VertexCount, mesh.DecodedUv1.Count);
             }
 
             if (mesh.VertexChannels.Count > 0)

@@ -1484,7 +1484,10 @@ internal static class SkeletonParser
             var vertexDataByteLength = 0;
             IReadOnlyList<SemanticVector3> decodedPositions = Array.Empty<SemanticVector3>();
             IReadOnlyList<SemanticVector3> decodedNormals = Array.Empty<SemanticVector3>();
+            IReadOnlyList<SemanticVector4> decodedTangents = Array.Empty<SemanticVector4>();
+            IReadOnlyList<SemanticVector4> decodedColors = Array.Empty<SemanticVector4>();
             IReadOnlyList<SemanticVector2> decodedUv0 = Array.Empty<SemanticVector2>();
+            IReadOnlyList<SemanticVector2> decodedUv1 = Array.Empty<SemanticVector2>();
             IReadOnlyList<SemanticVertexChannelInfo> vertexChannels = Array.Empty<SemanticVertexChannelInfo>();
             IReadOnlyList<SemanticVertexStreamInfo> vertexStreams = Array.Empty<SemanticVertexStreamInfo>();
             if (TryReadMeshVertexData(
@@ -1495,14 +1498,20 @@ internal static class SkeletonParser
                 out var parsedVertexDataByteLength,
                 out var parsedPositions,
                 out var parsedNormals,
+                out var parsedTangents,
+                out var parsedColors,
                 out var parsedUv0,
+                out var parsedUv1,
                 out var parsedVertexChannels,
                 out var parsedVertexStreams))
             {
                 vertexDataByteLength = parsedVertexDataByteLength;
                 decodedPositions = parsedPositions;
                 decodedNormals = parsedNormals;
+                decodedTangents = parsedTangents;
+                decodedColors = parsedColors;
                 decodedUv0 = parsedUv0;
+                decodedUv1 = parsedUv1;
                 vertexChannels = parsedVertexChannels;
                 vertexStreams = parsedVertexStreams;
             }
@@ -1537,7 +1546,10 @@ internal static class SkeletonParser
                 vertexDataByteLength,
                 decodedPositions,
                 decodedNormals,
+                decodedTangents,
+                decodedColors,
                 decodedUv0,
+                decodedUv1,
                 vertexChannels,
                 vertexStreams,
                 indexElementSize,
@@ -1642,14 +1654,20 @@ internal static class SkeletonParser
         out int vertexDataByteLength,
         out IReadOnlyList<SemanticVector3> decodedPositions,
         out IReadOnlyList<SemanticVector3> decodedNormals,
+        out IReadOnlyList<SemanticVector4> decodedTangents,
+        out IReadOnlyList<SemanticVector4> decodedColors,
         out IReadOnlyList<SemanticVector2> decodedUv0,
+        out IReadOnlyList<SemanticVector2> decodedUv1,
         out IReadOnlyList<SemanticVertexChannelInfo> vertexChannels,
         out IReadOnlyList<SemanticVertexStreamInfo> vertexStreams)
     {
         vertexDataByteLength = 0;
         decodedPositions = Array.Empty<SemanticVector3>();
         decodedNormals = Array.Empty<SemanticVector3>();
+        decodedTangents = Array.Empty<SemanticVector4>();
+        decodedColors = Array.Empty<SemanticVector4>();
         decodedUv0 = Array.Empty<SemanticVector2>();
+        decodedUv1 = Array.Empty<SemanticVector2>();
         vertexChannels = Array.Empty<SemanticVertexChannelInfo>();
         vertexStreams = Array.Empty<SemanticVertexStreamInfo>();
 
@@ -1727,6 +1745,32 @@ internal static class SkeletonParser
                     decodedNormals = channelNormals;
                 }
 
+                if (TryDecodeVector4ChannelFromLayout(
+                    payload,
+                    isBigEndian,
+                    vertexDataStart,
+                    candidateLength,
+                    vertexCount,
+                    vertexChannels,
+                    channelIndex: 2,
+                    out var channelTangents))
+                {
+                    decodedTangents = channelTangents;
+                }
+
+                if (TryDecodeVector4ChannelFromLayout(
+                    payload,
+                    isBigEndian,
+                    vertexDataStart,
+                    candidateLength,
+                    vertexCount,
+                    vertexChannels,
+                    channelIndex: 3,
+                    out var channelColors))
+                {
+                    decodedColors = channelColors;
+                }
+
                 if (TryDecodeVector2ChannelFromLayout(
                     payload,
                     isBigEndian,
@@ -1738,6 +1782,19 @@ internal static class SkeletonParser
                     out var channelUv0))
                 {
                     decodedUv0 = channelUv0;
+                }
+
+                if (TryDecodeVector2ChannelFromLayout(
+                    payload,
+                    isBigEndian,
+                    vertexDataStart,
+                    candidateLength,
+                    vertexCount,
+                    vertexChannels,
+                    channelIndex: 5,
+                    out var channelUv1))
+                {
+                    decodedUv1 = channelUv1;
                 }
             }
             else if (vertexCount > 0 && candidateLength == vertexCount * 12)
@@ -1756,6 +1813,74 @@ internal static class SkeletonParser
         }
 
         return false;
+    }
+
+    private static bool TryDecodeVector4ChannelFromLayout(
+        byte[] payload,
+        bool isBigEndian,
+        int vertexDataStart,
+        int vertexDataByteLength,
+        int vertexCount,
+        IReadOnlyList<SemanticVertexChannelInfo> channels,
+        int channelIndex,
+        out IReadOnlyList<SemanticVector4> decoded)
+    {
+        decoded = Array.Empty<SemanticVector4>();
+
+        var channel = channels.FirstOrDefault(candidate => candidate.ChannelIndex == channelIndex);
+        if (channel is null)
+        {
+            return false;
+        }
+
+        if (!CanDecodeChannelFormat(channel.Format) || channel.Dimension < 3)
+        {
+            return false;
+        }
+
+        if (!TryBuildStreamLayout(channels, vertexCount, vertexDataByteLength, out var streamLayout)
+            || !streamLayout.TryGetValue(channel.Stream, out var streamInfo))
+        {
+            return false;
+        }
+
+        if (vertexDataStart < 0 || vertexDataStart + vertexDataByteLength > payload.Length)
+        {
+            return false;
+        }
+
+        var reader = new EndianBinaryReader(payload)
+        {
+            IsBigEndian = isBigEndian
+        };
+
+        var values = new List<SemanticVector4>(vertexCount);
+        for (var i = 0; i < vertexCount; i++)
+        {
+            var baseOffset = vertexDataStart + streamInfo.Offset + (i * streamInfo.Stride) + channel.Offset;
+            reader.Position = baseOffset;
+
+            if (!TryReadChannelComponent(reader, channel.Format, out var x)
+                || !TryReadChannelComponent(reader, channel.Format, out var y)
+                || !TryReadChannelComponent(reader, channel.Format, out var z))
+            {
+                return false;
+            }
+
+            var w = 1f;
+            if (channel.Dimension >= 4)
+            {
+                if (!TryReadChannelComponent(reader, channel.Format, out w))
+                {
+                    return false;
+                }
+            }
+
+            values.Add(new SemanticVector4(x, y, z, w));
+        }
+
+        decoded = values;
+        return true;
     }
 
     private static bool TryDecodeVector3ChannelFromLayout(

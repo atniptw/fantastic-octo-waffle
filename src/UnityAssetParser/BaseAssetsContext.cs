@@ -166,6 +166,7 @@ public sealed class SemanticTransformInfo
 
 public readonly record struct SemanticVector3(float X, float Y, float Z);
 public readonly record struct SemanticVector2(float X, float Y);
+public readonly record struct SemanticVector4(float X, float Y, float Z, float W);
 public readonly record struct SemanticQuaternion(float W, float X, float Y, float Z);
 
 public sealed class SemanticMeshFilterInfo
@@ -208,7 +209,10 @@ public sealed class SemanticMeshInfo
 		int vertexDataByteLength,
 		IReadOnlyList<SemanticVector3> decodedPositions,
 		IReadOnlyList<SemanticVector3> decodedNormals,
+		IReadOnlyList<SemanticVector4> decodedTangents,
+		IReadOnlyList<SemanticVector4> decodedColors,
 		IReadOnlyList<SemanticVector2> decodedUv0,
+		IReadOnlyList<SemanticVector2> decodedUv1,
 		IReadOnlyList<SemanticVertexChannelInfo> vertexChannels,
 		IReadOnlyList<SemanticVertexStreamInfo> vertexStreams,
 		int indexElementSizeBytes,
@@ -228,7 +232,10 @@ public sealed class SemanticMeshInfo
 		VertexDataByteLength = vertexDataByteLength;
 		DecodedPositions = decodedPositions;
 		DecodedNormals = decodedNormals;
+		DecodedTangents = decodedTangents;
+		DecodedColors = decodedColors;
 		DecodedUv0 = decodedUv0;
+		DecodedUv1 = decodedUv1;
 		VertexChannels = vertexChannels;
 		VertexStreams = vertexStreams;
 		IndexElementSizeBytes = indexElementSizeBytes;
@@ -249,7 +256,10 @@ public sealed class SemanticMeshInfo
 	public int VertexDataByteLength { get; }
 	public IReadOnlyList<SemanticVector3> DecodedPositions { get; }
 	public IReadOnlyList<SemanticVector3> DecodedNormals { get; }
+	public IReadOnlyList<SemanticVector4> DecodedTangents { get; }
+	public IReadOnlyList<SemanticVector4> DecodedColors { get; }
 	public IReadOnlyList<SemanticVector2> DecodedUv0 { get; }
+	public IReadOnlyList<SemanticVector2> DecodedUv1 { get; }
 	public IReadOnlyList<SemanticVertexChannelInfo> VertexChannels { get; }
 	public IReadOnlyList<SemanticVertexStreamInfo> VertexStreams { get; }
 	public int IndexElementSizeBytes { get; }
