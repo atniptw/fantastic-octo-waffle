@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using SevenZip.Compression.LZMA;
 
 namespace UnityAssetParser;
@@ -1635,7 +1636,13 @@ internal static class SkeletonParser
                 vertexChannels = parsedChannels;
             }
 
-            if (vertexCount > 0 && candidateLength == vertexCount * 12)
+            if (vertexCount > 0
+                && vertexChannels.Count > 0
+                && TryDecodePositionsFromChannels(payload, isBigEndian, offset + 4, candidateLength, vertexCount, vertexChannels, out var channelPositions))
+            {
+                decodedPositions = channelPositions;
+            }
+            else if (vertexCount > 0 && candidateLength == vertexCount * 12)
             {
                 reader.Position = offset + 4;
                 var positions = new List<SemanticVector3>(vertexCount);
@@ -1651,6 +1658,93 @@ internal static class SkeletonParser
         }
 
         return false;
+    }
+
+    private static bool TryDecodePositionsFromChannels(
+        byte[] payload,
+        bool isBigEndian,
+        int vertexDataStart,
+        int vertexDataByteLength,
+        int vertexCount,
+        IReadOnlyList<SemanticVertexChannelInfo> channels,
+        out IReadOnlyList<SemanticVector3> positions)
+    {
+        positions = Array.Empty<SemanticVector3>();
+
+        var positionChannel = channels.FirstOrDefault(channel => channel.ChannelIndex == 0 || channel.Offset == 0);
+        if (positionChannel is null)
+        {
+            return false;
+        }
+
+        if (positionChannel.Stream != 0 || positionChannel.Format != 0 || positionChannel.Dimension < 3)
+        {
+            return false;
+        }
+
+        var stride = 0;
+        foreach (var channel in channels.Where(channel => channel.Stream == positionChannel.Stream))
+        {
+            var formatSize = GetVertexFormatElementSize(channel.Format);
+            if (formatSize <= 0)
+            {
+                return false;
+            }
+
+            var channelEnd = channel.Offset + (formatSize * channel.Dimension);
+            stride = Math.Max(stride, channelEnd);
+        }
+
+        if (stride < 12)
+        {
+            return false;
+        }
+
+        if (vertexDataByteLength < vertexCount * stride)
+        {
+            return false;
+        }
+
+        if (vertexDataStart < 0 || vertexDataStart + (vertexCount * stride) > payload.Length)
+        {
+            return false;
+        }
+
+        var reader = new EndianBinaryReader(payload)
+        {
+            IsBigEndian = isBigEndian
+        };
+
+        var parsed = new List<SemanticVector3>(vertexCount);
+        for (var i = 0; i < vertexCount; i++)
+        {
+            var baseOffset = vertexDataStart + (i * stride) + positionChannel.Offset;
+            reader.Position = baseOffset;
+            parsed.Add(new SemanticVector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle()));
+        }
+
+        positions = parsed;
+        return true;
+    }
+
+    private static int GetVertexFormatElementSize(int format)
+    {
+        return format switch
+        {
+            0 => 4,
+            1 => 2,
+            2 => 1,
+            3 => 1,
+            4 => 2,
+            5 => 2,
+            6 => 1,
+            7 => 1,
+            8 => 2,
+            9 => 2,
+            10 => 4,
+            11 => 4,
+            _ => -1
+        };
     }
 
     private static bool TryReadMeshVertexChannels(
