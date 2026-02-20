@@ -85,6 +85,31 @@ public sealed class HhhParserTests
                 || !string.IsNullOrWhiteSpace(container.UnityVersion)));
     }
 
+    [Fact]
+    public void ConvertToGlb_WithSemanticMesh_EmitsMeshAndBinaryChunk()
+    {
+        var fixture = GetFixtureFilePaths();
+        if (fixture.Count == 0)
+        {
+            return;
+        }
+
+        var input = File.ReadAllBytes(fixture[0]);
+        var parser = new HhhParser();
+        var context = CreateSemanticGeometryContext();
+
+        var glb = parser.ConvertToGlb(input, context);
+
+        ValidateGlb(glb);
+        Assert.True(HasBinChunk(glb), "Expected GLB BIN chunk for semantic geometry.");
+
+        var json = ReadJsonChunkText(glb);
+        Assert.Contains("\"meshes\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"accessors\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"bufferViews\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"POSITION\"", json, StringComparison.Ordinal);
+    }
+
     private static IReadOnlyList<string> GetFixtureFilePaths()
     {
         if (!Directory.Exists(FixturesRoot))
@@ -122,5 +147,82 @@ public sealed class HhhParserTests
         var jsonBytes = glb.AsSpan(20, (int)chunkLength);
         var jsonText = Encoding.UTF8.GetString(jsonBytes).Trim();
         Assert.False(string.IsNullOrWhiteSpace(jsonText), "JSON chunk must contain text.");
+    }
+
+    private static string ReadJsonChunkText(byte[] glb)
+    {
+        var chunkLength = BinaryPrimitives.ReadUInt32LittleEndian(glb.AsSpan(12, 4));
+        var jsonBytes = glb.AsSpan(20, (int)chunkLength);
+        return Encoding.UTF8.GetString(jsonBytes).Trim();
+    }
+
+    private static bool HasBinChunk(byte[] glb)
+    {
+        var jsonChunkLength = BinaryPrimitives.ReadUInt32LittleEndian(glb.AsSpan(12, 4));
+        var offset = 20 + (int)jsonChunkLength;
+        if (offset + 8 > glb.Length)
+        {
+            return false;
+        }
+
+        var chunkType = BinaryPrimitives.ReadUInt32LittleEndian(glb.AsSpan(offset + 4, 4));
+        return chunkType == 0x004E4942;
+    }
+
+    private static BaseAssetsContext CreateSemanticGeometryContext()
+    {
+        var context = new BaseAssetsContext();
+
+        context.SemanticGameObjects.Add(new SemanticGameObjectInfo(pathId: 200, name: "Root", isActive: true, layer: 0));
+        context.SemanticTransforms.Add(new SemanticTransformInfo(
+            pathId: 100,
+            gameObjectPathId: 200,
+            parentPathId: null,
+            childrenPathIds: Array.Empty<long>(),
+            localPosition: new SemanticVector3(0f, 0f, 0f),
+            localRotation: new SemanticQuaternion(1f, 0f, 0f, 0f),
+            localScale: new SemanticVector3(1f, 1f, 1f)));
+
+        context.SemanticMeshFilters.Add(new SemanticMeshFilterInfo(pathId: 300, gameObjectPathId: 200, meshPathId: 400));
+
+        var positions = new[]
+        {
+            new SemanticVector3(0f, 0f, 0f),
+            new SemanticVector3(1f, 0f, 0f),
+            new SemanticVector3(0f, 1f, 0f)
+        };
+
+        var uvs = new[]
+        {
+            new SemanticVector2(0f, 0f),
+            new SemanticVector2(1f, 0f),
+            new SemanticVector2(0f, 1f)
+        };
+
+        context.SemanticMeshes.Add(new SemanticMeshInfo(
+            pathId: 400,
+            name: "Triangle",
+            bounds: new SemanticBoundsInfo(new SemanticVector3(0f, 0f, 0f), new SemanticVector3(1f, 1f, 1f)),
+            channelFlags: new SemanticMeshChannelFlags(positions: true, normals: false, tangents: false, colors: false, uv0: true, uv1: false),
+            indexFormat: 1,
+            decodedIndices: new uint[] { 0, 1, 2 },
+            vertexDataByteLength: 0,
+            decodedPositions: positions,
+            decodedNormals: Array.Empty<SemanticVector3>(),
+            decodedTangents: Array.Empty<SemanticVector4>(),
+            decodedColors: Array.Empty<SemanticVector4>(),
+            decodedUv0: uvs,
+            decodedUv1: Array.Empty<SemanticVector2>(),
+            vertexChannels: Array.Empty<SemanticVertexChannelInfo>(),
+            vertexStreams: Array.Empty<SemanticVertexStreamInfo>(),
+            indexElementSizeBytes: 2,
+            indexElementCount: 3,
+            indexCount: 3,
+            subMeshCount: 1,
+            subMeshes: new[] { new SemanticSubMeshInfo(firstByte: 0, indexCount: 3, topology: 0, firstVertex: 0, vertexCount: 3) },
+            topology: new[] { 0 },
+            vertexCount: 3));
+
+        return context;
     }
 }
