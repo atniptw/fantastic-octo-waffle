@@ -1722,17 +1722,13 @@ internal static class SkeletonParser
             return false;
         }
 
-        if (!TryGetStreamStride(channels, channel.Stream, out var stride))
+        if (!TryBuildStreamLayout(channels, vertexCount, vertexDataByteLength, out var streamLayout)
+            || !streamLayout.TryGetValue(channel.Stream, out var streamInfo))
         {
             return false;
         }
 
-        if (vertexDataByteLength < vertexCount * stride)
-        {
-            return false;
-        }
-
-        if (vertexDataStart < 0 || vertexDataStart + (vertexCount * stride) > payload.Length)
+        if (vertexDataStart < 0 || vertexDataStart + vertexDataByteLength > payload.Length)
         {
             return false;
         }
@@ -1745,7 +1741,7 @@ internal static class SkeletonParser
         var values = new List<SemanticVector3>(vertexCount);
         for (var i = 0; i < vertexCount; i++)
         {
-            var baseOffset = vertexDataStart + (i * stride) + channel.Offset;
+            var baseOffset = vertexDataStart + streamInfo.Offset + (i * streamInfo.Stride) + channel.Offset;
             reader.Position = baseOffset;
 
             if (!TryReadChannelComponent(reader, channel.Format, out var x)
@@ -1785,17 +1781,13 @@ internal static class SkeletonParser
             return false;
         }
 
-        if (!TryGetStreamStride(channels, channel.Stream, out var stride))
+        if (!TryBuildStreamLayout(channels, vertexCount, vertexDataByteLength, out var streamLayout)
+            || !streamLayout.TryGetValue(channel.Stream, out var streamInfo))
         {
             return false;
         }
 
-        if (vertexDataByteLength < vertexCount * stride)
-        {
-            return false;
-        }
-
-        if (vertexDataStart < 0 || vertexDataStart + (vertexCount * stride) > payload.Length)
+        if (vertexDataStart < 0 || vertexDataStart + vertexDataByteLength > payload.Length)
         {
             return false;
         }
@@ -1808,7 +1800,7 @@ internal static class SkeletonParser
         var values = new List<SemanticVector2>(vertexCount);
         for (var i = 0; i < vertexCount; i++)
         {
-            var baseOffset = vertexDataStart + (i * stride) + channel.Offset;
+            var baseOffset = vertexDataStart + streamInfo.Offset + (i * streamInfo.Stride) + channel.Offset;
             reader.Position = baseOffset;
 
             if (!TryReadChannelComponent(reader, channel.Format, out var x)
@@ -1846,6 +1838,78 @@ internal static class SkeletonParser
         return stride > 0;
     }
 
+    private static bool TryBuildStreamLayout(
+        IReadOnlyList<SemanticVertexChannelInfo> channels,
+        int vertexCount,
+        int vertexDataByteLength,
+        out Dictionary<int, (int Offset, int Stride)> streamLayout)
+    {
+        streamLayout = new Dictionary<int, (int Offset, int Stride)>();
+        if (vertexCount <= 0)
+        {
+            return false;
+        }
+
+        var streamIds = channels
+            .Select(channel => channel.Stream)
+            .Distinct()
+            .OrderBy(stream => stream)
+            .ToArray();
+
+        if (streamIds.Length == 0)
+        {
+            return false;
+        }
+
+        if (TryBuildStreamLayoutInternal(channels, streamIds, vertexCount, vertexDataByteLength, alignStreams: true, out streamLayout))
+        {
+            return true;
+        }
+
+        return TryBuildStreamLayoutInternal(channels, streamIds, vertexCount, vertexDataByteLength, alignStreams: false, out streamLayout);
+    }
+
+    private static bool TryBuildStreamLayoutInternal(
+        IReadOnlyList<SemanticVertexChannelInfo> channels,
+        IReadOnlyList<int> streamIds,
+        int vertexCount,
+        int vertexDataByteLength,
+        bool alignStreams,
+        out Dictionary<int, (int Offset, int Stride)> streamLayout)
+    {
+        streamLayout = new Dictionary<int, (int Offset, int Stride)>();
+        var runningOffset = 0;
+
+        foreach (var streamId in streamIds)
+        {
+            if (!TryGetStreamStride(channels, streamId, out var stride))
+            {
+                return false;
+            }
+
+            if (alignStreams)
+            {
+                runningOffset = AlignPosition(runningOffset, 16);
+            }
+
+            var streamByteLength = stride * vertexCount;
+            if (streamByteLength < 0)
+            {
+                return false;
+            }
+
+            if (runningOffset + streamByteLength > vertexDataByteLength)
+            {
+                return false;
+            }
+
+            streamLayout[streamId] = (runningOffset, stride);
+            runningOffset += streamByteLength;
+        }
+
+        return true;
+    }
+
     private static bool TryDecodePositionsFromChannels(
         byte[] payload,
         bool isBigEndian,
@@ -1868,17 +1932,13 @@ internal static class SkeletonParser
             return false;
         }
 
-        if (!TryGetStreamStride(channels, positionChannel.Stream, out var stride))
+        if (!TryBuildStreamLayout(channels, vertexCount, vertexDataByteLength, out var streamLayout)
+            || !streamLayout.TryGetValue(positionChannel.Stream, out var streamInfo))
         {
             return false;
         }
 
-        if (vertexDataByteLength < vertexCount * stride)
-        {
-            return false;
-        }
-
-        if (vertexDataStart < 0 || vertexDataStart + (vertexCount * stride) > payload.Length)
+        if (vertexDataStart < 0 || vertexDataStart + vertexDataByteLength > payload.Length)
         {
             return false;
         }
@@ -1891,7 +1951,7 @@ internal static class SkeletonParser
         var parsed = new List<SemanticVector3>(vertexCount);
         for (var i = 0; i < vertexCount; i++)
         {
-            var baseOffset = vertexDataStart + (i * stride) + positionChannel.Offset;
+            var baseOffset = vertexDataStart + streamInfo.Offset + (i * streamInfo.Stride) + positionChannel.Offset;
             reader.Position = baseOffset;
 
             if (!TryReadChannelComponent(reader, positionChannel.Format, out var x)
