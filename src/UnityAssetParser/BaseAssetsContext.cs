@@ -202,6 +202,7 @@ public sealed class SemanticMeshInfo
 		long pathId,
 		string name,
 		SemanticBoundsInfo bounds,
+		SemanticMeshChannelFlags channelFlags,
 		int? indexFormat,
 		IReadOnlyList<uint> decodedIndices,
 		int vertexDataByteLength,
@@ -220,6 +221,7 @@ public sealed class SemanticMeshInfo
 		PathId = pathId;
 		Name = name;
 		Bounds = bounds;
+		ChannelFlags = channelFlags;
 		IndexFormat = indexFormat;
 		DecodedIndices = decodedIndices;
 		VertexDataByteLength = vertexDataByteLength;
@@ -239,6 +241,7 @@ public sealed class SemanticMeshInfo
 	public long PathId { get; }
 	public string Name { get; }
 	public SemanticBoundsInfo Bounds { get; }
+	public SemanticMeshChannelFlags ChannelFlags { get; }
 	public int? IndexFormat { get; }
 	public IReadOnlyList<uint> DecodedIndices { get; }
 	public int VertexDataByteLength { get; }
@@ -253,6 +256,26 @@ public sealed class SemanticMeshInfo
 	public IReadOnlyList<SemanticSubMeshInfo> SubMeshes { get; }
 	public IReadOnlyList<int> Topology { get; }
 	public int VertexCount { get; }
+}
+
+public sealed class SemanticMeshChannelFlags
+{
+	public SemanticMeshChannelFlags(bool positions, bool normals, bool tangents, bool colors, bool uv0, bool uv1)
+	{
+		Positions = positions;
+		Normals = normals;
+		Tangents = tangents;
+		Colors = colors;
+		Uv0 = uv0;
+		Uv1 = uv1;
+	}
+
+	public bool Positions { get; }
+	public bool Normals { get; }
+	public bool Tangents { get; }
+	public bool Colors { get; }
+	public bool Uv0 { get; }
+	public bool Uv1 { get; }
 }
 
 public sealed class SemanticVertexChannelInfo

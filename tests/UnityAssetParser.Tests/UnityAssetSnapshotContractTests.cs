@@ -111,6 +111,7 @@ public sealed class UnityAssetSnapshotContractTests
         AssertV2MeshFilterLinksMatchParser(root.GetProperty("objects"), context);
         AssertV2MeshRendererLinksMatchParser(root.GetProperty("objects"), context);
         AssertV2MeshCoreMatchesParser(root.GetProperty("meshes"), context);
+        AssertV2MeshChannelsMatchParser(root.GetProperty("meshes"), context);
         AssertV2MeshRenderableSemantics(context);
         AssertV2MaterialCoreMatchesParser(root.GetProperty("materials"), context);
         AssertV2TextureCoreMatchesParser(root.GetProperty("textures"), context);
@@ -465,6 +466,26 @@ public sealed class UnityAssetSnapshotContractTests
             Assert.Equal(snapshotMeshes[i].VertexCount, parserMeshes[i].VertexCount);
             AssertVector3Equal(snapshotMeshes[i].Center, parserMeshes[i].Center);
             AssertVector3Equal(snapshotMeshes[i].Extent, parserMeshes[i].Extent);
+        }
+    }
+
+    private static void AssertV2MeshChannelsMatchParser(JsonElement meshesNode, BaseAssetsContext context)
+    {
+        var snapshotChannelsByPath = meshesNode
+            .EnumerateArray()
+            .ToDictionary(
+                mesh => mesh.GetProperty("pathId").GetInt64(),
+                mesh => mesh.GetProperty("channels"));
+
+        foreach (var mesh in context.SemanticMeshes)
+        {
+            Assert.True(snapshotChannelsByPath.TryGetValue(mesh.PathId, out var channelsNode));
+            Assert.Equal(channelsNode.GetProperty("positions").GetBoolean(), mesh.ChannelFlags.Positions);
+            Assert.Equal(channelsNode.GetProperty("normals").GetBoolean(), mesh.ChannelFlags.Normals);
+            Assert.Equal(channelsNode.GetProperty("tangents").GetBoolean(), mesh.ChannelFlags.Tangents);
+            Assert.Equal(channelsNode.GetProperty("colors").GetBoolean(), mesh.ChannelFlags.Colors);
+            Assert.Equal(channelsNode.GetProperty("uv0").GetBoolean(), mesh.ChannelFlags.Uv0);
+            Assert.Equal(channelsNode.GetProperty("uv1").GetBoolean(), mesh.ChannelFlags.Uv1);
         }
     }
 

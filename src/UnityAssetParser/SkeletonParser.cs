@@ -1512,6 +1512,8 @@ internal static class SkeletonParser
                 }
             }
 
+            var channelFlags = BuildMeshChannelFlags(vertexChannels, (int)vertexCountMax);
+
             var boundsCenter = new SemanticVector3(
                 (minX + maxX) * 0.5f,
                 (minY + maxY) * 0.5f,
@@ -1526,6 +1528,7 @@ internal static class SkeletonParser
                 pathId,
                 name,
                 new SemanticBoundsInfo(boundsCenter, boundsExtent),
+                channelFlags,
                 indexFormat,
                 decodedIndices,
                 vertexDataByteLength,
@@ -2060,6 +2063,24 @@ internal static class SkeletonParser
             11 => 4,
             _ => -1
         };
+    }
+
+    private static SemanticMeshChannelFlags BuildMeshChannelFlags(
+        IReadOnlyList<SemanticVertexChannelInfo> channels,
+        int vertexCount)
+    {
+        var channelIds = channels
+            .Select(channel => channel.ChannelIndex)
+            .ToHashSet();
+
+        var positions = vertexCount > 0 || channelIds.Contains(0);
+        var normals = channelIds.Contains(1);
+        var tangents = channelIds.Contains(2);
+        var colors = channelIds.Contains(3);
+        var uv0 = channelIds.Contains(4);
+        var uv1 = channelIds.Contains(5);
+
+        return new SemanticMeshChannelFlags(positions, normals, tangents, colors, uv0, uv1);
     }
 
     private static bool TryReadMeshVertexChannels(
