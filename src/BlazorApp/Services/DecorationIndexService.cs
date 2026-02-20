@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using System.Linq;
 using Microsoft.AspNetCore.Components.Forms;
+using UnityAssetParser;
 
 namespace BlazorApp.Services;
 
@@ -24,6 +25,7 @@ public sealed class DecorationIndexService
     ];
 
     private readonly AssetStoreService _assetStore;
+    private readonly HhhParser _hhhParser = new();
     private readonly List<DecorationEntry> _entries = new();
     private Task? _loadTask;
 
@@ -193,17 +195,19 @@ public sealed class DecorationIndexService
 
     private async Task PersistEntryAsync(string modId, ReadEntryResult result, CancellationToken cancellationToken)
     {
+        var conversionContext = new BaseAssetsContext();
+        var glbBytes = _hhhParser.ConvertToGlb(result.Bytes, conversionContext);
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         var asset = new StoredAsset(
             result.Entry.Sha256,
             modId,
             DecorationNameFormatter.GetDisplayName(result.Entry.FilePath),
-            result.Bytes,
+            glbBytes,
             null,
-            result.Entry.SizeBytes,
+            glbBytes.LongLength,
             now,
             now,
-            null,
+            now,
             result.Entry.FilePath);
 
         await _assetStore.UpsertAsync(asset, cancellationToken);
