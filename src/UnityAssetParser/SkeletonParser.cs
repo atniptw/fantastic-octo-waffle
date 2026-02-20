@@ -1717,12 +1717,12 @@ internal static class SkeletonParser
             return false;
         }
 
-        if (channel.Format != 0 || channel.Dimension < 3)
+        if (!CanDecodeChannelFormat(channel.Format) || channel.Dimension < 3)
         {
             return false;
         }
 
-        if (!TryGetStreamStride(channels, channel.Stream, out var stride) || stride < 12)
+        if (!TryGetStreamStride(channels, channel.Stream, out var stride))
         {
             return false;
         }
@@ -1747,7 +1747,15 @@ internal static class SkeletonParser
         {
             var baseOffset = vertexDataStart + (i * stride) + channel.Offset;
             reader.Position = baseOffset;
-            values.Add(new SemanticVector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle()));
+
+            if (!TryReadChannelComponent(reader, channel.Format, out var x)
+                || !TryReadChannelComponent(reader, channel.Format, out var y)
+                || !TryReadChannelComponent(reader, channel.Format, out var z))
+            {
+                return false;
+            }
+
+            values.Add(new SemanticVector3(x, y, z));
         }
 
         decoded = values;
@@ -1772,12 +1780,12 @@ internal static class SkeletonParser
             return false;
         }
 
-        if (channel.Format != 0 || channel.Dimension < 2)
+        if (!CanDecodeChannelFormat(channel.Format) || channel.Dimension < 2)
         {
             return false;
         }
 
-        if (!TryGetStreamStride(channels, channel.Stream, out var stride) || stride < 8)
+        if (!TryGetStreamStride(channels, channel.Stream, out var stride))
         {
             return false;
         }
@@ -1802,7 +1810,14 @@ internal static class SkeletonParser
         {
             var baseOffset = vertexDataStart + (i * stride) + channel.Offset;
             reader.Position = baseOffset;
-            values.Add(new SemanticVector2(reader.ReadSingle(), reader.ReadSingle()));
+
+            if (!TryReadChannelComponent(reader, channel.Format, out var x)
+                || !TryReadChannelComponent(reader, channel.Format, out var y))
+            {
+                return false;
+            }
+
+            values.Add(new SemanticVector2(x, y));
         }
 
         decoded = values;
@@ -1848,17 +1863,12 @@ internal static class SkeletonParser
             return false;
         }
 
-        if (positionChannel.Stream != 0 || positionChannel.Format != 0 || positionChannel.Dimension < 3)
+        if (positionChannel.Stream != 0 || !CanDecodeChannelFormat(positionChannel.Format) || positionChannel.Dimension < 3)
         {
             return false;
         }
 
         if (!TryGetStreamStride(channels, positionChannel.Stream, out var stride))
-        {
-            return false;
-        }
-
-        if (stride < 12)
         {
             return false;
         }
@@ -1883,11 +1893,59 @@ internal static class SkeletonParser
         {
             var baseOffset = vertexDataStart + (i * stride) + positionChannel.Offset;
             reader.Position = baseOffset;
-            parsed.Add(new SemanticVector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle()));
+
+            if (!TryReadChannelComponent(reader, positionChannel.Format, out var x)
+                || !TryReadChannelComponent(reader, positionChannel.Format, out var y)
+                || !TryReadChannelComponent(reader, positionChannel.Format, out var z))
+            {
+                return false;
+            }
+
+            parsed.Add(new SemanticVector3(x, y, z));
         }
 
         positions = parsed;
         return true;
+    }
+
+    private static bool CanDecodeChannelFormat(int format)
+    {
+        return format is >= 0 and <= 5;
+    }
+
+    private static bool TryReadChannelComponent(EndianBinaryReader reader, int format, out float value)
+    {
+        value = 0;
+
+        switch (format)
+        {
+            case 0:
+                value = reader.ReadSingle();
+                return true;
+            case 1:
+                value = (float)BitConverter.UInt16BitsToHalf(reader.ReadUInt16());
+                return true;
+            case 2:
+                value = reader.ReadByte() / 255f;
+                return true;
+            case 3:
+            {
+                var signed = unchecked((sbyte)reader.ReadByte());
+                value = Math.Max(signed / 127f, -1f);
+                return true;
+            }
+            case 4:
+                value = reader.ReadUInt16() / 65535f;
+                return true;
+            case 5:
+            {
+                var signed = reader.ReadInt16();
+                value = Math.Max(signed / 32767f, -1f);
+                return true;
+            }
+            default:
+                return false;
+        }
     }
 
     private static int GetVertexFormatElementSize(int format)
