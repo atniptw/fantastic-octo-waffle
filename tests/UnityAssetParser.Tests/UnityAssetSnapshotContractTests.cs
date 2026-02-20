@@ -528,26 +528,56 @@ public sealed class UnityAssetSnapshotContractTests
             if (mesh.DecodedNormals.Count > 0)
             {
                 Assert.Equal(mesh.VertexCount, mesh.DecodedNormals.Count);
+                Assert.True(mesh.ChannelFlags.Normals);
             }
 
             if (mesh.DecodedTangents.Count > 0)
             {
                 Assert.Equal(mesh.VertexCount, mesh.DecodedTangents.Count);
+                Assert.True(mesh.ChannelFlags.Tangents);
             }
 
             if (mesh.DecodedColors.Count > 0)
             {
                 Assert.Equal(mesh.VertexCount, mesh.DecodedColors.Count);
+                Assert.True(mesh.ChannelFlags.Colors);
             }
 
             if (mesh.DecodedUv0.Count > 0)
             {
                 Assert.Equal(mesh.VertexCount, mesh.DecodedUv0.Count);
+                Assert.True(mesh.ChannelFlags.Uv0);
             }
 
             if (mesh.DecodedUv1.Count > 0)
             {
                 Assert.Equal(mesh.VertexCount, mesh.DecodedUv1.Count);
+                Assert.True(mesh.ChannelFlags.Uv1);
+            }
+
+            if (!mesh.ChannelFlags.Normals)
+            {
+                Assert.Empty(mesh.DecodedNormals);
+            }
+
+            if (!mesh.ChannelFlags.Tangents)
+            {
+                Assert.Empty(mesh.DecodedTangents);
+            }
+
+            if (!mesh.ChannelFlags.Colors)
+            {
+                Assert.Empty(mesh.DecodedColors);
+            }
+
+            if (!mesh.ChannelFlags.Uv0)
+            {
+                Assert.Empty(mesh.DecodedUv0);
+            }
+
+            if (!mesh.ChannelFlags.Uv1)
+            {
+                Assert.Empty(mesh.DecodedUv1);
             }
 
             if (mesh.VertexChannels.Count > 0)
