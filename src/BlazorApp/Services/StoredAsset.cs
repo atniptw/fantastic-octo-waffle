@@ -50,3 +50,22 @@ public sealed record UnityPackageAnchor(
     float PositionY,
     float PositionZ
 );
+
+public sealed record StoredAvatar(
+    string Id,
+    string FileName,
+    byte[] Glb,
+    long Size,
+    long CreatedAt,
+    long LastUsed
+);
+
+public sealed record StoredAvatarMetadata(
+    string Id,
+    string FileName,
+    long Size,
+    long CreatedAt,
+    long LastUsed
+);
+
+public sealed record AvatarInventory(string Id);

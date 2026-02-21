@@ -42,6 +42,7 @@ public sealed class DecorationIndexService
     public bool LastUnityPackageScanSucceeded { get; private set; }
     public string? LastUnityPackageScanMessage { get; private set; }
     public DateTimeOffset? LastUnityPackageScanAt { get; private set; }
+    public AvatarInventory? LastAvatarInventory { get; private set; }
     public event Action? OnChange;
 
     public Task LoadPersistedAsync(CancellationToken cancellationToken = default)
@@ -50,13 +51,31 @@ public sealed class DecorationIndexService
         return _loadTask;
     }
 
+    public async Task LoadPersistedAvatarAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var avatars = await _assetStore.GetAllAvatarMetadataAsync(cancellationToken);
+            if (avatars.Count > 0)
+            {
+                var lastAvatar = avatars[avatars.Count - 1]; // Get the most recently stored avatar
+                LastAvatarInventory = new AvatarInventory(lastAvatar.Id);
+                NotifyStateChanged();
+            }
+        }
+        catch
+        {
+            // Silent fail - avatar loading is not critical
+        }
+    }
+
     public Task ReloadPersistedAsync(CancellationToken cancellationToken = default)
     {
         _loadTask = LoadPersistedInternalAsync(cancellationToken);
         return _loadTask;
     }
 
-    public async Task ScanZipAsync(IBrowserFile file, CancellationToken cancellationToken = default)
+    public async Task ScanZipAsync(byte[] fileBytes, string fileName, CancellationToken cancellationToken = default)
     {
         _entries.Clear();
         LastScanSucceeded = false;
@@ -64,22 +83,12 @@ public sealed class DecorationIndexService
         LastScanAt = DateTimeOffset.UtcNow;
         NotifyStateChanged();
 
-        if (!IsZipFile(file.Name))
-        {
-            LastScanSucceeded = true;
-            LastScanMessage = "Scan skipped (not a .zip file).";
-            NotifyStateChanged();
-            return;
-        }
-
         try
         {
-            await using var stream = file.OpenReadStream(MaxUploadBytes, cancellationToken);
-            using var buffer = new MemoryStream();
-            await stream.CopyToAsync(buffer, cancellationToken);
+            using var buffer = new MemoryStream(fileBytes);
             buffer.Position = 0;
             using var archive = new ZipArchive(buffer, ZipArchiveMode.Read, leaveOpen: false);
-            var modId = GetModId(file.Name);
+            var modId = GetModId(fileName);
             var storageWarnings = new List<string>();
 
             foreach (var entry in archive.Entries)
@@ -116,7 +125,16 @@ public sealed class DecorationIndexService
         }
     }
 
-    public async Task ScanUnityPackageAsync(IBrowserFile file, CancellationToken cancellationToken = default)
+    public async Task ScanZipAsync(IBrowserFile file, CancellationToken cancellationToken = default)
+    {
+        const long maxBytes = 1024L * 1024L * 512L;
+        await using var stream = file.OpenReadStream(maxBytes, cancellationToken);
+        using var buffer = new MemoryStream();
+        await stream.CopyToAsync(buffer, cancellationToken);
+        await ScanZipAsync(buffer.ToArray(), file.Name, cancellationToken);
+    }
+
+    public async Task ScanUnityPackageAsync(byte[] fileBytes, string fileName, CancellationToken cancellationToken = default)
     {
         LastUnityPackageInventory = null;
         LastUnityPackageScanSucceeded = false;
@@ -124,23 +142,11 @@ public sealed class DecorationIndexService
         LastUnityPackageScanAt = DateTimeOffset.UtcNow;
         NotifyStateChanged();
 
-        if (!IsUnityPackageFile(file.Name))
-        {
-            LastUnityPackageScanSucceeded = true;
-            LastUnityPackageScanMessage = "Scan skipped (not a .unitypackage file).";
-            NotifyStateChanged();
-            return;
-        }
-
         try
         {
-            await using var stream = file.OpenReadStream(MaxUploadBytes, cancellationToken);
-            using var buffer = new MemoryStream();
-            await stream.CopyToAsync(buffer, cancellationToken);
-            var bytes = buffer.ToArray();
-            var sha256 = ComputeSha256(bytes);
+            var sha256 = ComputeSha256(fileBytes);
             var parser = new UnityPackageParser();
-            var context = parser.Parse(bytes);
+            var context = parser.Parse(fileBytes);
             var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
             var anchors = context.SemanticAnchorPoints
@@ -162,13 +168,32 @@ public sealed class DecorationIndexService
 
             var inventory = new UnityPackageInventory(
                 sha256,
-                Path.GetFileName(file.Name),
+                Path.GetFileName(fileName),
                 now,
                 now,
                 anchors,
                 resolvedPaths);
 
             await _assetStore.UpsertUnityPackageAsync(inventory, cancellationToken);
+            
+            var avatarError = TryExtractAvatarGlb(context, out var avatarGlbBytes);
+            if (avatarError is null && avatarGlbBytes is not null && avatarGlbBytes.Length > 0)
+            {
+                var avatar = new StoredAvatar(
+                    sha256 + "_avatar",
+                    Path.GetFileName(fileName),
+                    avatarGlbBytes,
+                    avatarGlbBytes.LongLength,
+                    now,
+                    now);
+                await _assetStore.UpsertAvatarAsync(avatar, cancellationToken);
+                LastAvatarInventory = new AvatarInventory(avatar.Id);
+            }
+            else
+            {
+                LastAvatarInventory = null;
+            }
+
             LastUnityPackageInventory = inventory;
             LastUnityPackageScanSucceeded = true;
             LastUnityPackageScanMessage = "Scan complete.";
@@ -180,6 +205,15 @@ public sealed class DecorationIndexService
             LastUnityPackageScanMessage = $"Scan failed: {ex.Message}";
             NotifyStateChanged();
         }
+    }
+
+    public async Task ScanUnityPackageAsync(IBrowserFile file, CancellationToken cancellationToken = default)
+    {
+        const long maxBytes = 1024L * 1024L * 512L;
+        await using var stream = file.OpenReadStream(maxBytes, cancellationToken);
+        using var buffer = new MemoryStream();
+        await stream.CopyToAsync(buffer, cancellationToken);
+        await ScanUnityPackageAsync(buffer.ToArray(), file.Name, cancellationToken);
     }
 
     private async Task LoadPersistedInternalAsync(CancellationToken cancellationToken)
@@ -303,6 +337,70 @@ public sealed class DecorationIndexService
     }
 
     private sealed record ReadEntryResult(DecorationEntry Entry, byte[] Bytes);
+
+    private static string? TryExtractAvatarGlb(BaseAssetsContext context, out byte[]? glbBytes)
+    {
+        glbBytes = null;
+
+        var avatarGameObject = FindAvatarGameObject(context);
+        if (avatarGameObject is null)
+        {
+            return "No player avatar model found.";
+        }
+
+        var avatarMesh = FindGameObjectMesh(context, avatarGameObject.PathId);
+        if (avatarMesh is null)
+        {
+            return "Avatar GameObject has no mesh.";
+        }
+
+        try
+        {
+            var glbBuilder = new HhhParser();
+            glbBytes = glbBuilder.ConvertToGlb(new byte[0], context);
+            return null;
+        }
+        catch (Exception ex)
+        {
+            return $"Avatar GLB conversion failed: {ex.Message}";
+        }
+    }
+
+    private static SemanticGameObjectInfo? FindAvatarGameObject(BaseAssetsContext context)
+    {
+        var avatarPatterns = new[] { "player", "character", "armature", "avatar", "body", "mesh" };
+
+        var byNameMatch = context.SemanticGameObjects
+            .FirstOrDefault(go => avatarPatterns.Any(pattern =>
+                go.Name.Contains(pattern, StringComparison.OrdinalIgnoreCase)));
+
+        if (byNameMatch is not null)
+        {
+            return byNameMatch;
+        }
+
+        var largestMesh = context.SemanticGameObjects
+            .Where(go => FindGameObjectMesh(context, go.PathId) is not null)
+            .Select(go => new { GameObject = go, Mesh = FindGameObjectMesh(context, go.PathId) })
+            .OrderByDescending(x => x.Mesh?.VertexCount ?? 0)
+            .FirstOrDefault();
+
+        return largestMesh?.GameObject;
+    }
+
+    private static SemanticMeshInfo? FindGameObjectMesh(BaseAssetsContext context, long gameObjectPathId)
+    {
+        var meshFilter = context.SemanticMeshFilters
+            .FirstOrDefault(mf => mf.GameObjectPathId == gameObjectPathId);
+
+        if (meshFilter is null)
+        {
+            return null;
+        }
+
+        return context.SemanticMeshes
+            .FirstOrDefault(mesh => mesh.PathId == meshFilter.MeshPathId);
+    }
 
     private static float GetAnchorX(BaseAssetsContext context, long gameObjectPathId)
         => TryGetTransform(context, gameObjectPathId)?.LocalPosition.X ?? 0f;

@@ -2,6 +2,7 @@ const DB_NAME = "repo-asset-library";
 const DB_VERSION = 2;
 const STORE_ASSETS = "assets";
 const STORE_UNITY_PACKAGES = "unityPackages";
+const STORE_AVATARS = "avatars";
 
 let dbPromise;
 let dbInstance;
@@ -18,6 +19,9 @@ function openDb() {
         }
         if (!db.objectStoreNames.contains(STORE_UNITY_PACKAGES)) {
           db.createObjectStore(STORE_UNITY_PACKAGES, { keyPath: "id" });
+        }
+        if (!db.objectStoreNames.contains(STORE_AVATARS)) {
+          db.createObjectStore(STORE_AVATARS, { keyPath: "id" });
         }
       };
 
@@ -176,4 +180,39 @@ export async function deleteDatabase() {
     request.onerror = () => reject(request.error);
     request.onblocked = () => resolve();
   });
+}
+
+export async function putAvatar(avatar) {
+  const db = await openDb();
+  const tx = db.transaction(STORE_AVATARS, "readwrite");
+  const store = tx.objectStore(STORE_AVATARS);
+  const stored = {
+    ...avatar,
+    glb: toArrayBuffer(avatar.glb)
+  };
+
+  store.put(stored);
+  await runTransaction(tx);
+}
+
+export async function getAvatarById(id) {
+  const db = await openDb();
+  const tx = db.transaction(STORE_AVATARS, "readonly");
+  const store = tx.objectStore(STORE_AVATARS);
+
+  const result = await runRequest(store.get(id));
+  if (!result) {
+    return null;
+  }
+
+  return result;
+}
+
+export async function getAllAvatarIds() {
+  const db = await openDb();
+  const tx = db.transaction(STORE_AVATARS, "readonly");
+  const store = tx.objectStore(STORE_AVATARS);
+  const items = await runRequest(store.getAll());
+
+  return items.map(({ glb, ...rest }) => rest);
 }

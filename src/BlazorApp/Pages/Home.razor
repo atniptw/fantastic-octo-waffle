@@ -2,6 +2,7 @@
 @layout PlannerLayout
 @inject DecorationIndexService DecorationIndex
 @inject AssetStoreService AssetStore
+@inject ModalStateService ModalState
 @inject IJSRuntime JS
 @implements IAsyncDisposable
 
@@ -81,6 +82,7 @@
 	private string activeFilter = FilterAll;
 	private bool isClearingDatabase;
 	private string? previewStatusMessage;
+	private string? avatarId;
 
 	private IReadOnlyList<string> BodyPartGroups => DecorationIndex.Entries
 		.Select(entry => entry.BodyPart)
@@ -102,11 +104,14 @@
 	protected override void OnInitialized()
 	{
 		DecorationIndex.OnChange += HandleDecorationIndexChanged;
+		ModalState.OnChange += HandleModalStateChanged;
 	}
 
 	protected override async Task OnInitializedAsync()
 	{
 		await DecorationIndex.LoadPersistedAsync();
+		await DecorationIndex.LoadPersistedAvatarAsync();
+		avatarId = DecorationIndex.LastAvatarInventory?.Id;
 		RefreshSelectionAndStatusFromEntries();
 	}
 
@@ -167,7 +172,7 @@
 			return;
 		}
 
-		if (selectedByBodyPart.Count == 0)
+		if (selectedByBodyPart.Count == 0 && string.IsNullOrEmpty(avatarId))
 		{
 			await previewModule.InvokeVoidAsync("clearAllPreviews", PreviewContainerId);
 			previewStatusMessage = "Select an item to preview.";
@@ -175,12 +180,19 @@
 			return;
 		}
 
-		var selectedAssets = selectedByBodyPart.Values.ToList();
-		var previewResult = await previewModule.InvokeAsync<PreviewResult>("previewMultipleAssets", PreviewContainerId, selectedAssets);
+		var selectedAssets = selectedByBodyPart.Count > 0 ? selectedByBodyPart.Values.ToList() : new List<string>();
+		var previewResult = await previewModule.InvokeAsync<PreviewResult>("previewMultipleAssets", PreviewContainerId, selectedAssets, avatarId);
 		if (previewResult.Success)
 		{
-			var selectionSummary = string.Join(" + ", selectedByBodyPart.Keys.OrderBy(k => k, StringComparer.OrdinalIgnoreCase));
-			previewStatusMessage = $"Outfit: {selectionSummary}";
+			if (selectedByBodyPart.Count > 0)
+			{
+				var selectionSummary = string.Join(" + ", selectedByBodyPart.Keys.OrderBy(k => k, StringComparer.OrdinalIgnoreCase));
+				previewStatusMessage = $"Outfit: {selectionSummary}";
+			}
+			else if (!string.IsNullOrEmpty(avatarId))
+			{
+				previewStatusMessage = "Avatar loaded.";
+			}
 		}
 		else
 		{
@@ -249,6 +261,7 @@
 
 	private void HandleDecorationIndexChanged()
 	{
+		avatarId = DecorationIndex.LastAvatarInventory?.Id;
 		RefreshSelectionAndStatusFromEntries();
 		_ = InvokeAsync(async () =>
 		{
@@ -257,9 +270,24 @@
 		});
 	}
 
+	private void HandleModalStateChanged()
+	{
+		if (!ModalState.IsOpen)
+		{
+			// Modal closed - reload avatar and trigger preview update
+			avatarId = DecorationIndex.LastAvatarInventory?.Id;
+			_ = InvokeAsync(async () =>
+			{
+				await SyncPreviewToAllSelectionsAsync();
+				StateHasChanged();
+			});
+		}
+	}
+
 	public async ValueTask DisposeAsync()
 	{
 		DecorationIndex.OnChange -= HandleDecorationIndexChanged;
+		ModalState.OnChange -= HandleModalStateChanged;
 
 		if (previewModule is null)
 		{

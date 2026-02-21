@@ -46,6 +46,25 @@ public sealed class AssetStoreService : IAsyncDisposable
         return await module.InvokeAsync<UnityPackageInventory?>("getUnityPackageById", cancellationToken, id);
     }
 
+    public async Task UpsertAvatarAsync(StoredAvatar avatar, CancellationToken cancellationToken = default)
+    {
+        var module = await GetModuleAsync();
+        await module.InvokeVoidAsync("putAvatar", cancellationToken, avatar);
+    }
+
+    public async Task<StoredAvatar?> GetAvatarByIdAsync(string id, CancellationToken cancellationToken = default)
+    {
+        var module = await GetModuleAsync();
+        return await module.InvokeAsync<StoredAvatar?>("getAvatarById", cancellationToken, id);
+    }
+
+    public async Task<IReadOnlyList<StoredAvatarMetadata>> GetAllAvatarMetadataAsync(CancellationToken cancellationToken = default)
+    {
+        var module = await GetModuleAsync();
+        var avatars = await module.InvokeAsync<StoredAvatarMetadata[]>("getAllAvatarIds", cancellationToken);
+        return avatars;
+    }
+
     public async Task ClearAsync(CancellationToken cancellationToken = default)
     {
         var module = await GetModuleAsync();

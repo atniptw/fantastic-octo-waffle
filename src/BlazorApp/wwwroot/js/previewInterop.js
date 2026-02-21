@@ -1,4 +1,4 @@
-import { getAssetById } from "./assetStore.js";
+import { getAssetById, getAvatarById } from "./assetStore.js";
 
 const previewUrlsByElement = new Map();
 const previewViewersInContainer = new Map();
@@ -166,8 +166,8 @@ export function clearPreview(elementId) {
   log("info", "preview cleared", { elementId });
 }
 
-export async function previewMultipleAssets(containerId, assetIds) {
-  log("info", "previewMultipleAssets start", { containerId, assetCount: assetIds?.length ?? 0 });
+export async function previewMultipleAssets(containerId, assetIds, avatarId = null) {
+  log("info", "previewMultipleAssets start", { containerId, assetCount: assetIds?.length ?? 0, avatarId });
 
   const container = getElement(containerId);
   if (!container) {
@@ -182,10 +182,10 @@ export async function previewMultipleAssets(containerId, assetIds) {
     return buildResult(false, "Preview renderer failed to load.");
   }
 
-  if (!assetIds || assetIds.length === 0) {
+  if ((!assetIds || assetIds.length === 0) && !avatarId) {
     clearAllPreviews(containerId);
-    log("info", "no assets to preview");
-    return buildResult(false, "No assets selected.");
+    log("info", "no assets or avatar to preview");
+    return buildResult(false, "No assets or avatar selected.");
   }
 
   clearAllPreviews(containerId);
@@ -193,59 +193,104 @@ export async function previewMultipleAssets(containerId, assetIds) {
   const loadedViewers = [];
   const failedAssets = [];
 
-  for (const assetId of assetIds) {
-    const asset = await getAssetById(assetId);
-    if (!asset?.glb) {
-      log("warn", "asset has no GLB payload", { assetId });
-      failedAssets.push(assetId);
-      continue;
+  // Load avatar as base layer if provided
+  if (avatarId) {
+    const avatar = await getAvatarById(avatarId);
+    if (!avatar?.glb) {
+      log("warn", "avatar has no GLB payload", { avatarId });
+    } else {
+      const glbBytes = avatar.glb instanceof ArrayBuffer
+        ? avatar.glb
+        : avatar.glb.buffer instanceof ArrayBuffer
+          ? avatar.glb.buffer.slice(avatar.glb.byteOffset, avatar.glb.byteOffset + avatar.glb.byteLength)
+          : null;
+
+      if (glbBytes) {
+        const glbJson = parseGlbJson(glbBytes);
+        if (hasRenderableMesh(glbJson)) {
+          const blob = new Blob([glbBytes], { type: "model/gltf-binary" });
+          const url = URL.createObjectURL(blob);
+
+          const viewer = document.createElement("model-viewer");
+          viewer.setAttribute("camera-controls", "");
+          viewer.setAttribute("auto-rotate", "");
+          viewer.setAttribute("touch-action", "pan-y");
+          viewer.className = "planner-model-viewer planner-model-viewer--avatar";
+          viewer.src = url;
+
+          container.appendChild(viewer);
+          loadedViewers.push({ viewer, url, assetId: avatarId, isAvatar: true });
+          previewUrlsByElement.set(avatarId, url);
+          log("info", "avatar loaded", { avatarId });
+        } else {
+          log("warn", "avatar GLB has no renderable mesh", { avatarId });
+        }
+      } else {
+        log("warn", "avatar GLB payload invalid", { avatarId });
+      }
     }
+  }
 
-    const glbBytes = asset.glb instanceof ArrayBuffer
-      ? asset.glb
-      : asset.glb.buffer instanceof ArrayBuffer
-        ? asset.glb.buffer.slice(asset.glb.byteOffset, asset.glb.byteOffset + asset.glb.byteLength)
-        : null;
+  // Load decoration assets on top
+  if (assetIds && assetIds.length > 0) {
+    for (const assetId of assetIds) {
+      const asset = await getAssetById(assetId);
+      if (!asset?.glb) {
+        log("warn", "asset has no GLB payload", { assetId });
+        failedAssets.push(assetId);
+        continue;
+      }
 
-    if (!glbBytes) {
-      log("warn", "asset GLB payload invalid", { assetId });
-      failedAssets.push(assetId);
-      continue;
+      const glbBytes = asset.glb instanceof ArrayBuffer
+        ? asset.glb
+        : asset.glb.buffer instanceof ArrayBuffer
+          ? asset.glb.buffer.slice(asset.glb.byteOffset, asset.glb.byteOffset + asset.glb.byteLength)
+          : null;
+
+      if (!glbBytes) {
+        log("warn", "asset GLB payload invalid", { assetId });
+        failedAssets.push(assetId);
+        continue;
+      }
+
+      const glbJson = parseGlbJson(glbBytes);
+      if (!hasRenderableMesh(glbJson)) {
+        const warning = extractConversionWarning(glbJson);
+        log("warn", "GLB has no renderable mesh", { assetId, warning });
+        failedAssets.push(assetId);
+        continue;
+      }
+
+      const blob = new Blob([glbBytes], { type: "model/gltf-binary" });
+      const url = URL.createObjectURL(blob);
+
+      const viewer = document.createElement("model-viewer");
+      viewer.setAttribute("camera-controls", "");
+      viewer.setAttribute("auto-rotate", "");
+      viewer.setAttribute("touch-action", "pan-y");
+      viewer.className = "planner-model-viewer planner-model-viewer--multi";
+      viewer.src = url;
+
+      container.appendChild(viewer);
+      loadedViewers.push({ viewer, url, assetId, isAvatar: false });
+      previewUrlsByElement.set(assetId, url);
     }
-
-    const glbJson = parseGlbJson(glbBytes);
-    if (!hasRenderableMesh(glbJson)) {
-      const warning = extractConversionWarning(glbJson);
-      log("warn", "GLB has no renderable mesh", { assetId, warning });
-      failedAssets.push(assetId);
-      continue;
-    }
-
-    const blob = new Blob([glbBytes], { type: "model/gltf-binary" });
-    const url = URL.createObjectURL(blob);
-
-    const viewer = document.createElement("model-viewer");
-    viewer.setAttribute("camera-controls", "");
-    viewer.setAttribute("auto-rotate", "");
-    viewer.setAttribute("touch-action", "pan-y");
-    viewer.className = "planner-model-viewer planner-model-viewer--multi";
-    viewer.src = url;
-
-    container.appendChild(viewer);
-    loadedViewers.push({ viewer, url, assetId });
-    previewUrlsByElement.set(assetId, url);
   }
 
   previewViewersInContainer.set(containerId, loadedViewers);
 
   if (loadedViewers.length === 0) {
-    log("warn", "no valid assets to preview", { assetIds, failedAssets });
-    return buildResult(false, "No valid assets could be loaded for preview.");
+    log("warn", "no valid assets or avatar to preview", { assetIds, avatarId, failedAssets });
+    return buildResult(false, "No valid assets or avatar could be loaded for preview.");
   }
 
-  const successMessage = loadedViewers.length === assetIds.length
-    ? `Loaded ${loadedViewers.length} asset(s).`
-    : `Loaded ${loadedViewers.length} of ${assetIds.length} asset(s) (${failedAssets.length} failed).`;
+  const avatarLoaded = loadedViewers.some(v => v.isAvatar);
+  const assetsLoaded = loadedViewers.filter(v => !v.isAvatar).length;
+  const successMessage = avatarLoaded
+    ? (assetsLoaded > 0
+      ? `Loaded avatar + ${assetsLoaded} decoration(s).`
+      : `Loaded avatar.`)
+    : `Loaded ${assetsLoaded} decoration(s).`;
 
   log("info", "previewMultipleAssets success", { loadedCount: loadedViewers.length, failedCount: failedAssets.length });
   return buildResult(true, successMessage);

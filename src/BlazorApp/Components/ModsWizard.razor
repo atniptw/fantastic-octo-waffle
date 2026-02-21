@@ -49,27 +49,41 @@
             {
                 <div class="wizard-list" data-testid="wizard-step-2">
                     <div class="wizard-list__title">Files grouped by body part</div>
-                    @foreach (var group in DecorationIndex.Entries
-                        .GroupBy(entry => entry.BodyPart)
-                        .OrderBy(group => group.Key))
+                    @if (DecorationIndex.Entries.Count == 0 && DecorationIndex.LastUnityPackageInventory is not null)
                     {
-                        <div class="wizard-group">
-                            <div class="wizard-group__title">@group.Key (@group.Count())</div>
-                            <ul class="wizard-group__list">
-                                @foreach (var entry in group.OrderBy(item => item.FilePath))
-                                {
-                                    <li>
-                                        <div class="wizard-file">
-                                            <div>
-                                                <div class="wizard-file__name">@DecorationNameFormatter.GetDisplayName(entry.FilePath)</div>
-                                                <div class="wizard-file__meta">@FormatFileSize(entry.SizeBytes)</div>
-                                            </div>
-                                            <span class="wizard-status @GetStatusClass(entry)">@GetStatusLabel(entry)</span>
-                                        </div>
-                                    </li>
-                                }
-                            </ul>
+                        <div style="padding: 1rem; color: #666;">
+                            <p>Unitypackage uploaded with @DecorationIndex.LastUnityPackageInventory.Anchors.Count anchor point(s).</p>
+                            <p>Ready to close modal or load additional mod files.</p>
                         </div>
+                    }
+                    else if (DecorationIndex.Entries.Count == 0)
+                    {
+                        <div style="padding: 1rem; color: #999;">No files found.</div>
+                    }
+                    else
+                    {
+                        @foreach (var group in DecorationIndex.Entries
+                            .GroupBy(entry => entry.BodyPart)
+                            .OrderBy(group => group.Key))
+                        {
+                            <div class="wizard-group">
+                                <div class="wizard-group__title">@group.Key (@group.Count())</div>
+                                <ul class="wizard-group__list">
+                                    @foreach (var entry in group.OrderBy(item => item.FilePath))
+                                    {
+                                        <li>
+                                            <div class="wizard-file">
+                                                <div>
+                                                    <div class="wizard-file__name">@DecorationNameFormatter.GetDisplayName(entry.FilePath)</div>
+                                                    <div class="wizard-file__meta">@FormatFileSize(entry.SizeBytes)</div>
+                                                </div>
+                                                <span class="wizard-status @GetStatusClass(entry)">@GetStatusLabel(entry)</span>
+                                            </div>
+                                        </li>
+                                    }
+                                </ul>
+                            </div>
+                        }
                     }
                 </div>
             }
@@ -117,8 +131,10 @@
     private readonly Dictionary<string, ProcessStatus> processingStatus = new();
     private const int ProcessingDelayMs = 120;
 
-    private bool CanProceed => DecorationIndex.LastScanSucceeded && DecorationIndex.Entries.Count > 0;
-    private bool CanProcess => !isProcessing && DecorationIndex.Entries.Count > 0;
+    private bool CanProceed => (DecorationIndex.LastScanSucceeded && DecorationIndex.Entries.Count > 0)
+        || (DecorationIndex.LastUnityPackageScanSucceeded && DecorationIndex.LastUnityPackageInventory is not null);
+    private bool CanProcess => !isProcessing && (DecorationIndex.Entries.Count > 0
+        || (DecorationIndex.LastUnityPackageScanSucceeded && DecorationIndex.LastUnityPackageInventory is not null));
 
     protected override void OnInitialized()
     {
@@ -132,50 +148,52 @@
         scanSucceeded = false;
         scanStatus = "Scan: starting...";
 
-        var fileType = await DetectFileTypeAsync(currentFile);
+        try
+        {
+            const long maxBytes = 1024L * 1024L * 512L; // 512 MB
+            await using var stream = currentFile.OpenReadStream(maxBytes);
+            using var buffer = new MemoryStream();
+            await stream.CopyToAsync(buffer);
+            var fileBytes = buffer.ToArray();
 
-        if (fileType == FileType.UnityPackage)
-        {
-            await DecorationIndex.ScanUnityPackageAsync(currentFile);
-            scanSucceeded = DecorationIndex.LastUnityPackageScanSucceeded;
-            scanStatus = DecorationIndex.LastUnityPackageScanMessage ?? "Scan complete.";
+            var fileType = DetectFileType(fileBytes);
+
+            if (fileType == FileType.UnityPackage)
+            {
+                await DecorationIndex.ScanUnityPackageAsync(fileBytes, currentFile.Name);
+                scanSucceeded = DecorationIndex.LastUnityPackageScanSucceeded;
+                scanStatus = DecorationIndex.LastUnityPackageScanMessage ?? "Scan complete.";
+            }
+            else
+            {
+                await DecorationIndex.ScanZipAsync(fileBytes, currentFile.Name);
+                scanSucceeded = DecorationIndex.LastScanSucceeded;
+                scanStatus = DecorationIndex.LastScanMessage ?? "Scan complete.";
+            }
         }
-        else
+        catch (Exception ex)
         {
-            await DecorationIndex.ScanZipAsync(currentFile);
-            scanSucceeded = DecorationIndex.LastScanSucceeded;
-            scanStatus = DecorationIndex.LastScanMessage ?? "Scan complete.";
+            scanSucceeded = false;
+            scanStatus = $"Scan failed: {ex.Message}";
         }
 
         ResetProcessingState();
         isScanning = false;
     }
 
-    private async Task<FileType> DetectFileTypeAsync(IBrowserFile file)
+    private static FileType DetectFileType(byte[] fileBytes)
     {
-        try
+        if (fileBytes.Length >= 2)
         {
-            const int bufferSize = 8;
-            var buffer = new byte[bufferSize];
-            await using var stream = file.OpenReadStream(bufferSize);
-            var bytesRead = await stream.ReadAsync(buffer, 0, bufferSize);
-
-            if (bytesRead >= 2)
+            if (fileBytes[0] == 0x1F && fileBytes[1] == 0x8B)
             {
-                if (buffer[0] == 0x1F && buffer[1] == 0x8B)
-                {
-                    return FileType.UnityPackage;
-                }
-                if (buffer[0] == 0x50 && buffer[1] == 0x4B)
-                {
-                    return FileType.Zip;
-                }
+                return FileType.UnityPackage;
+            }
+            if (fileBytes[0] == 0x50 && fileBytes[1] == 0x4B)
+            {
+                return FileType.Zip;
             }
         }
-        catch
-        {
-        }
-
         return FileType.Zip;
     }
 
