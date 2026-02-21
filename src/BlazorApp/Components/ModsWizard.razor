@@ -17,20 +17,20 @@
             @if (currentStep == StepUpload)
             {
                 <div class="dropzone" data-testid="wizard-step-1">
-                    <div class="dropzone__hint">Drop zip here</div>
-                    <InputFile OnChange="HandleBaseModSelected" class="dropzone__input" data-testid="base-mod-input" />
-                    <div class="dropzone__status @(baseModScanSucceeded ? "success" : string.Empty)" data-testid="base-mod-status">
-                        @if (baseModFile is null)
+                    <div class="dropzone__hint">Drop mod file here</div>
+                    <InputFile OnChange="HandleFileSelected" class="dropzone__input" data-testid="mod-file-input" />
+                    <div class="dropzone__status @(scanSucceeded ? "success" : string.Empty)" data-testid="mod-file-status">
+                        @if (currentFile is null)
                         {
-                            <span>Status: No mod selected</span>
+                            <span>Status: No file selected</span>
                         }
-                        else if (isBaseModScanning)
+                        else if (isScanning)
                         {
                             <span>Scan: in progress...</span>
                         }
-                        else if (!string.IsNullOrWhiteSpace(baseModScanStatus))
+                        else if (!string.IsNullOrWhiteSpace(scanStatus))
                         {
-                            <span>@baseModScanStatus</span>
+                            <span>@scanStatus</span>
                         }
                         else
                         {
@@ -38,6 +38,12 @@
                         }
                     </div>
                 </div>
+                @if (DecorationIndex.LastUnityPackageInventory is not null && DecorationIndex.LastUnityPackageInventory.Anchors.Count > 0)
+                {
+                    <div class="wizard-list" data-testid="unitypackage-anchors">
+                        <div class="wizard-list__title">Anchor points: @DecorationIndex.LastUnityPackageInventory.Anchors.Count found</div>
+                    </div>
+                }
             }
             else
             {
@@ -102,10 +108,10 @@
     private const int StepUpload = 1;
     private const int StepReview = 2;
     private int currentStep = StepUpload;
-    private IBrowserFile? baseModFile;
-    private bool isBaseModScanning;
-    private bool baseModScanSucceeded;
-    private string? baseModScanStatus;
+    private IBrowserFile? currentFile;
+    private bool isScanning;
+    private bool scanSucceeded;
+    private string? scanStatus;
     private bool isProcessing;
     private bool processingComplete;
     private readonly Dictionary<string, ProcessStatus> processingStatus = new();
@@ -119,19 +125,58 @@
         ModalState.OnChange += HandleModalChange;
     }
 
-    private async Task HandleBaseModSelected(InputFileChangeEventArgs args)
+    private async Task HandleFileSelected(InputFileChangeEventArgs args)
     {
-        baseModFile = args.File;
-        isBaseModScanning = true;
-        baseModScanSucceeded = false;
-        baseModScanStatus = "Scan: starting...";
+        currentFile = args.File;
+        isScanning = true;
+        scanSucceeded = false;
+        scanStatus = "Scan: starting...";
 
-        await DecorationIndex.ScanZipAsync(baseModFile);
+        var fileType = await DetectFileTypeAsync(currentFile);
+
+        if (fileType == FileType.UnityPackage)
+        {
+            await DecorationIndex.ScanUnityPackageAsync(currentFile);
+            scanSucceeded = DecorationIndex.LastUnityPackageScanSucceeded;
+            scanStatus = DecorationIndex.LastUnityPackageScanMessage ?? "Scan complete.";
+        }
+        else
+        {
+            await DecorationIndex.ScanZipAsync(currentFile);
+            scanSucceeded = DecorationIndex.LastScanSucceeded;
+            scanStatus = DecorationIndex.LastScanMessage ?? "Scan complete.";
+        }
 
         ResetProcessingState();
-        isBaseModScanning = false;
-        baseModScanSucceeded = DecorationIndex.LastScanSucceeded;
-        baseModScanStatus = DecorationIndex.LastScanMessage ?? "Scan complete.";
+        isScanning = false;
+    }
+
+    private async Task<FileType> DetectFileTypeAsync(IBrowserFile file)
+    {
+        try
+        {
+            const int bufferSize = 8;
+            var buffer = new byte[bufferSize];
+            await using var stream = file.OpenReadStream(bufferSize);
+            var bytesRead = await stream.ReadAsync(buffer, 0, bufferSize);
+
+            if (bytesRead >= 2)
+            {
+                if (buffer[0] == 0x1F && buffer[1] == 0x8B)
+                {
+                    return FileType.UnityPackage;
+                }
+                if (buffer[0] == 0x50 && buffer[1] == 0x4B)
+                {
+                    return FileType.Zip;
+                }
+            }
+        }
+        catch
+        {
+        }
+
+        return FileType.Zip;
     }
 
     private static string FormatFileSize(long bytes)
@@ -151,10 +196,10 @@
     {
         ResetProcessingState();
         currentStep = StepUpload;
-        baseModFile = null;
-        isBaseModScanning = false;
-        baseModScanSucceeded = false;
-        baseModScanStatus = null;
+        currentFile = null;
+        isScanning = false;
+        scanSucceeded = false;
+        scanStatus = null;
         ModalState.Close();
     }
 
@@ -184,10 +229,10 @@
     {
         ResetProcessingState();
         currentStep = StepUpload;
-        baseModFile = null;
-        isBaseModScanning = false;
-        baseModScanSucceeded = false;
-        baseModScanStatus = null;
+        currentFile = null;
+        isScanning = false;
+        scanSucceeded = false;
+        scanStatus = null;
     }
 
     private void ResetProcessingState()
@@ -275,5 +320,11 @@
         Processing,
         Done,
         Failed
+    }
+
+    private enum FileType
+    {
+        Zip,
+        UnityPackage
     }
 }

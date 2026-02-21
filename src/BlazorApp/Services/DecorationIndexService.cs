@@ -38,6 +38,10 @@ public sealed class DecorationIndexService
     public bool LastScanSucceeded { get; private set; }
     public string? LastScanMessage { get; private set; }
     public DateTimeOffset? LastScanAt { get; private set; }
+    public UnityPackageInventory? LastUnityPackageInventory { get; private set; }
+    public bool LastUnityPackageScanSucceeded { get; private set; }
+    public string? LastUnityPackageScanMessage { get; private set; }
+    public DateTimeOffset? LastUnityPackageScanAt { get; private set; }
     public event Action? OnChange;
 
     public Task LoadPersistedAsync(CancellationToken cancellationToken = default)
@@ -112,6 +116,72 @@ public sealed class DecorationIndexService
         }
     }
 
+    public async Task ScanUnityPackageAsync(IBrowserFile file, CancellationToken cancellationToken = default)
+    {
+        LastUnityPackageInventory = null;
+        LastUnityPackageScanSucceeded = false;
+        LastUnityPackageScanMessage = null;
+        LastUnityPackageScanAt = DateTimeOffset.UtcNow;
+        NotifyStateChanged();
+
+        if (!IsUnityPackageFile(file.Name))
+        {
+            LastUnityPackageScanSucceeded = true;
+            LastUnityPackageScanMessage = "Scan skipped (not a .unitypackage file).";
+            NotifyStateChanged();
+            return;
+        }
+
+        try
+        {
+            await using var stream = file.OpenReadStream(MaxUploadBytes, cancellationToken);
+            using var buffer = new MemoryStream();
+            await stream.CopyToAsync(buffer, cancellationToken);
+            var bytes = buffer.ToArray();
+            var sha256 = ComputeSha256(bytes);
+            var parser = new UnityPackageParser();
+            var context = parser.Parse(bytes);
+            var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+            var anchors = context.SemanticAnchorPoints
+                .Select(anchor => new UnityPackageAnchor(
+                    anchor.Tag,
+                    anchor.Name,
+                    anchor.GameObjectPathId,
+                    GetAnchorX(context, anchor.GameObjectPathId),
+                    GetAnchorY(context, anchor.GameObjectPathId),
+                    GetAnchorZ(context, anchor.GameObjectPathId)))
+                .ToList();
+
+            var resolvedPaths = context.Inventory.Entries
+                .Where(entry => !string.IsNullOrWhiteSpace(entry.ResolvedPath))
+                .Select(entry => entry.ResolvedPath!)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var inventory = new UnityPackageInventory(
+                sha256,
+                Path.GetFileName(file.Name),
+                now,
+                now,
+                anchors,
+                resolvedPaths);
+
+            await _assetStore.UpsertUnityPackageAsync(inventory, cancellationToken);
+            LastUnityPackageInventory = inventory;
+            LastUnityPackageScanSucceeded = true;
+            LastUnityPackageScanMessage = "Scan complete.";
+            NotifyStateChanged();
+        }
+        catch (Exception ex)
+        {
+            LastUnityPackageScanSucceeded = false;
+            LastUnityPackageScanMessage = $"Scan failed: {ex.Message}";
+            NotifyStateChanged();
+        }
+    }
+
     private async Task LoadPersistedInternalAsync(CancellationToken cancellationToken)
     {
         try
@@ -143,6 +213,9 @@ public sealed class DecorationIndexService
 
     private static bool IsZipFile(string fileName)
         => fileName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsUnityPackageFile(string fileName)
+        => fileName.EndsWith(".unitypackage", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsHhhEntry(ZipArchiveEntry entry)
     {
@@ -230,6 +303,18 @@ public sealed class DecorationIndexService
     }
 
     private sealed record ReadEntryResult(DecorationEntry Entry, byte[] Bytes);
+
+    private static float GetAnchorX(BaseAssetsContext context, long gameObjectPathId)
+        => TryGetTransform(context, gameObjectPathId)?.LocalPosition.X ?? 0f;
+
+    private static float GetAnchorY(BaseAssetsContext context, long gameObjectPathId)
+        => TryGetTransform(context, gameObjectPathId)?.LocalPosition.Y ?? 0f;
+
+    private static float GetAnchorZ(BaseAssetsContext context, long gameObjectPathId)
+        => TryGetTransform(context, gameObjectPathId)?.LocalPosition.Z ?? 0f;
+
+    private static SemanticTransformInfo? TryGetTransform(BaseAssetsContext context, long gameObjectPathId)
+        => context.SemanticTransforms.FirstOrDefault(transform => transform.GameObjectPathId == gameObjectPathId);
 }
 
 public sealed record DecorationEntry(

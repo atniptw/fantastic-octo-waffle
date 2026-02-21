@@ -1,9 +1,9 @@
 import { test, expect } from "@playwright/test";
 
-async function waitForBaseScanComplete(page: import("@playwright/test").Page) {
+async function waitForModScanComplete(page: import("@playwright/test").Page) {
   await expect
     .poll(
-      async () => (await page.getByTestId("base-mod-status").innerText()).trim(),
+      async () => (await page.getByTestId("mod-file-status").innerText()).trim(),
       { timeout: 120_000 }
     )
     .toMatch(/Scan complete/i);
@@ -20,9 +20,9 @@ test("base mod upload scans zip and shows list", async ({ page }) => {
   await page.goto("/");
 
   await page.getByTestId("load-mods-button").click();
-  const baseInput = page.getByTestId("base-mod-input");
-  await baseInput.setInputFiles("tests/e2e/fixtures/morehead-1.4.4.zip");
-  await waitForBaseScanComplete(page);
+  const modInput = page.getByTestId("mod-file-input");
+  await modInput.setInputFiles("tests/e2e/fixtures/morehead-1.4.4.zip");
+  await waitForModScanComplete(page);
   await page.getByTestId("wizard-next").click();
   await expect(page.getByTestId("wizard-step-2")).toBeVisible();
   await expect(page.getByTestId("wizard-process")).toBeEnabled();
@@ -32,9 +32,9 @@ test("process flow runs sequentially and completes", async ({ page }) => {
   await page.goto("/");
 
   await page.getByTestId("load-mods-button").click();
-  const baseInput = page.getByTestId("base-mod-input");
-  await baseInput.setInputFiles("tests/e2e/fixtures/morehead-1.4.4.zip");
-  await waitForBaseScanComplete(page);
+  const modInput = page.getByTestId("mod-file-input");
+  await modInput.setInputFiles("tests/e2e/fixtures/morehead-1.4.4.zip");
+  await waitForModScanComplete(page);
 
   await page.getByTestId("wizard-next").click();
   await expect(page.getByTestId("wizard-step-2")).toBeVisible();

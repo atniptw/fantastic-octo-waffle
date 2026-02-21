@@ -16,6 +16,8 @@ public sealed class BaseAssetsContext
 	public List<SemanticMeshInfo> SemanticMeshes { get; } = new();
 	public List<SemanticMaterialInfo> SemanticMaterials { get; } = new();
 	public List<SemanticTextureInfo> SemanticTextures { get; } = new();
+	public List<SemanticAnchorPointInfo> SemanticAnchorPoints { get; } = new();
+	public PackageInventory Inventory { get; } = new();
 
 	public IReadOnlyDictionary<string, int> BuildSemanticObjectTypeCounts()
 	{
@@ -372,6 +374,148 @@ public sealed class SemanticMaterialInfo
 public sealed class SemanticTextureInfo
 {
 	public SemanticTextureInfo(long pathId, string name, int width, int height, int format, int mipCount)
+	{
+		PathId = pathId;
+		Name = name;
+		Width = width;
+		Height = height;
+		Format = format;
+		MipCount = mipCount;
+	}
+
+	public long PathId { get; }
+	public string Name { get; }
+	public int Width { get; }
+	public int Height { get; }
+	public int Format { get; }
+	public int MipCount { get; }
+}
+
+public sealed class SemanticAnchorPointInfo
+{
+	public SemanticAnchorPointInfo(long gameObjectPathId, string tag, string name)
+	{
+		GameObjectPathId = gameObjectPathId;
+		Tag = tag;
+		Name = name;
+	}
+
+	public long GameObjectPathId { get; }
+	public string Tag { get; }
+	public string Name { get; }
+}
+
+public sealed class PackageInventory
+{
+	public List<PackageEntryInfo> Entries { get; } = new();
+	public List<PackageGameObjectInfo> GameObjects { get; } = new();
+	public List<PackageTransformInfo> Transforms { get; } = new();
+	public List<PackageMeshInfo> Meshes { get; } = new();
+	public List<PackageMaterialInfo> Materials { get; } = new();
+	public List<PackageTextureInfo> Textures { get; } = new();
+}
+
+public sealed class PackageEntryInfo
+{
+	public PackageEntryInfo(
+		string containerSource,
+		ContainerKind containerKind,
+		string path,
+		long size,
+		uint flags,
+		string? guid,
+		string? resolvedPath)
+	{
+		ContainerSource = containerSource;
+		ContainerKind = containerKind;
+		Path = path;
+		Size = size;
+		Flags = flags;
+		Guid = guid;
+		ResolvedPath = resolvedPath;
+	}
+
+	public string ContainerSource { get; }
+	public ContainerKind ContainerKind { get; }
+	public string Path { get; }
+	public long Size { get; }
+	public uint Flags { get; }
+	public string? Guid { get; }
+	public string? ResolvedPath { get; }
+}
+
+public sealed class PackageGameObjectInfo
+{
+	public PackageGameObjectInfo(long pathId, string name, bool isActive, int layer)
+	{
+		PathId = pathId;
+		Name = name;
+		IsActive = isActive;
+		Layer = layer;
+	}
+
+	public long PathId { get; }
+	public string Name { get; }
+	public bool IsActive { get; }
+	public int Layer { get; }
+}
+
+public sealed class PackageTransformInfo
+{
+	public PackageTransformInfo(long pathId, long gameObjectPathId, long? parentPathId, int childCount)
+	{
+		PathId = pathId;
+		GameObjectPathId = gameObjectPathId;
+		ParentPathId = parentPathId;
+		ChildCount = childCount;
+	}
+
+	public long PathId { get; }
+	public long GameObjectPathId { get; }
+	public long? ParentPathId { get; }
+	public int ChildCount { get; }
+}
+
+public sealed class PackageMeshInfo
+{
+	public PackageMeshInfo(
+		long pathId,
+		string name,
+		int vertexCount,
+		int subMeshCount,
+		SemanticMeshChannelFlags channelFlags)
+	{
+		PathId = pathId;
+		Name = name;
+		VertexCount = vertexCount;
+		SubMeshCount = subMeshCount;
+		ChannelFlags = channelFlags;
+	}
+
+	public long PathId { get; }
+	public string Name { get; }
+	public int VertexCount { get; }
+	public int SubMeshCount { get; }
+	public SemanticMeshChannelFlags ChannelFlags { get; }
+}
+
+public sealed class PackageMaterialInfo
+{
+	public PackageMaterialInfo(long pathId, string name, long? shaderPathId)
+	{
+		PathId = pathId;
+		Name = name;
+		ShaderPathId = shaderPathId;
+	}
+
+	public long PathId { get; }
+	public string Name { get; }
+	public long? ShaderPathId { get; }
+}
+
+public sealed class PackageTextureInfo
+{
+	public PackageTextureInfo(long pathId, string name, int width, int height, int format, int mipCount)
 	{
 		PathId = pathId;
 		Name = name;
