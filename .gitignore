@@ -39,6 +39,7 @@ Thumbs.db
 
 # Playwright
 playwright/.cache/
+.playwright-cli/
 
 # Test results
 TestResults/
