@@ -359,16 +359,25 @@ public sealed class SemanticBoundsInfo
 
 public sealed class SemanticMaterialInfo
 {
-	public SemanticMaterialInfo(long pathId, string name, long? shaderPathId)
+	public SemanticMaterialInfo(long pathId, string name, long? shaderPathId, 
+		float[]? baseColorFactor = null, float metallic = 0f, float roughness = 0.5f, string alphaMode = "OPAQUE")
 	{
 		PathId = pathId;
 		Name = name;
 		ShaderPathId = shaderPathId;
+		BaseColorFactor = baseColorFactor ?? new[] { 1f, 1f, 1f, 1f }; // Default to white
+		Metallic = metallic;
+		Roughness = roughness;
+		AlphaMode = alphaMode;
 	}
 
 	public long PathId { get; }
 	public string Name { get; }
 	public long? ShaderPathId { get; }
+	public float[] BaseColorFactor { get; } // RGBA array
+	public float Metallic { get; }
+	public float Roughness { get; }
+	public string AlphaMode { get; }
 }
 
 public sealed class SemanticTextureInfo

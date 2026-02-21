@@ -58,6 +58,19 @@ internal static class UnityYamlParser
         var transformLocalScale = new SemanticVector3(1, 1, 1);
         var inChildren = false;
 
+        var materialName = string.Empty;
+        var materialShaderFileId = 0L;
+        var materialShaderGuid = string.Empty;
+        var materialColorR = 1f;
+        var materialColorG = 1f;
+        var materialColorB = 1f;
+        var materialColorA = 1f;
+        var materialMetallic = 0f;
+        var materialSmoothr = 0.5f;
+        var inMaterialSavedProperties = false;
+        var inMaterialColors = false;
+        var inMaterialFloats = false;
+
         void Flush()
         {
             if (currentTypeId == 1 && currentFileId != 0)
@@ -124,6 +137,17 @@ internal static class UnityYamlParser
                     context.SemanticMeshFilters.Add(new SemanticMeshFilterInfo(currentFileId, meshFilterGameObjectId, meshPathId));
                 }
             }
+            else if (currentTypeId == 21 && currentFileId != 0)
+            {
+                var materialPathId = BuildYamlPathId(sourceGuid, currentFileId);
+                var shaderPathId = materialShaderFileId != 0 && !string.IsNullOrWhiteSpace(materialShaderGuid)
+                    ? BuildYamlPathId(materialShaderGuid, materialShaderFileId)
+                    : (long?)null;
+                
+                var baseColor = new[] { materialColorR, materialColorG, materialColorB, materialColorA };
+                var material = new SemanticMaterialInfo(materialPathId, materialName, shaderPathId, baseColor, materialMetallic, 1f - materialSmoothr);
+                context.SemanticMaterials.Add(material);
+            }
         }
 
         void ResetState(int typeId, long fileId)
@@ -156,6 +180,18 @@ internal static class UnityYamlParser
             transformLocalRotation = new SemanticQuaternion(1, 0, 0, 0);
             transformLocalScale = new SemanticVector3(1, 1, 1);
             inChildren = false;
+            materialName = string.Empty;
+            materialShaderFileId = 0;
+            materialShaderGuid = string.Empty;
+            materialColorR = 1f;
+            materialColorG = 1f;
+            materialColorB = 1f;
+            materialColorA = 1f;
+            materialMetallic = 0f;
+            materialSmoothr = 0.5f;
+            inMaterialSavedProperties = false;
+            inMaterialColors = false;
+            inMaterialFloats = false;
         }
 
         foreach (var rawLine in lines)
@@ -467,6 +503,72 @@ internal static class UnityYamlParser
                 {
                     transformLocalScale = localScale;
                     continue;
+                }
+            }
+            else if (currentTypeId == 21)
+            {
+                // Parse Material properties
+                if (TryReadSimpleValue(trimmed, "m_Name:", out var matNameValue))
+                {
+                    materialName = matNameValue;
+                    continue;
+                }
+
+                if (TryReadShaderReference(trimmed, out var shaderFileId, out var shaderGuid))
+                {
+                    materialShaderFileId = shaderFileId;
+                    materialShaderGuid = shaderGuid;
+                    continue;
+                }
+
+                if (trimmed.StartsWith("m_SavedProperties:", StringComparison.Ordinal))
+                {
+                    inMaterialSavedProperties = true;
+                    continue;
+                }
+
+                if (inMaterialSavedProperties && trimmed.StartsWith("m_Colors:", StringComparison.Ordinal))
+                {
+                    inMaterialColors = true;
+                    continue;
+                }
+
+                if (inMaterialSavedProperties && trimmed.StartsWith("m_Floats:", StringComparison.Ordinal))
+                {
+                    inMaterialFloats = true;
+                    inMaterialColors = false;
+                    continue;
+                }
+
+                if (inMaterialColors && TryReadColor(trimmed, "_Color:", out var colorR, out var colorG, out var colorB, out var colorA))
+                {
+                    materialColorR = colorR;
+                    materialColorG = colorG;
+                    materialColorB = colorB;
+                    materialColorA = colorA;
+                    continue;
+                }
+
+                if (inMaterialFloats && TryReadSimpleValue(trimmed, "- _Metallic:", out var metalValue)
+                    && float.TryParse(metalValue, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsedMetallic))
+                {
+                    materialMetallic = parsedMetallic;
+                    continue;
+                }
+
+                if (inMaterialFloats && TryReadSimpleValue(trimmed, "- _Smoothness:", out var smoothValue)
+                    && float.TryParse(smoothValue, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsedSmooth))
+                {
+                    materialSmoothr = parsedSmooth;
+                    continue;
+                }
+
+                // Reset flags when leaving the saved properties section
+                if (!trimmed.StartsWith("  ") && trimmed.Contains(":") && !trimmed.StartsWith("m_"))
+                {
+                    inMaterialSavedProperties = false;
+                    inMaterialColors = false;
+                    inMaterialFloats = false;
                 }
             }
         }
@@ -1113,5 +1215,116 @@ internal static class UnityYamlParser
         }
 
         return trimmed;
+    }
+
+    private static bool TryReadShaderReference(string line, out long fileId, out string guid)
+    {
+        fileId = 0;
+        guid = string.Empty;
+
+        if (!line.StartsWith("m_Shader:", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var braceIndex = line.IndexOf('{');
+        if (braceIndex < 0)
+        {
+            return false;
+        }
+
+        var fileIdIndex = line.IndexOf("fileID", StringComparison.Ordinal);
+        if (fileIdIndex < 0)
+        {
+            return false;
+        }
+
+        var colonIndex = line.IndexOf(':', fileIdIndex);
+        if (colonIndex < 0)
+        {
+            return false;
+        }
+
+        var commaIndex = line.IndexOf(',', colonIndex);
+        if (commaIndex < 0)
+        {
+            return false;
+        }
+
+        var fileIdText = line.Substring(colonIndex + 1, commaIndex - colonIndex - 1).Trim();
+        if (!long.TryParse(fileIdText, NumberStyles.Integer, CultureInfo.InvariantCulture, out fileId))
+        {
+            fileId = 0;
+            return false;
+        }
+
+        var guidIndex = line.IndexOf("guid:", StringComparison.Ordinal);
+        if (guidIndex < 0)
+        {
+            return false;
+        }
+
+        var guidColonIndex = line.IndexOf(':', guidIndex);
+        var guidEndIndex = line.IndexOf('}', guidColonIndex);
+        if (guidEndIndex < 0)
+        {
+            guidEndIndex = line.Length;
+        }
+
+        guid = line.Substring(guidColonIndex + 1, guidEndIndex - guidColonIndex - 1).Trim();
+        guid = guid.Trim(',', ' ');
+        return true;
+    }
+
+    private static bool TryReadColor(string line, string key, out float r, out float g, out float b, out float a)
+    {
+        r = 1f;
+        g = 1f;
+        b = 1f;
+        a = 1f;
+
+        if (!line.StartsWith("- " + key, StringComparison.Ordinal) && !line.StartsWith(key, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        // Format: "- _Color: {r: 1, g: 1, b: 1, a: 1}" or "_Color: {r: 1, g: 1, b: 1, a: 1}"
+        var braceIndex = line.IndexOf('{');
+        if (braceIndex < 0)
+        {
+            return false;
+        }
+
+        var closeIndex = line.IndexOf('}', braceIndex);
+        if (closeIndex < 0)
+        {
+            return false;
+        }
+
+        var colorContent = line.Substring(braceIndex + 1, closeIndex - braceIndex - 1);
+        var parts = colorContent.Split(',');
+
+        foreach (var part in parts)
+        {
+            var trimmedPart = part.Trim();
+            if (trimmedPart.StartsWith("r:", StringComparison.Ordinal))
+            {
+                float.TryParse(trimmedPart.Substring(2).Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out r);
+            }
+            else if (trimmedPart.StartsWith("g:", StringComparison.Ordinal))
+            {
+                float.TryParse(trimmedPart.Substring(2).Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out g);
+            }
+            else if (trimmedPart.StartsWith("b:", StringComparison.Ordinal))
+            {
+                float.TryParse(trimmedPart.Substring(2).Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out b);
+            }
+            else if (trimmedPart.StartsWith("a:", StringComparison.Ordinal))
+            {
+                float.TryParse(trimmedPart.Substring(2).Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out a);
+            }
+        }
+
+        return true;
     }
 }

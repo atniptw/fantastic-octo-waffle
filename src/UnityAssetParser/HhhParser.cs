@@ -106,6 +106,8 @@ public sealed class HhhParser
         private readonly Dictionary<long, int> _meshIndicesByPathId = new();
         private readonly Dictionary<long, long> _meshPathByGameObjectPathId;
         private readonly Dictionary<long, string> _gameObjectNameByPathId;
+        private readonly Dictionary<long, List<long>> _gameObjectPathIdToMaterialPathIds;
+        private Dictionary<long, int>? _materialPathIdToIndex;
         private readonly List<string> _conversionWarnings = new();
 
         private GlbExportModel(BaseAssetsContext context)
@@ -117,6 +119,11 @@ public sealed class HhhParser
             _gameObjectNameByPathId = context.SemanticGameObjects
                 .GroupBy(item => item.PathId)
                 .ToDictionary(group => group.Key, group => group.First().Name);
+            
+            // Map GameObject -> Material PathIds from MeshRenderers
+            _gameObjectPathIdToMaterialPathIds = context.SemanticMeshRenderers
+                .GroupBy(renderer => renderer.GameObjectPathId)
+                .ToDictionary(group => group.Key, group => group.First().MaterialPathIds.ToList());
         }
 
         public Dictionary<string, object> Json { get; private set; } = new();
@@ -168,20 +175,7 @@ public sealed class HhhParser
             if (_meshes.Count > 0)
             {
                 Json["meshes"] = _meshes;
-                Json["materials"] = new List<Dictionary<string, object>>
-                {
-                    new()
-                    {
-                        ["name"] = "DefaultMaterial",
-                        ["pbrMetallicRoughness"] = new Dictionary<string, object>
-                        {
-                            ["baseColorFactor"] = new[] { 1f, 1f, 1f, 1f },
-                            ["metallicFactor"] = 0f,
-                            ["roughnessFactor"] = 1f
-                        },
-                        ["doubleSided"] = true
-                    }
-                };
+                Json["materials"] = BuildMaterials();
             }
 
             if (_binaryStream.Length > 0)
@@ -200,9 +194,31 @@ public sealed class HhhParser
 
         private void BuildMeshes()
         {
+            // Build a map of mesh pathId -> material pathIds by finding GameObjects that use each mesh
+            var meshPathIdToMaterials = new Dictionary<long, List<long>>();
+            foreach (var meshFilter in _context.SemanticMeshFilters)
+            {
+                var meshPathId = meshFilter.MeshPathId;
+                var gameObjectPathId = meshFilter.GameObjectPathId;
+                
+                if (!meshPathIdToMaterials.ContainsKey(meshPathId))
+                {
+                    List<long> materials = new();
+                    if (_gameObjectPathIdToMaterialPathIds.TryGetValue(gameObjectPathId, out var materialList))
+                    {
+                        materials = materialList;
+                    }
+                    meshPathIdToMaterials[meshPathId] = materials;
+                }
+            }
+
             foreach (var mesh in _context.SemanticMeshes)
             {
-                var meshIndex = TryBuildMesh(mesh);
+                var materialPathIds = meshPathIdToMaterials.ContainsKey(mesh.PathId) 
+                    ? meshPathIdToMaterials[mesh.PathId] 
+                    : new List<long>();
+                
+                var meshIndex = TryBuildMesh(mesh, materialPathIds);
                 if (meshIndex >= 0)
                 {
                     _meshIndicesByPathId[mesh.PathId] = meshIndex;
@@ -210,7 +226,7 @@ public sealed class HhhParser
             }
         }
 
-        private int TryBuildMesh(SemanticMeshInfo mesh)
+        private int TryBuildMesh(SemanticMeshInfo mesh, List<long> materialPathIds)
         {
             var vertexCount = mesh.VertexCount > 0 ? mesh.VertexCount : mesh.DecodedPositions.Count;
             if (mesh.VertexDataByteLength == 0 && mesh.DecodedPositions.Count == 0)
@@ -240,6 +256,7 @@ public sealed class HhhParser
                 : (int?)null;
 
             var primitives = new List<Dictionary<string, object>>();
+            var subMeshIndex = 0;
             foreach (var subMesh in mesh.SubMeshes)
             {
                 if (!IsTrianglesTopology(subMesh.Topology))
@@ -254,6 +271,9 @@ public sealed class HhhParser
                     AddWarning($"GLB export skipped submesh in '{mesh.Name}' ({mesh.PathId}): index range out of bounds.");
                     continue;
                 }
+
+                // Get the material index for this submesh
+                var materialIndex = GetMaterialIndexForSubmesh(subMeshIndex, materialPathIds);
 
                 var indices = new uint[indexCount];
                 var hasOutOfRangeIndex = false;
@@ -296,8 +316,10 @@ public sealed class HhhParser
                     ["attributes"] = attributes,
                     ["indices"] = indicesAccessor,
                     ["mode"] = PrimitiveModeTriangles,
-                    ["material"] = 0
+                    ["material"] = materialIndex
                 });
+                
+                subMeshIndex++;
             }
 
             if (primitives.Count == 0)
@@ -567,6 +589,89 @@ public sealed class HhhParser
             {
                 _binaryStream.WriteByte(0);
             }
+        }
+
+        private List<Dictionary<string, object>> BuildMaterials()
+        {
+            var materials = new List<Dictionary<string, object>>();
+            var materialPathIdToIndex = new Dictionary<long, int>();
+
+            // Build a map of which materials are actually referenced by meshes
+            var referencedMaterialPathIds = new HashSet<long>();
+            foreach (var materialList in _gameObjectPathIdToMaterialPathIds.Values)
+            {
+                foreach (var matPathId in materialList)
+                {
+                    referencedMaterialPathIds.Add(matPathId);
+                }
+            }
+
+            // Add materials in order, only including referenced ones
+            foreach (var material in _context.SemanticMaterials)
+            {
+                if (referencedMaterialPathIds.Contains(material.PathId))
+                {
+                    var materialObject = new Dictionary<string, object>
+                    {
+                        ["name"] = material.Name,
+                        ["pbrMetallicRoughness"] = new Dictionary<string, object>
+                        {
+                            ["baseColorFactor"] = material.BaseColorFactor,
+                            ["metallicFactor"] = material.Metallic,
+                            ["roughnessFactor"] = material.Roughness
+                        },
+                        ["doubleSided"] = true
+                    };
+
+                    if (!string.IsNullOrEmpty(material.AlphaMode) && material.AlphaMode != "OPAQUE")
+                    {
+                        materialObject["alphaMode"] = material.AlphaMode;
+                    }
+
+                    materialPathIdToIndex[material.PathId] = materials.Count;
+                    materials.Add(materialObject);
+                }
+            }
+
+            // If no materials were found, add a default white material
+            if (materials.Count == 0)
+            {
+                materials.Add(new Dictionary<string, object>
+                {
+                    ["name"] = "DefaultMaterial",
+                    ["pbrMetallicRoughness"] = new Dictionary<string, object>
+                    {
+                        ["baseColorFactor"] = new[] { 1f, 1f, 1f, 1f },
+                        ["metallicFactor"] = 0f,
+                        ["roughnessFactor"] = 0.5f
+                    },
+                    ["doubleSided"] = true
+                });
+            }
+
+            // Store the mapping for use in GetMaterialIndexForSubmesh
+            _materialPathIdToIndex = materialPathIdToIndex;
+            return materials;
+        }
+
+        private int GetMaterialIndexForSubmesh(int subMeshIndex, List<long> materialPathIds)
+        {
+            if (materialPathIds.Count == 0)
+            {
+                return 0;  // Default to first material
+            }
+
+            if (subMeshIndex < materialPathIds.Count)
+            {
+                var materialPathId = materialPathIds[subMeshIndex];
+                if (_materialPathIdToIndex != null && _materialPathIdToIndex.TryGetValue(materialPathId, out var index))
+                {
+                    return index;
+                }
+            }
+
+            // Fallback to first material if submesh index is out of range
+            return 0;
         }
 
         private static void WriteFloat32(byte[] buffer, ref int offset, float value)
