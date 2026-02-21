@@ -86,6 +86,34 @@ public sealed class HhhParserTests
     }
 
     [Fact]
+    public void ConvertToGlb_BlindEyeBody_DecodesPositionsFromExternalStreamData()
+    {
+        var fixturePath = GetFixtureFilePaths()
+            .FirstOrDefault(path => Path.GetFileName(path).Equals("BlindEye_body.hhh", StringComparison.OrdinalIgnoreCase));
+
+        if (fixturePath is null)
+        {
+            return;
+        }
+
+        var parser = new HhhParser();
+        var context = new BaseAssetsContext();
+
+        var glb = parser.ConvertToGlb(File.ReadAllBytes(fixturePath), context);
+        ValidateGlb(glb);
+
+        var blindEyeMesh = context.SemanticMeshes
+            .FirstOrDefault(mesh => mesh.Name.Contains("BlindEye", StringComparison.OrdinalIgnoreCase));
+
+        Assert.NotNull(blindEyeMesh);
+        Assert.True(blindEyeMesh!.VertexCount > 0);
+        Assert.Equal(blindEyeMesh.VertexCount, blindEyeMesh.DecodedPositions.Count);
+
+        var json = ReadJsonChunkText(glb);
+        Assert.Contains("\"meshes\"", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ConvertToGlb_WithSemanticMesh_EmitsMeshAndBinaryChunk()
     {
         var fixture = GetFixtureFilePaths();

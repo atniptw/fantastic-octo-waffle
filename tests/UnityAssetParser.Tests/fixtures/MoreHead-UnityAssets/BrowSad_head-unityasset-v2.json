@@ -11,14 +11,14 @@
         "components": [],
         "isActive": true,
         "layer": 0,
-        "name": "\u7709\u6bdb\u7236\u4eb2",
+        "name": "眉毛父亲",
         "pathId": -2144871566240954979
       },
       {
         "components": [],
         "isActive": true,
         "layer": 0,
-        "name": "brow\u7709\u6bdb",
+        "name": "brow眉毛",
         "pathId": 4218713472869369053
       },
       {
@@ -276,13 +276,34 @@
         "uv1": false
       },
       "indexCount": 1296,
-      "name": "brow \u7709\u6bdb",
+      "name": "brow 眉毛",
       "pathId": -5993842382815103843,
       "subMeshCount": 1,
       "topology": [
         0
       ],
-      "vertexCount": 428
+      "vertexCount": 428,
+      "oracle": {
+        "vertexCount": 428,
+        "indexBufferLength": 1296,
+        "vertexDataLength": 0,
+        "channelsCount": 14,
+        "indexFormat": 0,
+        "use16BitIndices": null,
+        "streamData": {
+          "hasStream": true,
+          "path": "archive:/CAB-74519b5dfeea3c9c08aaba81cb5ce7b2/CAB-74519b5dfeea3c9c08aaba81cb5ce7b2.resS",
+          "offset": 0,
+          "size": 10272
+        },
+        "renderableHint": true
+      },
+      "parserGap": {
+        "positionsLikelyMissingFromParser": true,
+        "streamDataPresentInOracle": true,
+        "externalStreamLikelyCause": true,
+        "decodedPositionsMissingInParser": true
+      }
     }
   ],
   "objects": [
@@ -347,7 +368,7 @@
       "type": "Transform"
     }
   ],
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "serializedFiles": [],
   "skinning": [],
   "summary": {
@@ -364,5 +385,9 @@
     }
   },
   "textures": [],
-  "warnings": []
+  "warnings": [],
+  "oracle": {
+    "source": "UnityPy",
+    "version": "1.24.2"
+  }
 }

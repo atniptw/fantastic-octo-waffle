@@ -11,7 +11,7 @@
         "components": [],
         "isActive": true,
         "layer": 0,
-        "name": "BambooCopter\u7af9\u873b\u8713",
+        "name": "BambooCopter竹蜻蜓",
         "pathId": -7175832566522114417
       },
       {
@@ -245,13 +245,34 @@
         "uv1": false
       },
       "indexCount": 1944,
-      "name": "BambooCopter\u7af9\u873b\u8713",
+      "name": "BambooCopter竹蜻蜓",
       "pathId": -3164586831722678914,
       "subMeshCount": 1,
       "topology": [
         0
       ],
-      "vertexCount": 533
+      "vertexCount": 533,
+      "oracle": {
+        "vertexCount": 533,
+        "indexBufferLength": 1944,
+        "vertexDataLength": 0,
+        "channelsCount": 14,
+        "indexFormat": 0,
+        "use16BitIndices": null,
+        "streamData": {
+          "hasStream": true,
+          "path": "archive:/CAB-8d5ddb4daa8b46918d493f795d30ae61/CAB-8d5ddb4daa8b46918d493f795d30ae61.resS",
+          "offset": 0,
+          "size": 12792
+        },
+        "renderableHint": true
+      },
+      "parserGap": {
+        "positionsLikelyMissingFromParser": true,
+        "streamDataPresentInOracle": true,
+        "externalStreamLikelyCause": true,
+        "decodedPositionsMissingInParser": true
+      }
     }
   ],
   "objects": [
@@ -321,7 +342,7 @@
       "type": "GameObject"
     }
   ],
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "serializedFiles": [],
   "skinning": [],
   "summary": {
@@ -341,5 +362,9 @@
     }
   },
   "textures": [],
-  "warnings": []
+  "warnings": [],
+  "oracle": {
+    "source": "UnityPy",
+    "version": "1.24.2"
+  }
 }

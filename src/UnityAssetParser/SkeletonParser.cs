@@ -1,7 +1,9 @@
 using System;
+using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using SevenZip.Compression.LZMA;
 
 namespace UnityAssetParser;
@@ -151,21 +153,28 @@ internal static class SkeletonParser
                 return;
             }
 
-            var serializedAssetIndex = 0;
+            var serializedPayloads = new List<byte[]>();
             foreach (var node in blockInfo.Nodes)
             {
                 var entry = new ContainerEntry(node.Path, node.Offset, node.Size, node.Flags);
                 if (TrySlicePayload(decompressedData, node.Offset, node.Size, out var payload))
                 {
                     entry.Payload = payload;
-                    _ = TryParseSerializedPayload(payload, serializedAssetIndex, context);
-                    serializedAssetIndex++;
+                    serializedPayloads.Add(payload);
                 }
                 else
                 {
                     context.Warnings.Add($"UnityFS entry '{node.Path}' is out of range.");
                 }
                 container.Entries.Add(entry);
+            }
+
+            var externalResourceLookup = BuildExternalResourceLookup(container.Entries);
+            var serializedAssetIndex = 0;
+            foreach (var serializedPayload in serializedPayloads)
+            {
+                _ = TryParseSerializedPayload(serializedPayload, serializedAssetIndex, context, externalResourceLookup);
+                serializedAssetIndex++;
             }
         }
         else
@@ -180,7 +189,12 @@ internal static class SkeletonParser
             || TryReadSerializedHeader(data, isBigEndian: true, out _);
     }
 
-    private static void ParseSerializedFile(byte[] data, string sourceName, BaseAssetsContext context, string? serializedFileSourceName = null)
+    private static void ParseSerializedFile(
+        byte[] data,
+        string sourceName,
+        BaseAssetsContext context,
+        string? serializedFileSourceName = null,
+        IReadOnlyDictionary<string, byte[]>? externalResourceLookup = null)
     {
         var hasLittleHeader = TryReadSerializedHeader(data, isBigEndian: false, out var littleHeader);
         var hasBigHeader = TryReadSerializedHeader(data, isBigEndian: true, out var bigHeader);
@@ -321,7 +335,7 @@ internal static class SkeletonParser
         }
 
         PopulateHierarchySemantics(data, info, context);
-        PopulateRenderLinkSemantics(data, info, context);
+        PopulateRenderLinkSemantics(data, info, context, externalResourceLookup);
 
         context.SerializedFiles.Add(info);
         context.Containers.Add(new ParsedContainer(sourceName, ContainerKind.SerializedFile, data.Length)
@@ -564,7 +578,7 @@ internal static class SkeletonParser
                 return null;
             }
 
-            var decoder = new Decoder();
+            var decoder = new SevenZip.Compression.LZMA.Decoder();
             decoder.SetDecoderProperties(properties);
             decoder.Code(input, output, input.Length - input.Position, uncompressedSize, null);
 
@@ -710,7 +724,11 @@ internal static class SkeletonParser
         return true;
     }
 
-    private static bool TryParseSerializedPayload(byte[] payload, int serializedAssetIndex, BaseAssetsContext context)
+    private static bool TryParseSerializedPayload(
+        byte[] payload,
+        int serializedAssetIndex,
+        BaseAssetsContext context,
+        IReadOnlyDictionary<string, byte[]>? externalResourceLookup = null)
     {
         var serializedBefore = context.SerializedFiles.Count;
         var containersBefore = context.Containers.Count;
@@ -727,7 +745,7 @@ internal static class SkeletonParser
         {
             var containerSourceName = $"serialized_asset_{serializedAssetIndex}";
             var serializedSourceName = $"asset_{serializedAssetIndex}";
-            ParseSerializedFile(payload, containerSourceName, context, serializedSourceName);
+            ParseSerializedFile(payload, containerSourceName, context, serializedSourceName, externalResourceLookup);
         }
         catch
         {
@@ -921,7 +939,95 @@ internal static class SkeletonParser
         }
     }
 
-    private static void PopulateRenderLinkSemantics(byte[] data, SerializedFileInfo info, BaseAssetsContext context)
+    private static Dictionary<string, byte[]> BuildExternalResourceLookup(IReadOnlyList<ContainerEntry> entries)
+    {
+        var lookup = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var entry in entries)
+        {
+            if (entry.Payload is null || entry.Payload.Length == 0)
+            {
+                continue;
+            }
+
+            AddExternalResourceLookupKey(lookup, entry.Path, entry.Payload);
+
+            var normalizedPath = entry.Path.Replace('\\', '/').Trim();
+            var fileName = Path.GetFileName(normalizedPath);
+            if (!string.IsNullOrWhiteSpace(fileName))
+            {
+                AddExternalResourceLookupKey(lookup, fileName, entry.Payload);
+            }
+        }
+
+        return lookup;
+    }
+
+    private static void AddExternalResourceLookupKey(Dictionary<string, byte[]> lookup, string rawKey, byte[] payload)
+    {
+        var normalized = NormalizeResourceLookupKey(rawKey);
+        if (!string.IsNullOrWhiteSpace(normalized) && !lookup.ContainsKey(normalized))
+        {
+            lookup[normalized] = payload;
+        }
+    }
+
+    private static string NormalizeResourceLookupKey(string key)
+    {
+        var normalized = key.Replace('\\', '/').Trim();
+        const string archivePrefix = "archive:/";
+        if (normalized.StartsWith(archivePrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            normalized = normalized.Substring(archivePrefix.Length);
+        }
+
+        return normalized.TrimStart('/');
+    }
+
+    private static bool TryResolveExternalResource(
+        IReadOnlyDictionary<string, byte[]>? externalResourceLookup,
+        string resourcePath,
+        out byte[] payload)
+    {
+        payload = Array.Empty<byte>();
+        if (externalResourceLookup is null || externalResourceLookup.Count == 0 || string.IsNullOrWhiteSpace(resourcePath))
+        {
+            return false;
+        }
+
+        var normalized = NormalizeResourceLookupKey(resourcePath);
+        if (externalResourceLookup.TryGetValue(normalized, out payload))
+        {
+            return true;
+        }
+
+        var fileName = Path.GetFileName(normalized);
+        if (!string.IsNullOrWhiteSpace(fileName)
+            && externalResourceLookup.TryGetValue(NormalizeResourceLookupKey(fileName), out payload))
+        {
+            return true;
+        }
+
+        foreach (var pair in externalResourceLookup)
+        {
+            if (normalized.EndsWith(pair.Key, StringComparison.OrdinalIgnoreCase)
+                || pair.Key.EndsWith(normalized, StringComparison.OrdinalIgnoreCase)
+                || (!string.IsNullOrWhiteSpace(fileName)
+                    && pair.Key.EndsWith('/' + fileName, StringComparison.OrdinalIgnoreCase)))
+            {
+                payload = pair.Value;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static void PopulateRenderLinkSemantics(
+        byte[] data,
+        SerializedFileInfo info,
+        BaseAssetsContext context,
+        IReadOnlyDictionary<string, byte[]>? externalResourceLookup)
     {
         var gameObjectPathIds = new HashSet<long>(
             info.Objects
@@ -995,7 +1101,7 @@ internal static class SkeletonParser
                 continue;
             }
 
-            var mesh = TryReadMesh(payload, obj.PathId, info.Version, info.BigEndian);
+            var mesh = TryReadMesh(payload, obj.PathId, info.Version, info.BigEndian, externalResourceLookup);
             if (mesh is not null)
             {
                 context.SemanticMeshes.Add(mesh);
@@ -1301,9 +1407,10 @@ internal static class SkeletonParser
         byte[] payload,
         long pathId,
         uint version,
-        bool isBigEndian)
+        bool isBigEndian,
+        IReadOnlyDictionary<string, byte[]>? externalResourceLookup)
     {
-        if (TryReadMeshPayload(payload, pathId, version, isBigEndian, 0, out var candidate))
+        if (TryReadMeshPayload(payload, pathId, version, isBigEndian, 0, externalResourceLookup, out var candidate))
         {
             return candidate;
         }
@@ -1311,7 +1418,7 @@ internal static class SkeletonParser
         var objectPrefixSize = GetObjectPrefixSize(version);
         if (objectPrefixSize > 0
             && objectPrefixSize < payload.Length
-            && TryReadMeshPayload(payload, pathId, version, isBigEndian, objectPrefixSize, out candidate))
+            && TryReadMeshPayload(payload, pathId, version, isBigEndian, objectPrefixSize, externalResourceLookup, out candidate))
         {
             return candidate;
         }
@@ -1325,6 +1432,7 @@ internal static class SkeletonParser
         uint version,
         bool isBigEndian,
         int startOffset,
+        IReadOnlyDictionary<string, byte[]>? externalResourceLookup,
         out SemanticMeshInfo candidate)
     {
         candidate = default!;
@@ -1495,6 +1603,7 @@ internal static class SkeletonParser
                 isBigEndian,
                 indexBufferEndOffset,
                 (int)vertexCountMax,
+                externalResourceLookup,
                 out var parsedVertexDataByteLength,
                 out var parsedPositions,
                 out var parsedNormals,
@@ -1651,6 +1760,7 @@ internal static class SkeletonParser
         bool isBigEndian,
         int indexBufferEndOffset,
         int vertexCount,
+        IReadOnlyDictionary<string, byte[]>? externalResourceLookup,
         out int vertexDataByteLength,
         out IReadOnlyList<SemanticVector3> decodedPositions,
         out IReadOnlyList<SemanticVector3> decodedNormals,
@@ -1702,7 +1812,20 @@ internal static class SkeletonParser
                 continue;
             }
 
-            vertexDataByteLength = candidateLength;
+            var candidateVertexDataBuffer = payload;
+            var candidateVertexDataStart = offset + 4;
+            var candidateVertexDataLength = candidateLength;
+
+            if (candidateVertexDataLength == 0
+                && vertexCount > 0
+                && TryResolveMeshStreamVertexData(payload, isBigEndian, externalResourceLookup, out var streamedVertexData))
+            {
+                candidateVertexDataBuffer = streamedVertexData;
+                candidateVertexDataStart = 0;
+                candidateVertexDataLength = streamedVertexData.Length;
+            }
+
+            vertexDataByteLength = candidateVertexDataLength;
 
             if (TryReadMeshVertexChannels(payload, isBigEndian, scanStart, offset, out var parsedChannels))
             {
@@ -1711,7 +1834,7 @@ internal static class SkeletonParser
                 if (TryBuildStreamLayout(
                     vertexChannels,
                     vertexCount,
-                    candidateLength,
+                    candidateVertexDataLength,
                     out var streamLayout))
                 {
                     vertexStreams = streamLayout
@@ -1725,18 +1848,17 @@ internal static class SkeletonParser
                 }
             }
 
-            var vertexDataStart = offset + 4;
             if (vertexCount > 0
                 && vertexChannels.Count > 0
-                && TryDecodePositionsFromChannels(payload, isBigEndian, vertexDataStart, candidateLength, vertexCount, vertexChannels, out var channelPositions))
+                && TryDecodePositionsFromChannels(candidateVertexDataBuffer, isBigEndian, candidateVertexDataStart, candidateVertexDataLength, vertexCount, vertexChannels, out var channelPositions))
             {
                 decodedPositions = channelPositions;
 
                 if (TryDecodeVector3ChannelFromLayout(
-                    payload,
+                    candidateVertexDataBuffer,
                     isBigEndian,
-                    vertexDataStart,
-                    candidateLength,
+                    candidateVertexDataStart,
+                    candidateVertexDataLength,
                     vertexCount,
                     vertexChannels,
                     channelIndex: 1,
@@ -1746,10 +1868,10 @@ internal static class SkeletonParser
                 }
 
                 if (TryDecodeVector4ChannelFromLayout(
-                    payload,
+                    candidateVertexDataBuffer,
                     isBigEndian,
-                    vertexDataStart,
-                    candidateLength,
+                    candidateVertexDataStart,
+                    candidateVertexDataLength,
                     vertexCount,
                     vertexChannels,
                     channelIndex: 2,
@@ -1759,10 +1881,10 @@ internal static class SkeletonParser
                 }
 
                 if (TryDecodeVector4ChannelFromLayout(
-                    payload,
+                    candidateVertexDataBuffer,
                     isBigEndian,
-                    vertexDataStart,
-                    candidateLength,
+                    candidateVertexDataStart,
+                    candidateVertexDataLength,
                     vertexCount,
                     vertexChannels,
                     channelIndex: 3,
@@ -1772,10 +1894,10 @@ internal static class SkeletonParser
                 }
 
                 if (TryDecodeVector2ChannelFromLayout(
-                    payload,
+                    candidateVertexDataBuffer,
                     isBigEndian,
-                    vertexDataStart,
-                    candidateLength,
+                    candidateVertexDataStart,
+                    candidateVertexDataLength,
                     vertexCount,
                     vertexChannels,
                     channelIndex: 4,
@@ -1785,10 +1907,10 @@ internal static class SkeletonParser
                 }
 
                 if (TryDecodeVector2ChannelFromLayout(
-                    payload,
+                    candidateVertexDataBuffer,
                     isBigEndian,
-                    vertexDataStart,
-                    candidateLength,
+                    candidateVertexDataStart,
+                    candidateVertexDataLength,
                     vertexCount,
                     vertexChannels,
                     channelIndex: 5,
@@ -1797,22 +1919,240 @@ internal static class SkeletonParser
                     decodedUv1 = channelUv1;
                 }
             }
-            else if (vertexCount > 0 && candidateLength == vertexCount * 12)
+            else if (vertexCount > 0 && candidateVertexDataLength == vertexCount * 12)
             {
-                reader.Position = vertexDataStart;
+                var fallbackReader = new EndianBinaryReader(candidateVertexDataBuffer)
+                {
+                    IsBigEndian = isBigEndian,
+                    Position = candidateVertexDataStart
+                };
+
                 var positions = new List<SemanticVector3>(vertexCount);
                 for (var i = 0; i < vertexCount; i++)
                 {
-                    positions.Add(new SemanticVector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle()));
+                    positions.Add(new SemanticVector3(fallbackReader.ReadSingle(), fallbackReader.ReadSingle(), fallbackReader.ReadSingle()));
                 }
 
                 decodedPositions = positions;
             }
 
-            return true;
+            if (vertexCount > 0
+                && decodedPositions.Count == 0
+                && candidateVertexDataLength > vertexCount * 12
+                && candidateVertexDataLength % vertexCount == 0)
+            {
+                var inferredStride = candidateVertexDataLength / vertexCount;
+                if (inferredStride >= 12)
+                {
+                    var inferredReader = new EndianBinaryReader(candidateVertexDataBuffer)
+                    {
+                        IsBigEndian = isBigEndian
+                    };
+
+                    var inferred = new List<SemanticVector3>(vertexCount);
+                    var allFinite = true;
+                    for (var i = 0; i < vertexCount; i++)
+                    {
+                        inferredReader.Position = candidateVertexDataStart + (i * inferredStride);
+                        var x = inferredReader.ReadSingle();
+                        var y = inferredReader.ReadSingle();
+                        var z = inferredReader.ReadSingle();
+
+                        if (float.IsNaN(x) || float.IsNaN(y) || float.IsNaN(z)
+                            || float.IsInfinity(x) || float.IsInfinity(y) || float.IsInfinity(z))
+                        {
+                            allFinite = false;
+                            break;
+                        }
+
+                        inferred.Add(new SemanticVector3(x, y, z));
+                    }
+
+                    if (allFinite && inferred.Count == vertexCount)
+                    {
+                        decodedPositions = inferred;
+                    }
+                }
+            }
+
+            if (vertexCount == 0 || decodedPositions.Count > 0)
+            {
+                return true;
+            }
+
+            vertexDataByteLength = 0;
+            decodedPositions = Array.Empty<SemanticVector3>();
+            decodedNormals = Array.Empty<SemanticVector3>();
+            decodedTangents = Array.Empty<SemanticVector4>();
+            decodedColors = Array.Empty<SemanticVector4>();
+            decodedUv0 = Array.Empty<SemanticVector2>();
+            decodedUv1 = Array.Empty<SemanticVector2>();
+            vertexChannels = Array.Empty<SemanticVertexChannelInfo>();
+            vertexStreams = Array.Empty<SemanticVertexStreamInfo>();
         }
 
         return false;
+    }
+
+    private static bool TryResolveMeshStreamVertexData(
+        byte[] meshPayload,
+        bool isBigEndian,
+        IReadOnlyDictionary<string, byte[]>? externalResourceLookup,
+        out byte[] vertexData)
+    {
+        vertexData = Array.Empty<byte>();
+
+        if (!TryExtractMeshStreamDescriptor(meshPayload, isBigEndian, out var streamPath, out var streamOffset, out var streamSize))
+        {
+            return false;
+        }
+
+        if (!TryResolveExternalResource(externalResourceLookup, streamPath, out var externalPayload))
+        {
+            return false;
+        }
+
+        if (streamOffset < 0 || streamSize <= 0 || streamOffset > externalPayload.Length || streamOffset + streamSize > externalPayload.Length)
+        {
+            return false;
+        }
+
+        vertexData = new byte[streamSize];
+        Buffer.BlockCopy(externalPayload, (int)streamOffset, vertexData, 0, streamSize);
+        return true;
+    }
+
+    private static bool TryExtractMeshStreamDescriptor(
+        byte[] meshPayload,
+        bool isBigEndian,
+        out string streamPath,
+        out long streamOffset,
+        out int streamSize)
+    {
+        streamPath = string.Empty;
+        streamOffset = 0;
+        streamSize = 0;
+
+        var marker = Encoding.ASCII.GetBytes(".resS");
+        if (meshPayload.Length < marker.Length + 16)
+        {
+            return false;
+        }
+
+        for (var i = 0; i <= meshPayload.Length - marker.Length; i++)
+        {
+            var matches = true;
+            for (var j = 0; j < marker.Length; j++)
+            {
+                if (meshPayload[i + j] != marker[j])
+                {
+                    matches = false;
+                    break;
+                }
+            }
+
+            if (!matches)
+            {
+                continue;
+            }
+
+            var stringStart = i;
+            while (stringStart > 0 && IsLikelyPathByte(meshPayload[stringStart - 1]))
+            {
+                stringStart--;
+            }
+
+            var stringEnd = i + marker.Length;
+            while (stringEnd < meshPayload.Length && IsLikelyPathByte(meshPayload[stringEnd]))
+            {
+                stringEnd++;
+            }
+
+            var stringLength = stringEnd - stringStart;
+            if (stringLength <= marker.Length || stringStart < 4)
+            {
+                continue;
+            }
+
+            var encodedLength = isBigEndian
+                ? BinaryPrimitives.ReadInt32BigEndian(meshPayload.AsSpan(stringStart - 4, 4))
+                : BinaryPrimitives.ReadInt32LittleEndian(meshPayload.AsSpan(stringStart - 4, 4));
+
+            if (encodedLength != stringLength)
+            {
+                continue;
+            }
+
+            var candidatePath = Encoding.UTF8.GetString(meshPayload, stringStart, stringLength);
+            if (string.IsNullOrWhiteSpace(candidatePath))
+            {
+                continue;
+            }
+
+            if (TryReadInt64At(meshPayload, stringStart - 16, isBigEndian, out var offset64)
+                && TryReadInt32At(meshPayload, stringStart - 8, isBigEndian, out var size32)
+                && size32 > 0)
+            {
+                streamPath = candidatePath;
+                streamOffset = offset64;
+                streamSize = size32;
+                return true;
+            }
+
+            if (TryReadInt32At(meshPayload, stringStart - 12, isBigEndian, out var offset32)
+                && TryReadInt32At(meshPayload, stringStart - 8, isBigEndian, out size32)
+                && offset32 >= 0
+                && size32 > 0)
+            {
+                streamPath = candidatePath;
+                streamOffset = offset32;
+                streamSize = size32;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool TryReadInt32At(byte[] data, int offset, bool isBigEndian, out int value)
+    {
+        value = 0;
+        if (offset < 0 || offset + 4 > data.Length)
+        {
+            return false;
+        }
+
+        value = isBigEndian
+            ? BinaryPrimitives.ReadInt32BigEndian(data.AsSpan(offset, 4))
+            : BinaryPrimitives.ReadInt32LittleEndian(data.AsSpan(offset, 4));
+        return true;
+    }
+
+    private static bool TryReadInt64At(byte[] data, int offset, bool isBigEndian, out long value)
+    {
+        value = 0;
+        if (offset < 0 || offset + 8 > data.Length)
+        {
+            return false;
+        }
+
+        value = isBigEndian
+            ? BinaryPrimitives.ReadInt64BigEndian(data.AsSpan(offset, 8))
+            : BinaryPrimitives.ReadInt64LittleEndian(data.AsSpan(offset, 8));
+        return true;
+    }
+
+    private static bool IsLikelyPathByte(byte value)
+    {
+        return value is (>= (byte)'a' and <= (byte)'z')
+            or (>= (byte)'A' and <= (byte)'Z')
+            or (>= (byte)'0' and <= (byte)'9')
+            or (byte)'/'
+            or (byte)'\\'
+            or (byte)'-'
+            or (byte)'_'
+            or (byte)'.'
+            or (byte)':';
     }
 
     private static bool TryDecodeVector4ChannelFromLayout(

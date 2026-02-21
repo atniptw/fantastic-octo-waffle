@@ -18,7 +18,7 @@
         "components": [],
         "isActive": true,
         "layer": 0,
-        "name": "Sakuyas hairdo \u5b8c\u7f8e\u7684\u5341\u516d\u591c\u5934\u9970",
+        "name": "Sakuyas hairdo 完美的十六夜头饰",
         "pathId": -3546758782495037057
       }
     ],
@@ -668,7 +668,7 @@
         "uv1": false
       },
       "indexCount": 114480,
-      "name": "Sakuyas hairdo \u5b8c\u7f8e\u7684\u5341\u516d\u591c\u5934\u9970\u4fee\u6539\u5e95\u90e8\u5934\u53d1",
+      "name": "Sakuyas hairdo 完美的十六夜头饰修改底部头发",
       "pathId": -9055711993948854630,
       "subMeshCount": 4,
       "topology": [
@@ -677,7 +677,28 @@
         0,
         0
       ],
-      "vertexCount": 36175
+      "vertexCount": 36175,
+      "oracle": {
+        "vertexCount": 36175,
+        "indexBufferLength": 114480,
+        "vertexDataLength": 0,
+        "channelsCount": 14,
+        "indexFormat": 0,
+        "use16BitIndices": null,
+        "streamData": {
+          "hasStream": true,
+          "path": "archive:/CAB-f05825ad263b0cc3e9da2b494075139e/CAB-f05825ad263b0cc3e9da2b494075139e.resS",
+          "offset": 0,
+          "size": 868200
+        },
+        "renderableHint": true
+      },
+      "parserGap": {
+        "positionsLikelyMissingFromParser": true,
+        "streamDataPresentInOracle": true,
+        "externalStreamLikelyCause": true,
+        "decodedPositionsMissingInParser": true
+      }
     }
   ],
   "objects": [
@@ -747,7 +768,7 @@
       "type": "Material"
     }
   ],
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "serializedFiles": [],
   "skinning": [],
   "summary": {
@@ -764,5 +785,9 @@
     }
   },
   "textures": [],
-  "warnings": []
+  "warnings": [],
+  "oracle": {
+    "source": "UnityPy",
+    "version": "1.24.2"
+  }
 }

@@ -11,7 +11,7 @@
         "components": [],
         "isActive": true,
         "layer": 0,
-        "name": "BlindEye\u76f2\u89c6",
+        "name": "BlindEye盲视",
         "pathId": -7749891051798471038
       },
       {
@@ -73,7 +73,7 @@
   },
   "materials": [
     {
-      "name": "\u6750\u8d28.005",
+      "name": "材质.005",
       "pathId": 878434467506892780,
       "properties": {
         "scalars": {
@@ -245,13 +245,34 @@
         "uv1": false
       },
       "indexCount": 288,
-      "name": "BlindEye\u76f2\u89c6",
+      "name": "BlindEye盲视",
       "pathId": 6423636310026100672,
       "subMeshCount": 1,
       "topology": [
         0
       ],
-      "vertexCount": 82
+      "vertexCount": 82,
+      "oracle": {
+        "vertexCount": 82,
+        "indexBufferLength": 288,
+        "vertexDataLength": 0,
+        "channelsCount": 14,
+        "indexFormat": 0,
+        "use16BitIndices": null,
+        "streamData": {
+          "hasStream": true,
+          "path": "archive:/CAB-ebac5b3b8f04d522d3b017776601de04/CAB-ebac5b3b8f04d522d3b017776601de04.resS",
+          "offset": 699064,
+          "size": 1968
+        },
+        "renderableHint": true
+      },
+      "parserGap": {
+        "positionsLikelyMissingFromParser": true,
+        "streamDataPresentInOracle": true,
+        "externalStreamLikelyCause": true,
+        "decodedPositionsMissingInParser": true
+      }
     }
   ],
   "objects": [
@@ -311,7 +332,7 @@
       "type": "Mesh"
     }
   ],
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "serializedFiles": [],
   "skinning": [],
   "summary": {
@@ -340,5 +361,9 @@
       "width": 1024
     }
   ],
-  "warnings": []
+  "warnings": [],
+  "oracle": {
+    "source": "UnityPy",
+    "version": "1.24.2"
+  }
 }

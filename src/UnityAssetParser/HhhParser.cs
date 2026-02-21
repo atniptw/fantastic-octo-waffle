@@ -203,6 +203,12 @@ public sealed class HhhParser
         private int TryBuildMesh(SemanticMeshInfo mesh)
         {
             var vertexCount = mesh.VertexCount > 0 ? mesh.VertexCount : mesh.DecodedPositions.Count;
+            if (mesh.VertexDataByteLength == 0 && mesh.DecodedPositions.Count == 0)
+            {
+                AddWarning($"GLB export skipped mesh '{mesh.Name}' ({mesh.PathId}): no vertex buffer payload in source mesh.");
+                return -1;
+            }
+
             if (vertexCount <= 0 || mesh.DecodedPositions.Count < vertexCount)
             {
                 AddWarning($"GLB export skipped mesh '{mesh.Name}' ({mesh.PathId}): missing positions.");

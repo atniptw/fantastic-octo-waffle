@@ -42,7 +42,7 @@ public sealed class UnityAssetSnapshotContractTests
         var root = document.RootElement;
 
         var schemaVersion = root.GetProperty("schemaVersion").GetInt32();
-        Assert.True(schemaVersion is 1 or 2, $"Unsupported index schemaVersion: {schemaVersion}");
+        Assert.True(schemaVersion is 1 or 2 or 3, $"Unsupported index schemaVersion: {schemaVersion}");
 
         var determinismNode = root.GetProperty("determinismCheck");
         Assert.True(determinismNode.GetProperty("passed").GetBoolean());
@@ -80,7 +80,7 @@ public sealed class UnityAssetSnapshotContractTests
         var root = snapshotDocument.RootElement;
         var schemaVersion = root.GetProperty("schemaVersion").GetInt32();
 
-        Assert.True(schemaVersion is 1 or 2, $"Unsupported snapshot schemaVersion: {schemaVersion}");
+        Assert.True(schemaVersion is 1 or 2 or 3, $"Unsupported snapshot schemaVersion: {schemaVersion}");
         AssertSnapshotInternalConsistency(root, schemaVersion);
 
         var fixtureNode = root.GetProperty("fixture");
@@ -119,6 +119,11 @@ public sealed class UnityAssetSnapshotContractTests
         AssertV2MeshConsistency(root.GetProperty("meshes"), root.GetProperty("objects"));
         AssertV2TextureConsistency(root.GetProperty("textures"), root.GetProperty("objects"));
         AssertV2WarningsConsistency(root.GetProperty("warnings"), context);
+
+        if (schemaVersion == 3)
+        {
+            AssertV3MeshOracleDiagnostics(root, context);
+        }
     }
 
     private static void AssertObjectsByPathIdClassIdTypeMatch(JsonElement snapshotObjectsNode, BaseAssetsContext context)
@@ -625,6 +630,46 @@ public sealed class UnityAssetSnapshotContractTests
         }
     }
 
+    private static void AssertV3MeshOracleDiagnostics(JsonElement root, BaseAssetsContext context)
+    {
+        var oracleNode = root.GetProperty("oracle");
+        Assert.Equal("UnityPy", oracleNode.GetProperty("source").GetString());
+        var unityPyVersion = oracleNode.GetProperty("version").GetString();
+        Assert.False(string.IsNullOrWhiteSpace(unityPyVersion));
+
+        var parserMeshesByPath = context.SemanticMeshes.ToDictionary(mesh => mesh.PathId);
+
+        foreach (var meshNode in root.GetProperty("meshes").EnumerateArray())
+        {
+            var pathId = meshNode.GetProperty("pathId").GetInt64();
+            Assert.True(parserMeshesByPath.ContainsKey(pathId));
+
+            var oracleMesh = meshNode.GetProperty("oracle");
+            Assert.Equal(meshNode.GetProperty("vertexCount").GetInt32(), oracleMesh.GetProperty("vertexCount").GetInt32());
+            Assert.Equal(meshNode.GetProperty("bufferLengths").GetProperty("indices").GetInt32(), oracleMesh.GetProperty("indexBufferLength").GetInt32());
+            Assert.True(oracleMesh.GetProperty("vertexDataLength").GetInt32() >= 0);
+            Assert.True(oracleMesh.GetProperty("channelsCount").GetInt32() >= 0);
+            _ = oracleMesh.GetProperty("renderableHint").GetBoolean();
+
+            var streamDataNode = oracleMesh.GetProperty("streamData");
+            var hasStream = streamDataNode.GetProperty("hasStream").GetBoolean();
+            if (hasStream)
+            {
+                Assert.False(string.IsNullOrWhiteSpace(streamDataNode.GetProperty("path").GetString()));
+                Assert.True(streamDataNode.GetProperty("size").GetInt32() > 0);
+                Assert.True(streamDataNode.GetProperty("offset").GetInt64() >= 0);
+            }
+
+            var parserGapNode = meshNode.GetProperty("parserGap");
+            var expectedPositionsLikelyMissing = meshNode.GetProperty("bufferLengths").GetProperty("vertexData").GetInt32() == 0
+                && meshNode.GetProperty("vertexCount").GetInt32() > 0;
+
+            Assert.Equal(expectedPositionsLikelyMissing, parserGapNode.GetProperty("positionsLikelyMissingFromParser").GetBoolean());
+            Assert.Equal(hasStream, parserGapNode.GetProperty("streamDataPresentInOracle").GetBoolean());
+            Assert.Equal(expectedPositionsLikelyMissing && hasStream, parserGapNode.GetProperty("externalStreamLikelyCause").GetBoolean());
+        }
+    }
+
     private static void AssertV2TextureCoreMatchesParser(JsonElement texturesNode, BaseAssetsContext context)
     {
         var snapshotTextures = texturesNode
@@ -909,6 +954,12 @@ public sealed class UnityAssetSnapshotContractTests
             return;
         }
 
+        if (schemaVersion == 3)
+        {
+            AssertSnapshotInternalConsistencyV3(root);
+            return;
+        }
+
         AssertSnapshotInternalConsistencyV2(root);
     }
 
@@ -959,6 +1010,37 @@ public sealed class UnityAssetSnapshotContractTests
         var determinismCheckNode = root.GetProperty("determinismCheck");
         Assert.Equal(JsonValueKind.String, determinismCheckNode.ValueKind);
         Assert.False(string.IsNullOrWhiteSpace(determinismCheckNode.GetString()));
+    }
+
+    private static void AssertSnapshotInternalConsistencyV3(JsonElement root)
+    {
+        AssertSnapshotInternalConsistencyV2(root);
+
+        var oracleNode = root.GetProperty("oracle");
+        Assert.Equal("UnityPy", oracleNode.GetProperty("source").GetString());
+        Assert.False(string.IsNullOrWhiteSpace(oracleNode.GetProperty("version").GetString()));
+
+        foreach (var meshNode in root.GetProperty("meshes").EnumerateArray())
+        {
+            var oracleMesh = meshNode.GetProperty("oracle");
+            _ = oracleMesh.GetProperty("vertexCount").GetInt32();
+            _ = oracleMesh.GetProperty("indexBufferLength").GetInt32();
+            _ = oracleMesh.GetProperty("vertexDataLength").GetInt32();
+            _ = oracleMesh.GetProperty("channelsCount").GetInt32();
+            _ = oracleMesh.GetProperty("renderableHint").GetBoolean();
+
+            var streamDataNode = oracleMesh.GetProperty("streamData");
+            _ = streamDataNode.GetProperty("hasStream").GetBoolean();
+            _ = streamDataNode.GetProperty("offset").GetInt64();
+            _ = streamDataNode.GetProperty("size").GetInt32();
+            _ = streamDataNode.GetProperty("path");
+
+            var parserGapNode = meshNode.GetProperty("parserGap");
+            _ = parserGapNode.GetProperty("positionsLikelyMissingFromParser").GetBoolean();
+            _ = parserGapNode.GetProperty("streamDataPresentInOracle").GetBoolean();
+            _ = parserGapNode.GetProperty("externalStreamLikelyCause").GetBoolean();
+            _ = parserGapNode.GetProperty("decodedPositionsMissingInParser").GetBoolean();
+        }
     }
 
     private static void AssertVector3Node(JsonElement node)

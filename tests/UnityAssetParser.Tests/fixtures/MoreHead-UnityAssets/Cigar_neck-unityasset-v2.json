@@ -11,14 +11,14 @@
         "components": [],
         "isActive": true,
         "layer": 0,
-        "name": "\u7c92\u5b50",
+        "name": "粒子",
         "pathId": -5336330473934095272
       },
       {
         "components": [],
         "isActive": true,
         "layer": 0,
-        "name": "\u672c\u4f53",
+        "name": "本体",
         "pathId": 673506148854230287
       },
       {
@@ -699,7 +699,7 @@
         "uv1": false
       },
       "indexCount": 936,
-      "name": "\u96ea\u8304",
+      "name": "雪茄",
       "pathId": -3876313651872223835,
       "subMeshCount": 3,
       "topology": [
@@ -707,7 +707,28 @@
         0,
         0
       ],
-      "vertexCount": 220
+      "vertexCount": 220,
+      "oracle": {
+        "vertexCount": 220,
+        "indexBufferLength": 936,
+        "vertexDataLength": 0,
+        "channelsCount": 14,
+        "indexFormat": 0,
+        "use16BitIndices": null,
+        "streamData": {
+          "hasStream": true,
+          "path": "archive:/CAB-64b5478776646b94cf897cfa5da9eb15/CAB-64b5478776646b94cf897cfa5da9eb15.resS",
+          "offset": 0,
+          "size": 5280
+        },
+        "renderableHint": true
+      },
+      "parserGap": {
+        "positionsLikelyMissingFromParser": true,
+        "streamDataPresentInOracle": true,
+        "externalStreamLikelyCause": true,
+        "decodedPositionsMissingInParser": true
+      }
     }
   ],
   "objects": [
@@ -797,7 +818,7 @@
       "type": "Transform"
     }
   ],
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "serializedFiles": [],
   "skinning": [],
   "summary": {
@@ -816,5 +837,9 @@
     }
   },
   "textures": [],
-  "warnings": []
+  "warnings": [],
+  "oracle": {
+    "source": "UnityPy",
+    "version": "1.24.2"
+  }
 }
