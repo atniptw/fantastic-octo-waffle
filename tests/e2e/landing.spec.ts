@@ -1,5 +1,14 @@
 import { test, expect } from "@playwright/test";
 
+async function waitForBaseScanComplete(page: import("@playwright/test").Page) {
+  await expect
+    .poll(
+      async () => (await page.getByTestId("base-mod-status").innerText()).trim(),
+      { timeout: 120_000 }
+    )
+    .toMatch(/Scan complete/i);
+}
+
 test("planner loads on home route", async ({ page }) => {
   await page.goto("/");
 
@@ -13,10 +22,7 @@ test("base mod upload scans zip and shows list", async ({ page }) => {
   await page.getByTestId("load-mods-button").click();
   const baseInput = page.getByTestId("base-mod-input");
   await baseInput.setInputFiles("tests/e2e/fixtures/morehead-1.4.4.zip");
-
-  await expect(page.getByTestId("base-mod-status")).toContainText(
-    "Scan complete"
-  );
+  await waitForBaseScanComplete(page);
   await page.getByTestId("wizard-next").click();
   await expect(page.getByTestId("wizard-step-2")).toBeVisible();
   await expect(page.getByTestId("wizard-process")).toBeEnabled();
@@ -28,9 +34,7 @@ test("process flow runs sequentially and completes", async ({ page }) => {
   await page.getByTestId("load-mods-button").click();
   const baseInput = page.getByTestId("base-mod-input");
   await baseInput.setInputFiles("tests/e2e/fixtures/morehead-1.4.4.zip");
-  await expect(page.getByTestId("base-mod-status")).toContainText(
-    "Scan complete"
-  );
+  await waitForBaseScanComplete(page);
 
   await page.getByTestId("wizard-next").click();
   await expect(page.getByTestId("wizard-step-2")).toBeVisible();
@@ -41,4 +45,16 @@ test("process flow runs sequentially and completes", async ({ page }) => {
   await expect(processButton).toHaveText(/Processing/i);
   await expect(page.getByTestId("wizard-close")).toBeVisible();
   await expect(page.getByTestId("wizard-reset")).toBeVisible();
+
+  await page.getByTestId("wizard-close").click();
+
+  const firstItem = page.locator('[data-testid^="item-"]').first();
+  await expect(firstItem).toBeVisible();
+  await firstItem.click();
+
+  const previewStatus = page.getByTestId("preview-status");
+  await expect(previewStatus).toBeVisible();
+  await expect(previewStatus).not.toContainText(
+    "Load mods to start previewing items."
+  );
 });

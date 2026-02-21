@@ -38,6 +38,7 @@ public sealed class DecorationIndexService
     public bool LastScanSucceeded { get; private set; }
     public string? LastScanMessage { get; private set; }
     public DateTimeOffset? LastScanAt { get; private set; }
+    public event Action? OnChange;
 
     public Task LoadPersistedAsync(CancellationToken cancellationToken = default)
     {
@@ -57,11 +58,13 @@ public sealed class DecorationIndexService
         LastScanSucceeded = false;
         LastScanMessage = null;
         LastScanAt = DateTimeOffset.UtcNow;
+        NotifyStateChanged();
 
         if (!IsZipFile(file.Name))
         {
             LastScanSucceeded = true;
             LastScanMessage = "Scan skipped (not a .zip file).";
+            NotifyStateChanged();
             return;
         }
 
@@ -99,11 +102,13 @@ public sealed class DecorationIndexService
             LastScanMessage = storageWarnings.Count == 0
                 ? "Scan complete."
                 : $"Scan complete with {storageWarnings.Count} storage warning(s).";
+            NotifyStateChanged();
         }
         catch (Exception ex)
         {
             LastScanSucceeded = false;
             LastScanMessage = $"Scan failed: {ex.Message}";
+            NotifyStateChanged();
         }
     }
 
@@ -123,13 +128,18 @@ public sealed class DecorationIndexService
             LastScanSucceeded = true;
             LastScanMessage = assets.Count > 0 ? "Loaded from library." : "Library is empty.";
             LastScanAt = DateTimeOffset.UtcNow;
+            NotifyStateChanged();
         }
         catch (Exception ex)
         {
             LastScanSucceeded = false;
             LastScanMessage = $"Library load failed: {ex.Message}";
+            NotifyStateChanged();
         }
     }
+
+    private void NotifyStateChanged()
+        => OnChange?.Invoke();
 
     private static bool IsZipFile(string fileName)
         => fileName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase);

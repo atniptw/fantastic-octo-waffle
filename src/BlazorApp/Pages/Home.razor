@@ -107,13 +107,15 @@
 				.OrderBy(entry => entry.FilePath, StringComparer.OrdinalIgnoreCase)
 				.ToList();
 
+	protected override void OnInitialized()
+	{
+		DecorationIndex.OnChange += HandleDecorationIndexChanged;
+	}
+
 	protected override async Task OnInitializedAsync()
 	{
 		await DecorationIndex.LoadPersistedAsync();
-		activeBodyPart = BodyPartGroups.FirstOrDefault();
-		previewStatusMessage = DecorationIndex.Entries.Count == 0
-			? "Load mods to start previewing items."
-			: "Select an item to preview.";
+		RefreshSelectionAndStatusFromEntries();
 	}
 
 	protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -183,10 +185,10 @@
 			return;
 		}
 
-		var loaded = await previewModule.InvokeAsync<bool>("previewAsset", PreviewElementId, selectedEntry.Sha256);
-		previewStatusMessage = loaded
+		var previewResult = await previewModule.InvokeAsync<PreviewResult>("previewAsset", PreviewElementId, selectedEntry.Sha256);
+		previewStatusMessage = previewResult.Success
 			? $"Previewing {DecorationNameFormatter.GetDisplayName(selectedEntry.FilePath)}"
-			: "Preview unavailable for selected item.";
+			: previewResult.Reason ?? "Preview unavailable for selected item.";
 		await InvokeAsync(StateHasChanged);
 	}
 
@@ -209,7 +211,7 @@
 		await AssetStore.ClearAsync();
 		await DecorationIndex.ReloadPersistedAsync();
 		selectedByBodyPart.Clear();
-		activeBodyPart = BodyPartGroups.FirstOrDefault();
+		RefreshSelectionAndStatusFromEntries();
 
 		if (previewModule is not null)
 		{
@@ -220,8 +222,38 @@
 		isClearingLibrary = false;
 	}
 
+	private void RefreshSelectionAndStatusFromEntries()
+	{
+		if (BodyPartGroups.Count == 0)
+		{
+			activeBodyPart = null;
+			previewStatusMessage = "Load mods to start previewing items.";
+			return;
+		}
+
+		if (string.IsNullOrWhiteSpace(activeBodyPart)
+			|| !BodyPartGroups.Contains(activeBodyPart, StringComparer.OrdinalIgnoreCase))
+		{
+			activeBodyPart = BodyPartGroups[0];
+		}
+
+		previewStatusMessage = "Select an item to preview.";
+	}
+
+	private void HandleDecorationIndexChanged()
+	{
+		RefreshSelectionAndStatusFromEntries();
+		_ = InvokeAsync(async () =>
+		{
+			await SyncPreviewToCurrentSelectionAsync();
+			StateHasChanged();
+		});
+	}
+
 	public async ValueTask DisposeAsync()
 	{
+		DecorationIndex.OnChange -= HandleDecorationIndexChanged;
+
 		if (previewModule is null)
 		{
 			return;
@@ -229,5 +261,11 @@
 
 		await previewModule.InvokeVoidAsync("clearPreview", PreviewElementId);
 		await previewModule.DisposeAsync();
+	}
+
+	private sealed class PreviewResult
+	{
+		public bool Success { get; set; }
+		public string? Reason { get; set; }
 	}
 }
