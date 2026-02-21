@@ -27,10 +27,36 @@ public sealed class AssetStoreService : IAsyncDisposable
         return assets;
     }
 
+    public async Task UpsertUnityPackageAsync(UnityPackageInventory inventory, CancellationToken cancellationToken = default)
+    {
+        var module = await GetModuleAsync();
+        await module.InvokeVoidAsync("putUnityPackage", cancellationToken, inventory);
+    }
+
+    public async Task<IReadOnlyList<UnityPackageInventoryMetadata>> GetAllUnityPackageMetadataAsync(CancellationToken cancellationToken = default)
+    {
+        var module = await GetModuleAsync();
+        var items = await module.InvokeAsync<UnityPackageInventoryMetadata[]>("getAllUnityPackageMetadata", cancellationToken);
+        return items;
+    }
+
+    public async Task<UnityPackageInventory?> GetUnityPackageByIdAsync(string id, CancellationToken cancellationToken = default)
+    {
+        var module = await GetModuleAsync();
+        return await module.InvokeAsync<UnityPackageInventory?>("getUnityPackageById", cancellationToken, id);
+    }
+
     public async Task ClearAsync(CancellationToken cancellationToken = default)
     {
         var module = await GetModuleAsync();
         await module.InvokeVoidAsync("clearAssets", cancellationToken);
+        await module.InvokeVoidAsync("clearUnityPackages", cancellationToken);
+    }
+
+    public async Task DeleteDatabaseAsync(CancellationToken cancellationToken = default)
+    {
+        var module = await GetModuleAsync();
+        await module.InvokeVoidAsync("deleteDatabase", cancellationToken);
     }
 
     public async Task<bool> TouchProcessedAsync(string id, long processedAt, long lastUsed, CancellationToken cancellationToken = default)

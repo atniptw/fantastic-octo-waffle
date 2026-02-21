@@ -7,90 +7,88 @@
 
 <PageTitle>Outfit Planner</PageTitle>
 
-<section class="planner-grid">
-	<aside class="planner-panel planner-slots">
-		<div class="planner-panel__title">Slots</div>
-		<ul class="planner-slots__list">
-			@foreach (var bodyPart in BodyPartGroups)
+<div class="planner-content">
+	<section class="planner-home">
+		<aside class="planner-panel planner-library">
+			<div class="planner-panel__title">Parts / Mods</div>
+			@if (VisibleEntries.Count == 0)
 			{
-				<li>
-					<button
-						class="planner-slot @(activeBodyPart == bodyPart ? "planner-slot--active" : string.Empty)"
-						type="button"
-						@onclick="() => SelectBodyPartAsync(bodyPart)"
-						data-testid="slot-@bodyPart">
-						@bodyPart
-					</button>
-				</li>
+				<div class="planner-empty">No mods loaded yet.</div>
 			}
-		</ul>
+			else
+			{
+				<div class="planner-list" role="list">
+					@foreach (var entry in VisibleEntries)
+					{
+						var isSelected = IsSelected(entry);
+						<label class="planner-entry @(isSelected ? "planner-entry--selected" : string.Empty)">
+							<input
+								class="planner-entry__checkbox"
+								type="checkbox"
+								checked="@isSelected"
+								@onchange="(args) => ToggleEntryAsync(entry, args)"
+								data-testid="item-@entry.Sha256" />
+							<span class="planner-entry__details">
+								<span class="planner-entry__name">@DecorationNameFormatter.GetDisplayName(entry.FilePath)</span>
+								<span class="planner-entry__meta">@entry.BodyPart • @FormatFileSize(entry.SizeBytes)</span>
+							</span>
+						</label>
+					}
+				</div>
+			}
+		</aside>
 
-		<div class="planner-selection">
-			<div class="planner-panel__title">Selected</div>
-			<ul class="planner-selection__list">
-				@foreach (var bodyPart in BodyPartGroups)
+		<section class="planner-panel planner-preview">
+			<div class="planner-panel__title">Preview</div>
+			<div class="planner-viewport">
+				<model-viewer
+					id="planner-preview-viewer"
+					class="planner-model-viewer"
+					camera-controls
+					auto-rotate
+					touch-action="pan-y"
+					data-testid="preview-viewer">
+				</model-viewer>
+				@if (!string.IsNullOrWhiteSpace(previewStatusMessage))
 				{
-					var selected = GetSelectedEntry(bodyPart);
-					<li>@bodyPart: @(selected is null ? "None" : DecorationNameFormatter.GetDisplayName(selected.FilePath))</li>
+					<div class="planner-preview__message" data-testid="preview-status">@previewStatusMessage</div>
 				}
-			</ul>
-			<button class="btn btn-outline-secondary" type="button" @onclick="ClearLibraryAsync" disabled="@(isClearingLibrary || DecorationIndex.Entries.Count == 0)" data-testid="clear-library-button">
-				@(isClearingLibrary ? "Clearing..." : "Clear library")
-			</button>
-		</div>
-	</aside>
-
-	<section class="planner-panel planner-preview">
-		<div class="planner-panel__title">Character Preview</div>
-		<div class="planner-viewport">
-			<model-viewer
-				id="planner-preview-viewer"
-				class="planner-model-viewer"
-				camera-controls
-				auto-rotate
-				touch-action="pan-y"
-				data-testid="preview-viewer">
-			</model-viewer>
-			@if (!string.IsNullOrWhiteSpace(previewStatusMessage))
-			{
-				<div class="planner-preview__message" data-testid="preview-status">@previewStatusMessage</div>
-			}
-		</div>
+			</div>
+		</section>
 	</section>
 
-	<aside class="planner-panel planner-items">
-		<div class="planner-panel__title">Items Panel (@DecorationIndex.Entries.Count loaded)</div>
-		<div class="planner-items__slot">Slot: @(activeBodyPart ?? "None")</div>
-
-		@if (CurrentBodyPartEntries.Count == 0)
-		{
-			<div class="planner-item-card planner-item-card--empty">No items for the selected slot.</div>
-		}
-		else
-		{
-			@foreach (var entry in CurrentBodyPartEntries)
+	<footer class="planner-footer">
+		<div class="planner-filters">
+			<span class="planner-filters__label">Filters</span>
+			@foreach (var filter in Filters)
 			{
-				var isSelected = IsSelected(entry);
-				<button class="planner-item-card planner-item-card--button @(isSelected ? "planner-item-card--selected" : string.Empty)"
-					type="button"
-					@onclick="() => SelectEntryAsync(entry)"
-					data-testid="item-@entry.Sha256">
-					<div class="planner-item-card__name">@DecorationNameFormatter.GetDisplayName(entry.FilePath)</div>
-					<div class="planner-item-card__meta">@entry.BodyPart • @FormatFileSize(entry.SizeBytes)</div>
+				var isActive = string.Equals(filter, activeFilter, StringComparison.OrdinalIgnoreCase);
+				<button class="planner-filter @(isActive ? "planner-filter--active" : string.Empty)" type="button" @onclick="() => SetFilter(filter)">
+					@filter
 				</button>
 			}
-		}
-	</aside>
-</section>
+		</div>
+		<div class="planner-footer__actions">
+			<button class="btn btn-outline-secondary" type="button" @onclick="ClearSelectionsAsync" disabled="@(DecorationIndex.Entries.Count == 0 || selectedByBodyPart.Count == 0)">
+				Clear All
+			</button>
+			<button class="btn btn-outline-danger" type="button" @onclick="ClearDatabaseAsync" disabled="@(isClearingDatabase || DecorationIndex.Entries.Count == 0)">
+				@(isClearingDatabase ? "Clearing..." : "Clear DB")
+			</button>
+		</div>
+	</footer>
+</div>
 
 <ModsWizard />
 
 @code {
 	private const string PreviewElementId = "planner-preview-viewer";
+	private const string FilterAll = "ALL";
 	private readonly Dictionary<string, string> selectedByBodyPart = new(StringComparer.OrdinalIgnoreCase);
 	private IJSObjectReference? previewModule;
 	private string? activeBodyPart;
-	private bool isClearingLibrary;
+	private string activeFilter = FilterAll;
+	private bool isClearingDatabase;
 	private string? previewStatusMessage;
 
 	private IReadOnlyList<string> BodyPartGroups => DecorationIndex.Entries
@@ -99,13 +97,16 @@
 		.OrderBy(item => item, StringComparer.OrdinalIgnoreCase)
 		.ToList();
 
-	private IReadOnlyList<DecorationEntry> CurrentBodyPartEntries =>
-		string.IsNullOrWhiteSpace(activeBodyPart)
-			? Array.Empty<DecorationEntry>()
-			: DecorationIndex.Entries
-				.Where(entry => string.Equals(entry.BodyPart, activeBodyPart, StringComparison.OrdinalIgnoreCase))
-				.OrderBy(entry => entry.FilePath, StringComparer.OrdinalIgnoreCase)
-				.ToList();
+	private IReadOnlyList<string> Filters => new[] { FilterAll }
+		.Concat(BodyPartGroups)
+		.ToList();
+
+	private IReadOnlyList<DecorationEntry> VisibleEntries => DecorationIndex.Entries
+		.Where(entry => string.Equals(activeFilter, FilterAll, StringComparison.OrdinalIgnoreCase)
+			|| string.Equals(entry.BodyPart, activeFilter, StringComparison.OrdinalIgnoreCase))
+		.OrderBy(entry => entry.BodyPart, StringComparer.OrdinalIgnoreCase)
+		.ThenBy(entry => entry.FilePath, StringComparer.OrdinalIgnoreCase)
+		.ToList();
 
 	protected override void OnInitialized()
 	{
@@ -148,16 +149,31 @@
 		=> selectedByBodyPart.TryGetValue(entry.BodyPart, out var selectedId)
 			&& string.Equals(selectedId, entry.Sha256, StringComparison.OrdinalIgnoreCase);
 
-	private async Task SelectBodyPartAsync(string bodyPart)
+	private void SetFilter(string filter)
 	{
-		activeBodyPart = bodyPart;
-		await SyncPreviewToCurrentSelectionAsync();
+		activeFilter = filter;
 	}
 
-	private async Task SelectEntryAsync(DecorationEntry entry)
+	private async Task ToggleEntryAsync(DecorationEntry entry, ChangeEventArgs args)
 	{
-		selectedByBodyPart[entry.BodyPart] = entry.Sha256;
-		activeBodyPart = entry.BodyPart;
+		var isChecked = args.Value is bool value && value;
+		if (isChecked)
+		{
+			selectedByBodyPart[entry.BodyPart] = entry.Sha256;
+			activeBodyPart = entry.BodyPart;
+			await SyncPreviewToCurrentSelectionAsync();
+			return;
+		}
+
+		if (IsSelected(entry))
+		{
+			selectedByBodyPart.Remove(entry.BodyPart);
+			if (string.Equals(activeBodyPart, entry.BodyPart, StringComparison.OrdinalIgnoreCase))
+			{
+				activeBodyPart = null;
+			}
+		}
+
 		await SyncPreviewToCurrentSelectionAsync();
 	}
 
@@ -171,7 +187,7 @@
 		if (string.IsNullOrWhiteSpace(activeBodyPart))
 		{
 			await previewModule.InvokeVoidAsync("clearPreview", PreviewElementId);
-			previewStatusMessage = "No slot selected.";
+			previewStatusMessage = "Select an item to preview.";
 			await InvokeAsync(StateHasChanged);
 			return;
 		}
@@ -205,21 +221,33 @@
 		return $"{bytes / kilo:0.##} KB";
 	}
 
-	private async Task ClearLibraryAsync()
+	private async Task ClearSelectionsAsync()
 	{
-		isClearingLibrary = true;
-		await AssetStore.ClearAsync();
-		await DecorationIndex.ReloadPersistedAsync();
 		selectedByBodyPart.Clear();
-		RefreshSelectionAndStatusFromEntries();
-
+		activeBodyPart = null;
+		previewStatusMessage = DecorationIndex.Entries.Count == 0
+			? "Load mods to start previewing items."
+			: "Select an item to preview.";
 		if (previewModule is not null)
 		{
 			await previewModule.InvokeVoidAsync("clearPreview", PreviewElementId);
 		}
+	}
 
+	private async Task ClearDatabaseAsync()
+	{
+		isClearingDatabase = true;
+		await AssetStore.DeleteDatabaseAsync();
+		await DecorationIndex.ReloadPersistedAsync();
+		selectedByBodyPart.Clear();
+		activeBodyPart = null;
+		activeFilter = FilterAll;
+		if (previewModule is not null)
+		{
+			await previewModule.InvokeVoidAsync("clearPreview", PreviewElementId);
+		}
 		previewStatusMessage = "Library cleared. Load mods to start previewing items.";
-		isClearingLibrary = false;
+		isClearingDatabase = false;
 	}
 
 	private void RefreshSelectionAndStatusFromEntries()
@@ -227,14 +255,21 @@
 		if (BodyPartGroups.Count == 0)
 		{
 			activeBodyPart = null;
+			activeFilter = FilterAll;
 			previewStatusMessage = "Load mods to start previewing items.";
 			return;
 		}
 
-		if (string.IsNullOrWhiteSpace(activeBodyPart)
-			|| !BodyPartGroups.Contains(activeBodyPart, StringComparer.OrdinalIgnoreCase))
+		if (!string.IsNullOrWhiteSpace(activeBodyPart)
+			&& !BodyPartGroups.Contains(activeBodyPart, StringComparer.OrdinalIgnoreCase))
 		{
-			activeBodyPart = BodyPartGroups[0];
+			activeBodyPart = null;
+		}
+
+		if (!string.Equals(activeFilter, FilterAll, StringComparison.OrdinalIgnoreCase)
+			&& !BodyPartGroups.Contains(activeFilter, StringComparer.OrdinalIgnoreCase))
+		{
+			activeFilter = FilterAll;
 		}
 
 		previewStatusMessage = "Select an item to preview.";

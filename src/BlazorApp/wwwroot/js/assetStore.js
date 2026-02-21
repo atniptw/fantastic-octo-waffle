@@ -1,8 +1,10 @@
 const DB_NAME = "repo-asset-library";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_ASSETS = "assets";
+const STORE_UNITY_PACKAGES = "unityPackages";
 
 let dbPromise;
+let dbInstance;
 
 function openDb() {
   if (!dbPromise) {
@@ -14,6 +16,9 @@ function openDb() {
         if (!db.objectStoreNames.contains(STORE_ASSETS)) {
           db.createObjectStore(STORE_ASSETS, { keyPath: "id" });
         }
+        if (!db.objectStoreNames.contains(STORE_UNITY_PACKAGES)) {
+          db.createObjectStore(STORE_UNITY_PACKAGES, { keyPath: "id" });
+        }
       };
 
       request.onsuccess = () => resolve(request.result);
@@ -21,7 +26,10 @@ function openDb() {
     });
   }
 
-  return dbPromise;
+  return dbPromise.then((db) => {
+    dbInstance = db;
+    return db;
+  });
 }
 
 function toArrayBuffer(value) {
@@ -77,6 +85,31 @@ export async function getAllAssetMetadata() {
   return items.map(({ glb, thumbnail, ...rest }) => rest);
 }
 
+export async function putUnityPackage(packageInventory) {
+  const db = await openDb();
+  const tx = db.transaction(STORE_UNITY_PACKAGES, "readwrite");
+  const store = tx.objectStore(STORE_UNITY_PACKAGES);
+  store.put(packageInventory);
+  await runTransaction(tx);
+}
+
+export async function getAllUnityPackageMetadata() {
+  const db = await openDb();
+  const tx = db.transaction(STORE_UNITY_PACKAGES, "readonly");
+  const store = tx.objectStore(STORE_UNITY_PACKAGES);
+  const items = await runRequest(store.getAll());
+
+  return items.map(({ anchors, resolvedPaths, ...rest }) => rest);
+}
+
+export async function getUnityPackageById(id) {
+  const db = await openDb();
+  const tx = db.transaction(STORE_UNITY_PACKAGES, "readonly");
+  const store = tx.objectStore(STORE_UNITY_PACKAGES);
+
+  return runRequest(store.get(id));
+}
+
 export async function getAssetById(id) {
   const db = await openDb();
   const tx = db.transaction(STORE_ASSETS, "readonly");
@@ -118,4 +151,29 @@ export async function clearAssets() {
 
   store.clear();
   await runTransaction(tx);
+}
+
+export async function clearUnityPackages() {
+  const db = await openDb();
+  const tx = db.transaction(STORE_UNITY_PACKAGES, "readwrite");
+  const store = tx.objectStore(STORE_UNITY_PACKAGES);
+
+  store.clear();
+  await runTransaction(tx);
+}
+
+export async function deleteDatabase() {
+  if (dbInstance) {
+    dbInstance.close();
+    dbInstance = undefined;
+  }
+
+  dbPromise = undefined;
+
+  await new Promise((resolve, reject) => {
+    const request = indexedDB.deleteDatabase(DB_NAME);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+    request.onblocked = () => resolve();
+  });
 }

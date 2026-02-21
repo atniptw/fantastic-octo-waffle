@@ -1,5 +1,5 @@
 .planner-shell {
-    min-height: 100vh;
+    height: 100vh;
     background: #f1f5f9;
     display: flex;
     flex-direction: column;
@@ -39,6 +39,10 @@
 .planner-main {
     flex: 1;
     padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
 }
 
 @media (max-width: 900px) {
