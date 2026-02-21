@@ -1,0 +1,19 @@
+{
+  "browser": {
+    "browserName": "chromium",
+    "launchOptions": {
+      "chromiumSandbox": false,
+      "headless": true,
+      "args": [
+        "--no-sandbox",
+        "--disable-dev-shm-usage",
+        "--use-gl=swiftshader",
+        "--enable-webgl",
+        "--ignore-gpu-blocklist"
+      ]
+    },
+    "contextOptions": {
+      "viewport": null
+    }
+  }
+}

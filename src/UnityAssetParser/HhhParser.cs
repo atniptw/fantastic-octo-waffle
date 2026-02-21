@@ -23,6 +23,16 @@ public sealed class HhhParser
         return GlbBuilder.BuildFromContext(context);
     }
 
+    public byte[] ConvertToGlbFromContext(BaseAssetsContext context)
+    {
+        if (context is null)
+        {
+            throw new ArgumentNullException(nameof(context));
+        }
+
+        return GlbBuilder.BuildFromContext(context);
+    }
+
     private static class GlbBuilder
     {
         private static readonly JsonSerializerOptions JsonOptions = new()
@@ -360,6 +370,13 @@ public sealed class HhhParser
                 _transformNodeIndices[transform.PathId] = nodeIndex;
             }
 
+            var childNodesByParent = _context.SemanticTransforms
+                .Where(transform => transform.ParentPathId.HasValue && _transformNodeIndices.ContainsKey(transform.ParentPathId.Value))
+                .GroupBy(transform => transform.ParentPathId!.Value)
+                .ToDictionary(
+                    group => group.Key,
+                    group => group.Select(child => _transformNodeIndices[child.PathId]).ToList());
+
             foreach (var transform in _context.SemanticTransforms)
             {
                 if (!_transformNodeIndices.TryGetValue(transform.PathId, out var nodeIndex))
@@ -367,14 +384,26 @@ public sealed class HhhParser
                     continue;
                 }
 
-                var childNodeIndices = transform.ChildrenPathIds
-                    .Where(child => _transformNodeIndices.ContainsKey(child))
-                    .Select(child => _transformNodeIndices[child])
-                    .ToList();
+                var childNodeIndices = new HashSet<int>();
+                foreach (var child in transform.ChildrenPathIds)
+                {
+                    if (_transformNodeIndices.TryGetValue(child, out var childIndex))
+                    {
+                        childNodeIndices.Add(childIndex);
+                    }
+                }
+
+                if (childNodesByParent.TryGetValue(transform.PathId, out var parentLinkedChildren))
+                {
+                    foreach (var childIndex in parentLinkedChildren)
+                    {
+                        childNodeIndices.Add(childIndex);
+                    }
+                }
 
                 if (childNodeIndices.Count > 0)
                 {
-                    _nodes[nodeIndex]["children"] = childNodeIndices;
+                    _nodes[nodeIndex]["children"] = childNodeIndices.ToList();
                 }
             }
 

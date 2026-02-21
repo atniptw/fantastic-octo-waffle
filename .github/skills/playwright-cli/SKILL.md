@@ -88,6 +88,42 @@ playwright-cli tracing-start
 playwright-cli tracing-stop      # saves trace for Playwright Trace Viewer
 ```
 
+## WebGL / Chromium workaround (containers)
+In this dev container, headless Firefox blocks WebGL. Use Playwright's Chromium build with a CLI config that disables the sandbox and enables software WebGL.
+
+Create `.playwright/cli.config.json`:
+```json
+{
+	"browser": {
+		"browserName": "chromium",
+		"launchOptions": {
+			"chromiumSandbox": false,
+			"headless": true,
+			"args": [
+				"--no-sandbox",
+				"--disable-dev-shm-usage",
+				"--use-gl=swiftshader",
+				"--enable-webgl",
+				"--ignore-gpu-blocklist"
+			]
+		},
+		"contextOptions": {
+			"viewport": null
+		}
+	}
+}
+```
+
+Open Chromium with the config:
+```bash
+playwright-cli open http://localhost:5075/ --config .playwright/cli.config.json
+```
+
+Quick WebGL check:
+```bash
+playwright-cli eval 'document.createElement("canvas").getContext("webgl2") !== null'
+```
+
 ## Handoff requirements
 Include:
 1. Commands run and their output.

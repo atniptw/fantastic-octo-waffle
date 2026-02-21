@@ -357,7 +357,7 @@ public sealed class DecorationIndexService
         try
         {
             var glbBuilder = new HhhParser();
-            glbBytes = glbBuilder.ConvertToGlb(new byte[0], context);
+            glbBytes = glbBuilder.ConvertToGlbFromContext(context);
             return null;
         }
         catch (Exception ex)
@@ -372,7 +372,8 @@ public sealed class DecorationIndexService
 
         var byNameMatch = context.SemanticGameObjects
             .FirstOrDefault(go => avatarPatterns.Any(pattern =>
-                go.Name.Contains(pattern, StringComparison.OrdinalIgnoreCase)));
+                    go.Name.Contains(pattern, StringComparison.OrdinalIgnoreCase))
+                && FindGameObjectMesh(context, go.PathId) is not null);
 
         if (byNameMatch is not null)
         {

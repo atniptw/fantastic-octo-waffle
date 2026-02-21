@@ -27,6 +27,7 @@ public static class PackageInventoryReport
         AppendMeshes(builder, context, maxItemsPerSection);
         AppendMaterials(builder, context, maxItemsPerSection);
         AppendTextures(builder, context, maxItemsPerSection);
+        AppendWarnings(builder, context, maxItemsPerSection);
 
         return builder.ToString();
     }
@@ -366,6 +367,31 @@ public static class PackageInventoryReport
         else
         {
             builder.AppendLine("(none)");
+        }
+
+        builder.AppendLine();
+    }
+
+    private static void AppendWarnings(StringBuilder builder, BaseAssetsContext context, int maxItems)
+    {
+        builder.AppendLine("Warnings");
+        builder.AppendLine("--------");
+        if (context.Warnings.Count == 0)
+        {
+            builder.AppendLine("(none)");
+            builder.AppendLine();
+            return;
+        }
+
+        var warnings = context.Warnings.Take(maxItems).ToList();
+        foreach (var warning in warnings)
+        {
+            builder.AppendLine($"- {warning}");
+        }
+
+        if (context.Warnings.Count > warnings.Count)
+        {
+            builder.AppendLine($"- ... {context.Warnings.Count - warnings.Count} more warning(s)");
         }
 
         builder.AppendLine();

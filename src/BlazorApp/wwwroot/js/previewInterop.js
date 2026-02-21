@@ -215,6 +215,11 @@ export async function previewMultipleAssets(containerId, assetIds, avatarId = nu
           viewer.setAttribute("camera-controls", "");
           viewer.setAttribute("auto-rotate", "");
           viewer.setAttribute("touch-action", "pan-y");
+          viewer.style.position = "absolute";
+          viewer.style.inset = "0";
+          viewer.style.width = "100%";
+          viewer.style.height = "100%";
+          viewer.style.background = "transparent";
           viewer.className = "planner-model-viewer planner-model-viewer--avatar";
           viewer.src = url;
 
@@ -268,6 +273,11 @@ export async function previewMultipleAssets(containerId, assetIds, avatarId = nu
       viewer.setAttribute("camera-controls", "");
       viewer.setAttribute("auto-rotate", "");
       viewer.setAttribute("touch-action", "pan-y");
+      viewer.style.position = "absolute";
+      viewer.style.inset = "0";
+      viewer.style.width = "100%";
+      viewer.style.height = "100%";
+      viewer.style.background = "transparent";
       viewer.className = "planner-model-viewer planner-model-viewer--multi";
       viewer.src = url;
 
