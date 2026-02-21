@@ -596,41 +596,29 @@ public sealed class HhhParser
             var materials = new List<Dictionary<string, object>>();
             var materialPathIdToIndex = new Dictionary<long, int>();
 
-            // Build a map of which materials are actually referenced by meshes
-            var referencedMaterialPathIds = new HashSet<long>();
-            foreach (var materialList in _gameObjectPathIdToMaterialPathIds.Values)
-            {
-                foreach (var matPathId in materialList)
-                {
-                    referencedMaterialPathIds.Add(matPathId);
-                }
-            }
-
-            // Add materials in order, only including referenced ones
+            // Export all materials from the context, regardless of MeshRenderer references
+            // This ensures .hhh files with embedded materials are included
             foreach (var material in _context.SemanticMaterials)
             {
-                if (referencedMaterialPathIds.Contains(material.PathId))
+                var materialObject = new Dictionary<string, object>
                 {
-                    var materialObject = new Dictionary<string, object>
+                    ["name"] = material.Name,
+                    ["pbrMetallicRoughness"] = new Dictionary<string, object>
                     {
-                        ["name"] = material.Name,
-                        ["pbrMetallicRoughness"] = new Dictionary<string, object>
-                        {
-                            ["baseColorFactor"] = material.BaseColorFactor,
-                            ["metallicFactor"] = material.Metallic,
-                            ["roughnessFactor"] = material.Roughness
-                        },
-                        ["doubleSided"] = true
-                    };
+                        ["baseColorFactor"] = material.BaseColorFactor,
+                        ["metallicFactor"] = material.Metallic,
+                        ["roughnessFactor"] = material.Roughness
+                    },
+                    ["doubleSided"] = true
+                };
 
-                    if (!string.IsNullOrEmpty(material.AlphaMode) && material.AlphaMode != "OPAQUE")
-                    {
-                        materialObject["alphaMode"] = material.AlphaMode;
-                    }
-
-                    materialPathIdToIndex[material.PathId] = materials.Count;
-                    materials.Add(materialObject);
+                if (!string.IsNullOrEmpty(material.AlphaMode) && material.AlphaMode != "OPAQUE")
+                {
+                    materialObject["alphaMode"] = material.AlphaMode;
                 }
+
+                materialPathIdToIndex[material.PathId] = materials.Count;
+                materials.Add(materialObject);
             }
 
             // If no materials were found, add a default white material
@@ -656,21 +644,29 @@ public sealed class HhhParser
 
         private int GetMaterialIndexForSubmesh(int subMeshIndex, List<long> materialPathIds)
         {
-            if (materialPathIds.Count == 0)
+            // If we have MeshRenderer material references, use them
+            if (materialPathIds.Count > 0)
             {
-                return 0;  // Default to first material
-            }
-
-            if (subMeshIndex < materialPathIds.Count)
-            {
-                var materialPathId = materialPathIds[subMeshIndex];
-                if (_materialPathIdToIndex != null && _materialPathIdToIndex.TryGetValue(materialPathId, out var index))
+                if (subMeshIndex < materialPathIds.Count)
                 {
-                    return index;
+                    var materialPathId = materialPathIds[subMeshIndex];
+                    if (_materialPathIdToIndex != null && _materialPathIdToIndex.TryGetValue(materialPathId, out var index))
+                    {
+                        return index;
+                    }
                 }
+                return 0; // Fallback for mismatched indices
             }
 
-            // Fallback to first material if submesh index is out of range
+            // If no MeshRenderer materials, assign materials sequentially by submesh
+            // This handles standalone .hhh files with embedded materials
+            if (_materialPathIdToIndex != null && _materialPathIdToIndex.Count > 0)
+            {
+                var materialIndex = subMeshIndex % _materialPathIdToIndex.Count;
+                return materialIndex;
+            }
+
+            // Final fallback to first material
             return 0;
         }
 
