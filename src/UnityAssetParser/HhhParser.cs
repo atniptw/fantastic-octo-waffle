@@ -141,6 +141,9 @@ public sealed class HhhParser
         {
             BuildMeshes();
             var rootNodes = BuildNodes();
+            
+            // Log hierarchy structure for diagnostics
+            LogNodeHierarchy(rootNodes);
 
             Json = new Dictionary<string, object>
             {
@@ -668,6 +671,95 @@ public sealed class HhhParser
 
             // Final fallback to first material
             return 0;
+        }
+
+        private void LogNodeHierarchy(List<int> rootNodeIndices)
+        {
+            try
+            {
+                System.Console.WriteLine("\n=== GLB Node Hierarchy ===");
+                System.Console.WriteLine($"Root nodes: {string.Join(", ", rootNodeIndices)} (count: {rootNodeIndices.Count})");
+                System.Console.WriteLine($"Total nodes exported: {_nodes.Count}");
+                System.Console.WriteLine($"Total transforms in context: {_context.SemanticTransforms.Count}");
+                System.Console.WriteLine($"Total GameObjects: {_gameObjectNameByPathId.Count}");
+                System.Console.WriteLine($"Total transforms with meshes: {_meshPathByGameObjectPathId.Count}");
+                System.Console.WriteLine();
+                
+                // Log skeleton nodes (likely named with common skeleton patterns)
+                System.Console.WriteLine("Skeleton-like nodes (likely bones):");
+                var skeletonNames = new[] { "armature", "skeleton", "rig", "root", "hips", "spine", "chest", "neck", "head", 
+                                            "leftarm", "rightarm", "leftleg", "rightleg", "eyebone", "jawbone" };
+                for (int i = 0; i < _nodes.Count; i++)
+                {
+                    var node = _nodes[i];
+                    if (node.TryGetValue("name", out var nameObj) && nameObj is string nodeName)
+                    {
+                        if (skeletonNames.Any(skel => nodeName.Contains(skel, StringComparison.OrdinalIgnoreCase)))
+                        {
+                            var hasChildren = node.ContainsKey("children");
+                            System.Console.WriteLine($"  [{i}] {nodeName} {(hasChildren ? "[has children]" : "[no children]")} {(node.ContainsKey("mesh") ? "[MESH]" : "")}");
+                        }
+                    }
+                }
+                System.Console.WriteLine();
+                
+                System.Console.WriteLine("Node tree (hierarchy):");
+                foreach (var rootIndex in rootNodeIndices)
+                {
+                    LogNodeRecursive(rootIndex, 0);
+                }
+                
+                System.Console.WriteLine("\n=== End Hierarchy ===\n");
+            }
+            catch (Exception ex)
+            {
+                System.Console.WriteLine($"Error logging hierarchy: {ex.Message}" );
+            }
+        }
+
+        private void LogNodeRecursive(int nodeIndex, int depth)
+        {
+            if (nodeIndex >= _nodes.Count)
+                return;
+                
+            var node = _nodes[nodeIndex];
+            var indent = new string(' ', depth * 2);
+            var nodeName = node.TryGetValue("name", out var nameObj) ? (string?)nameObj ?? $"[{nodeIndex}]unknown" : $"[{nodeIndex}]unnamed";
+            var hasMesh = node.ContainsKey("mesh");
+            var hasTransform = node.ContainsKey("translation") || node.ContainsKey("rotation") || node.ContainsKey("scale");
+            var childCount = node.TryGetValue("children", out var childrenObj) && childrenObj is List<object> children ? children.Count : 0;
+            
+            System.Console.WriteLine($"{indent}[{nodeIndex}] {nodeName}{(hasMesh ? " [MESH]" : "")}{(hasTransform ? " [TXF]" : "")}{(childCount > 0 ? $" [{childCount} children]" : "")}");
+            
+            if (hasTransform)
+            {
+                var parts = new List<string>();
+                if (node.TryGetValue("translation", out var translationObj) && translationObj is IEnumerable<object> translation)
+                {
+                    var vals = translation.Cast<double>().ToArray();
+                    if (vals.Any(v => Math.Abs(v) > 0.001))
+                        parts.Add($"pos:({vals[0]:F2},{vals[1]:F2},{vals[2]:F2})");
+                }
+                if (node.TryGetValue("scale", out var scaleObj) && scaleObj is IEnumerable<object> scale)
+                {
+                    var vals = scale.Cast<double>().ToArray();
+                    if (Math.Abs(vals[0] - 1) > 0.001 || Math.Abs(vals[1] - 1) > 0.001 || Math.Abs(vals[2] - 1) > 0.001)
+                        parts.Add($"scale:({vals[0]:F2},{vals[1]:F2},{vals[2]:F2})");
+                }
+                if (parts.Count > 0)
+                    System.Console.WriteLine($"{indent}   {string.Join("; ", parts)}");
+            }
+            
+            if (node.TryGetValue("children", out var childrenObj2) && childrenObj2 is List<object> childrenList)
+            {
+                foreach (var child in childrenList)
+                {
+                    if (child is int childIndex)
+                    {
+                        LogNodeRecursive(childIndex, depth + 1);
+                    }
+                }
+            }
         }
 
         private static void WriteFloat32(byte[] buffer, ref int offset, float value)
