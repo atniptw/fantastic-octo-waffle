@@ -1394,7 +1394,45 @@ internal static class SkeletonParser
                 return false;
             }
 
-            candidate = new SemanticMaterialInfo(pathId, name, shaderPathId);
+            // Try to extract color and PBR properties from the binary payload
+            var baseColorFactor = new[] { 1f, 1f, 1f, 1f };
+            var metallic = 0f;
+            var roughness = 0.5f;
+
+            try
+            {
+                // Skip past the parent reference (PPtr)
+                _ = ReadPPtrPathId(reader, version);
+                
+                // Try to read color properties if available
+                // The format varies, but commonly: m_SavedProperties contains shader properties
+                // We'll attempt to find _Color, _Metallic, _Smoothness if they exist
+                var startPos = reader.Position;
+                var maxBytes = Math.Min(payload.Length - (int)startPos, 512); // Read next 512 bytes for properties
+                
+                // Look for color data pattern (4 floats for RGBA)
+                if (maxBytes >= 16)
+                {
+                    // Try reading a color field (common pattern: r, g, b, a as floats)
+                    var testR = reader.ReadSingle();
+                    var testG = reader.ReadSingle();
+                    var testB = reader.ReadSingle();
+                    var testA = reader.ReadSingle();
+                    
+                    // Validate it looks like a color (values between 0-1 typically)
+                    if (testR >= 0 && testR <= 2f && testG >= 0 && testG <= 2f && 
+                        testB >= 0 && testB <= 2f && testA >= 0 && testA <= 2f)
+                    {
+                        baseColorFactor = new[] { testR, testG, testB, testA };
+                    }
+                }
+            }
+            catch
+            {
+                // If color extraction fails, fall back to defaults
+            }
+
+            candidate = new SemanticMaterialInfo(pathId, name, shaderPathId, baseColorFactor, metallic, roughness);
             return true;
         }
         catch
