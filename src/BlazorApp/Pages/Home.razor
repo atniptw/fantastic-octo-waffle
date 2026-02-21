@@ -40,15 +40,7 @@
 
 		<section class="planner-panel planner-preview">
 			<div class="planner-panel__title">Preview</div>
-			<div class="planner-viewport">
-				<model-viewer
-					id="planner-preview-viewer"
-					class="planner-model-viewer"
-					camera-controls
-					auto-rotate
-					touch-action="pan-y"
-					data-testid="preview-viewer">
-				</model-viewer>
+			<div class="planner-viewport" id="planner-preview-container" data-testid="preview-viewer">
 				@if (!string.IsNullOrWhiteSpace(previewStatusMessage))
 				{
 					<div class="planner-preview__message" data-testid="preview-status">@previewStatusMessage</div>
@@ -82,11 +74,10 @@
 <ModsWizard />
 
 @code {
-	private const string PreviewElementId = "planner-preview-viewer";
+	private const string PreviewContainerId = "planner-preview-container";
 	private const string FilterAll = "ALL";
 	private readonly Dictionary<string, string> selectedByBodyPart = new(StringComparer.OrdinalIgnoreCase);
 	private IJSObjectReference? previewModule;
-	private string? activeBodyPart;
 	private string activeFilter = FilterAll;
 	private bool isClearingDatabase;
 	private string? previewStatusMessage;
@@ -127,9 +118,9 @@
 		}
 
 		previewModule = await JS.InvokeAsync<IJSObjectReference>("import", "./js/previewInterop.js");
-		if (!string.IsNullOrWhiteSpace(activeBodyPart))
+		if (selectedByBodyPart.Count > 0)
 		{
-			await SyncPreviewToCurrentSelectionAsync();
+			await SyncPreviewToAllSelectionsAsync();
 		}
 	}
 
@@ -160,51 +151,41 @@
 		if (isChecked)
 		{
 			selectedByBodyPart[entry.BodyPart] = entry.Sha256;
-			activeBodyPart = entry.BodyPart;
-			await SyncPreviewToCurrentSelectionAsync();
-			return;
 		}
-
-		if (IsSelected(entry))
+		else if (IsSelected(entry))
 		{
 			selectedByBodyPart.Remove(entry.BodyPart);
-			if (string.Equals(activeBodyPart, entry.BodyPart, StringComparison.OrdinalIgnoreCase))
-			{
-				activeBodyPart = null;
-			}
 		}
 
-		await SyncPreviewToCurrentSelectionAsync();
+		await SyncPreviewToAllSelectionsAsync();
 	}
 
-	private async Task SyncPreviewToCurrentSelectionAsync()
+	private async Task SyncPreviewToAllSelectionsAsync()
 	{
 		if (previewModule is null)
 		{
 			return;
 		}
 
-		if (string.IsNullOrWhiteSpace(activeBodyPart))
+		if (selectedByBodyPart.Count == 0)
 		{
-			await previewModule.InvokeVoidAsync("clearPreview", PreviewElementId);
+			await previewModule.InvokeVoidAsync("clearAllPreviews", PreviewContainerId);
 			previewStatusMessage = "Select an item to preview.";
 			await InvokeAsync(StateHasChanged);
 			return;
 		}
 
-		var selectedEntry = GetSelectedEntry(activeBodyPart);
-		if (selectedEntry is null)
+		var selectedAssets = selectedByBodyPart.Values.ToList();
+		var previewResult = await previewModule.InvokeAsync<PreviewResult>("previewMultipleAssets", PreviewContainerId, selectedAssets);
+		if (previewResult.Success)
 		{
-			await previewModule.InvokeVoidAsync("clearPreview", PreviewElementId);
-			previewStatusMessage = "Select an item to preview.";
-			await InvokeAsync(StateHasChanged);
-			return;
+			var selectionSummary = string.Join(" + ", selectedByBodyPart.Keys.OrderBy(k => k, StringComparer.OrdinalIgnoreCase));
+			previewStatusMessage = $"Outfit: {selectionSummary}";
 		}
-
-		var previewResult = await previewModule.InvokeAsync<PreviewResult>("previewAsset", PreviewElementId, selectedEntry.Sha256);
-		previewStatusMessage = previewResult.Success
-			? $"Previewing {DecorationNameFormatter.GetDisplayName(selectedEntry.FilePath)}"
-			: previewResult.Reason ?? "Preview unavailable for selected item.";
+		else
+		{
+			previewStatusMessage = previewResult.Reason ?? "Preview unavailable for selected items.";
+		}
 		await InvokeAsync(StateHasChanged);
 	}
 
@@ -224,13 +205,12 @@
 	private async Task ClearSelectionsAsync()
 	{
 		selectedByBodyPart.Clear();
-		activeBodyPart = null;
 		previewStatusMessage = DecorationIndex.Entries.Count == 0
 			? "Load mods to start previewing items."
 			: "Select an item to preview.";
 		if (previewModule is not null)
 		{
-			await previewModule.InvokeVoidAsync("clearPreview", PreviewElementId);
+			await previewModule.InvokeVoidAsync("clearAllPreviews", PreviewContainerId);
 		}
 	}
 
@@ -240,11 +220,10 @@
 		await AssetStore.DeleteDatabaseAsync();
 		await DecorationIndex.ReloadPersistedAsync();
 		selectedByBodyPart.Clear();
-		activeBodyPart = null;
 		activeFilter = FilterAll;
 		if (previewModule is not null)
 		{
-			await previewModule.InvokeVoidAsync("clearPreview", PreviewElementId);
+			await previewModule.InvokeVoidAsync("clearAllPreviews", PreviewContainerId);
 		}
 		previewStatusMessage = "Library cleared. Load mods to start previewing items.";
 		isClearingDatabase = false;
@@ -254,16 +233,9 @@
 	{
 		if (BodyPartGroups.Count == 0)
 		{
-			activeBodyPart = null;
 			activeFilter = FilterAll;
 			previewStatusMessage = "Load mods to start previewing items.";
 			return;
-		}
-
-		if (!string.IsNullOrWhiteSpace(activeBodyPart)
-			&& !BodyPartGroups.Contains(activeBodyPart, StringComparer.OrdinalIgnoreCase))
-		{
-			activeBodyPart = null;
 		}
 
 		if (!string.Equals(activeFilter, FilterAll, StringComparison.OrdinalIgnoreCase)
@@ -280,7 +252,7 @@
 		RefreshSelectionAndStatusFromEntries();
 		_ = InvokeAsync(async () =>
 		{
-			await SyncPreviewToCurrentSelectionAsync();
+			await SyncPreviewToAllSelectionsAsync();
 			StateHasChanged();
 		});
 	}
@@ -294,7 +266,7 @@
 			return;
 		}
 
-		await previewModule.InvokeVoidAsync("clearPreview", PreviewElementId);
+		await previewModule.InvokeVoidAsync("clearAllPreviews", PreviewContainerId);
 		await previewModule.DisposeAsync();
 	}
 

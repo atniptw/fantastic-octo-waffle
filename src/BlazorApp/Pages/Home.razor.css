@@ -126,6 +126,24 @@
     background: transparent;
 }
 
+.planner-model-viewer--multi {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0.85;
+    z-index: 1;
+}
+
+.planner-model-viewer--multi:nth-child(2) {
+    opacity: 0.75;
+}
+
+.planner-model-viewer--multi:nth-child(3) {
+    opacity: 0.65;
+}
+
 .planner-preview__message {
     position: absolute;
     left: 0.8rem;

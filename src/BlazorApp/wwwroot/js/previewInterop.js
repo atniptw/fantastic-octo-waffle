@@ -1,6 +1,7 @@
 import { getAssetById } from "./assetStore.js";
 
 const previewUrlsByElement = new Map();
+const previewViewersInContainer = new Map();
 let modelViewerLoadPromise;
 
 function log(level, message, details = null) {
@@ -163,4 +164,109 @@ export function clearPreview(elementId) {
 
   revokePreviewUrl(elementId);
   log("info", "preview cleared", { elementId });
+}
+
+export async function previewMultipleAssets(containerId, assetIds) {
+  log("info", "previewMultipleAssets start", { containerId, assetCount: assetIds?.length ?? 0 });
+
+  const container = getElement(containerId);
+  if (!container) {
+    log("error", "preview container not found", { containerId });
+    return buildResult(false, "Preview container not found.");
+  }
+
+  const modelViewerReady = await ensureModelViewerLoaded();
+  if (!modelViewerReady) {
+    clearAllPreviews(containerId);
+    log("warn", "model-viewer failed to load");
+    return buildResult(false, "Preview renderer failed to load.");
+  }
+
+  if (!assetIds || assetIds.length === 0) {
+    clearAllPreviews(containerId);
+    log("info", "no assets to preview");
+    return buildResult(false, "No assets selected.");
+  }
+
+  clearAllPreviews(containerId);
+
+  const loadedViewers = [];
+  const failedAssets = [];
+
+  for (const assetId of assetIds) {
+    const asset = await getAssetById(assetId);
+    if (!asset?.glb) {
+      log("warn", "asset has no GLB payload", { assetId });
+      failedAssets.push(assetId);
+      continue;
+    }
+
+    const glbBytes = asset.glb instanceof ArrayBuffer
+      ? asset.glb
+      : asset.glb.buffer instanceof ArrayBuffer
+        ? asset.glb.buffer.slice(asset.glb.byteOffset, asset.glb.byteOffset + asset.glb.byteLength)
+        : null;
+
+    if (!glbBytes) {
+      log("warn", "asset GLB payload invalid", { assetId });
+      failedAssets.push(assetId);
+      continue;
+    }
+
+    const glbJson = parseGlbJson(glbBytes);
+    if (!hasRenderableMesh(glbJson)) {
+      const warning = extractConversionWarning(glbJson);
+      log("warn", "GLB has no renderable mesh", { assetId, warning });
+      failedAssets.push(assetId);
+      continue;
+    }
+
+    const blob = new Blob([glbBytes], { type: "model/gltf-binary" });
+    const url = URL.createObjectURL(blob);
+
+    const viewer = document.createElement("model-viewer");
+    viewer.setAttribute("camera-controls", "");
+    viewer.setAttribute("auto-rotate", "");
+    viewer.setAttribute("touch-action", "pan-y");
+    viewer.className = "planner-model-viewer planner-model-viewer--multi";
+    viewer.src = url;
+
+    container.appendChild(viewer);
+    loadedViewers.push({ viewer, url, assetId });
+    previewUrlsByElement.set(assetId, url);
+  }
+
+  previewViewersInContainer.set(containerId, loadedViewers);
+
+  if (loadedViewers.length === 0) {
+    log("warn", "no valid assets to preview", { assetIds, failedAssets });
+    return buildResult(false, "No valid assets could be loaded for preview.");
+  }
+
+  const successMessage = loadedViewers.length === assetIds.length
+    ? `Loaded ${loadedViewers.length} asset(s).`
+    : `Loaded ${loadedViewers.length} of ${assetIds.length} asset(s) (${failedAssets.length} failed).`;
+
+  log("info", "previewMultipleAssets success", { loadedCount: loadedViewers.length, failedCount: failedAssets.length });
+  return buildResult(true, successMessage);
+}
+
+export function clearAllPreviews(containerId) {
+  const container = getElement(containerId);
+  if (!container) {
+    log("warn", "preview container not found for clear", { containerId });
+    return;
+  }
+
+  const viewers = previewViewersInContainer.get(containerId);
+  if (viewers) {
+    for (const { viewer, url, assetId } of viewers) {
+      viewer.remove();
+      URL.revokeObjectURL(url);
+      previewUrlsByElement.delete(assetId);
+    }
+    previewViewersInContainer.delete(containerId);
+  }
+
+  log("info", "all previews cleared", { containerId });
 }
