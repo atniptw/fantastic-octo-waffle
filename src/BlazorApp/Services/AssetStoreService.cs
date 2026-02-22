@@ -27,6 +27,12 @@ public sealed class AssetStoreService : IAsyncDisposable
         return assets;
     }
 
+    public async Task<StoredAsset?> GetAssetByIdAsync(string id, CancellationToken cancellationToken = default)
+    {
+        var module = await GetModuleAsync();
+        return await module.InvokeAsync<StoredAsset?>("getAssetById", cancellationToken, id);
+    }
+
     public async Task UpsertUnityPackageAsync(UnityPackageInventory inventory, CancellationToken cancellationToken = default)
     {
         var module = await GetModuleAsync();

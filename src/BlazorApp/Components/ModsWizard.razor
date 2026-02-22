@@ -1,7 +1,6 @@
 @using System.Linq
 @inject DecorationIndexService DecorationIndex
 @inject ModalStateService ModalState
-@inject AssetStoreService AssetStore
 @implements IDisposable
 
 <div class="mods-modal-backdrop @(ModalState.IsOpen ? "show" : string.Empty)" data-testid="mods-modal" aria-hidden="@(!ModalState.IsOpen)">
@@ -9,59 +8,46 @@
         <header class="mods-modal__header">
             <div>
                 <div class="mods-modal__title">Load mods</div>
-                <div class="mods-modal__step">Step @currentStep of 2</div>
             </div>
             <button class="btn btn-outline-secondary" type="button" @onclick="CloseModal">Close</button>
         </header>
         <div class="mods-modal__content">
-            @if (currentStep == StepUpload)
-            {
-                <div class="dropzone" data-testid="wizard-step-1">
-                    <div class="dropzone__hint">Drop mod file here</div>
-                    <InputFile OnChange="HandleFileSelected" class="dropzone__input" data-testid="mod-file-input" />
-                    <div class="dropzone__status @(scanSucceeded ? "success" : string.Empty)" data-testid="mod-file-status">
-                        @if (currentFile is null)
-                        {
-                            <span>Status: No file selected</span>
-                        }
-                        else if (isScanning)
-                        {
-                            <span>Scan: in progress...</span>
-                        }
-                        else if (!string.IsNullOrWhiteSpace(scanStatus))
-                        {
-                            <span>@scanStatus</span>
-                        }
-                        else
-                        {
-                            <span>Scan: pending</span>
-                        }
-                    </div>
-                </div>
-                @if (DecorationIndex.LastUnityPackageInventory is not null && DecorationIndex.LastUnityPackageInventory.Anchors.Count > 0)
-                {
-                    <div class="wizard-list" data-testid="unitypackage-anchors">
-                        <div class="wizard-list__title">Anchor points: @DecorationIndex.LastUnityPackageInventory.Anchors.Count found</div>
-                    </div>
-                }
-            }
-            else
-            {
-                <div class="wizard-list" data-testid="wizard-step-2">
-                    <div class="wizard-list__title">Files grouped by body part</div>
-                    @if (DecorationIndex.Entries.Count == 0 && DecorationIndex.LastUnityPackageInventory is not null)
+            <div class="dropzone" data-testid="wizard-step-1">
+                <div class="dropzone__hint">Drop mod file here (.zip for decorations, .unitypackage for avatar)</div>
+                <InputFile OnChange="HandleFileSelected" class="dropzone__input" data-testid="mod-file-input" />
+                <div class="dropzone__status @(scanSucceeded ? "success" : string.Empty)" data-testid="mod-file-status">
+                    @if (currentFile is null)
                     {
-                        <div style="padding: 1rem; color: #666;">
-                            <p>Unitypackage uploaded with @DecorationIndex.LastUnityPackageInventory.Anchors.Count anchor point(s).</p>
-                            <p>Ready to close modal or load additional mod files.</p>
-                        </div>
+                        <span>Status: No file selected</span>
                     }
-                    else if (DecorationIndex.Entries.Count == 0)
+                    else if (isScanning)
                     {
-                        <div style="padding: 1rem; color: #999;">No files found.</div>
+                        <span>Scanning and saving...</span>
+                    }
+                    else if (!string.IsNullOrWhiteSpace(scanStatus))
+                    {
+                        <span>@scanStatus</span>
                     }
                     else
                     {
+                        <span>Ready to upload</span>
+                    }
+                </div>
+            </div>
+
+            @if (scanSucceeded)
+            {
+                @if (DecorationIndex.LastUnityPackageInventory is not null && DecorationIndex.LastUnityPackageInventory.Anchors.Count > 0)
+                {
+                    <div class="wizard-list" data-testid="unitypackage-anchors">
+                        <div class="wizard-list__title">✓ Avatar saved with @DecorationIndex.LastUnityPackageInventory.Anchors.Count anchor point(s)</div>
+                    </div>
+                }
+
+                @if (DecorationIndex.Entries.Count > 0)
+                {
+                    <div class="wizard-list" data-testid="wizard-step-2">
+                        <div class="wizard-list__title">✓ Decorations saved (@DecorationIndex.Entries.Count items)</div>
                         @foreach (var group in DecorationIndex.Entries
                             .GroupBy(entry => entry.BodyPart)
                             .OrderBy(group => group.Key))
@@ -77,64 +63,28 @@
                                                     <div class="wizard-file__name">@DecorationNameFormatter.GetDisplayName(entry.FilePath)</div>
                                                     <div class="wizard-file__meta">@FormatFileSize(entry.SizeBytes)</div>
                                                 </div>
-                                                <span class="wizard-status @GetStatusClass(entry)">@GetStatusLabel(entry)</span>
                                             </div>
                                         </li>
                                     }
                                 </ul>
                             </div>
                         }
-                    }
-                </div>
+                    </div>
+                }
             }
         </div>
         <footer class="mods-modal__footer">
-            @if (currentStep == StepUpload)
-            {
-                <button class="btn btn-outline-secondary" type="button" @onclick="GoBack" disabled data-testid="wizard-back">Back</button>
-                <button class="btn btn-primary" type="button" @onclick="GoNext" disabled="@(!CanProceed)" data-testid="wizard-next">Next</button>
-            }
-            else
-            {
-                if (processingComplete)
-                {
-                    <button class="btn btn-outline-secondary" type="button" @onclick="ResetToUpload" data-testid="wizard-reset">Load new mod</button>
-                }
-                else
-                {
-                    <button class="btn btn-outline-secondary" type="button" @onclick="GoBack" disabled="@isProcessing" data-testid="wizard-back">Back</button>
-                }
-
-                if (processingComplete)
-                {
-                    <button class="btn btn-primary" type="button" @onclick="CloseModal" data-testid="wizard-close">Close</button>
-                }
-                else
-                {
-                    <button class="btn btn-primary" type="button" @onclick="ProcessAllAsync" disabled="@(!CanProcess)" data-testid="wizard-process">@(isProcessing ? "Processing..." : "Process")</button>
-                }
-            }
+            <button class="btn btn-outline-secondary" type="button" @onclick="ResetUpload" disabled="@isScanning" data-testid="wizard-reset">Load another file</button>
+            <button class="btn btn-primary" type="button" @onclick="CloseModal" data-testid="wizard-close">Done</button>
         </footer>
     </div>
 </div>
 
 @code {
-    private const int StepUpload = 1;
-    private const int StepReview = 2;
-    private int currentStep = StepUpload;
     private IBrowserFile? currentFile;
     private bool isScanning;
     private bool scanSucceeded;
     private string? scanStatus;
-    private bool isProcessing;
-    private bool processingComplete;
-    private readonly Dictionary<string, ProcessStatus> processingStatus = new();
-    private const int ProcessingDelayMs = 120;
-
-    private bool CanProceed => (DecorationIndex.LastScanSucceeded && DecorationIndex.Entries.Count > 0)
-        || (DecorationIndex.LastUnityPackageScanSucceeded && DecorationIndex.LastUnityPackageInventory is not null);
-    private bool CanProcess => !isProcessing && (DecorationIndex.Entries.Count > 0
-        || (DecorationIndex.LastUnityPackageScanSucceeded && DecorationIndex.LastUnityPackageInventory is not null));
 
     protected override void OnInitialized()
     {
@@ -146,7 +96,7 @@
         currentFile = args.File;
         isScanning = true;
         scanSucceeded = false;
-        scanStatus = "Scan: starting...";
+        scanStatus = "Scanning and saving...";
 
         try
         {
@@ -162,22 +112,21 @@
             {
                 await DecorationIndex.ScanUnityPackageAsync(fileBytes, currentFile.Name);
                 scanSucceeded = DecorationIndex.LastUnityPackageScanSucceeded;
-                scanStatus = DecorationIndex.LastUnityPackageScanMessage ?? "Scan complete.";
+                scanStatus = DecorationIndex.LastUnityPackageScanMessage ?? "Avatar saved successfully.";
             }
             else
             {
                 await DecorationIndex.ScanZipAsync(fileBytes, currentFile.Name);
                 scanSucceeded = DecorationIndex.LastScanSucceeded;
-                scanStatus = DecorationIndex.LastScanMessage ?? "Scan complete.";
+                scanStatus = DecorationIndex.LastScanMessage ?? "Decorations saved successfully.";
             }
         }
         catch (Exception ex)
         {
             scanSucceeded = false;
-            scanStatus = $"Scan failed: {ex.Message}";
+            scanStatus = $"Save failed: {ex.Message}";
         }
 
-        ResetProcessingState();
         isScanning = false;
     }
 
@@ -212,132 +161,26 @@
 
     private void CloseModal()
     {
-        ResetProcessingState();
-        currentStep = StepUpload;
-        currentFile = null;
-        isScanning = false;
-        scanSucceeded = false;
-        scanStatus = null;
+        ResetUpload();
         ModalState.Close();
     }
 
-    private void GoNext()
+    private void ResetUpload()
     {
-        if (currentStep == StepReview)
-        {
-            CloseModal();
-            return;
-        }
-
-        if (CanProceed)
-        {
-            currentStep = StepReview;
-        }
-    }
-
-    private void GoBack()
-    {
-        if (currentStep == StepReview)
-        {
-            currentStep = StepUpload;
-        }
-    }
-
-    private void ResetToUpload()
-    {
-        ResetProcessingState();
-        currentStep = StepUpload;
         currentFile = null;
         isScanning = false;
         scanSucceeded = false;
         scanStatus = null;
-    }
-
-    private void ResetProcessingState()
-    {
-        isProcessing = false;
-        processingComplete = false;
-        processingStatus.Clear();
-    }
-
-    private string GetStatusKey(DecorationEntry entry)
-        => entry.FilePath;
-
-    private ProcessStatus GetStatus(DecorationEntry entry)
-    {
-        var key = GetStatusKey(entry);
-        return processingStatus.TryGetValue(key, out var status) ? status : ProcessStatus.Queued;
-    }
-
-    private string GetStatusLabel(DecorationEntry entry)
-        => GetStatus(entry).ToString();
-
-    private string GetStatusClass(DecorationEntry entry)
-        => GetStatus(entry) switch
-        {
-            ProcessStatus.Processing => "wizard-status--processing",
-            ProcessStatus.Done => "wizard-status--done",
-            ProcessStatus.Failed => "wizard-status--failed",
-            _ => "wizard-status--queued"
-        };
-
-    private async Task ProcessAllAsync()
-    {
-        isProcessing = true;
-        processingComplete = false;
-
-        foreach (var entry in DecorationIndex.Entries.OrderBy(item => item.FilePath))
-        {
-            var key = GetStatusKey(entry);
-            processingStatus[key] = ProcessStatus.Queued;
-        }
-
-        foreach (var entry in DecorationIndex.Entries.OrderBy(item => item.FilePath))
-        {
-            var key = GetStatusKey(entry);
-            processingStatus[key] = ProcessStatus.Processing;
-            await InvokeAsync(StateHasChanged);
-
-            try
-            {
-                var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-                await Task.Delay(ProcessingDelayMs);
-                await AssetStore.TouchProcessedAsync(entry.Sha256, now, now);
-                processingStatus[key] = ProcessStatus.Done;
-            }
-            catch
-            {
-                processingStatus[key] = ProcessStatus.Failed;
-            }
-
-            await InvokeAsync(StateHasChanged);
-        }
-
-        isProcessing = false;
-        processingComplete = true;
     }
 
     private void HandleModalChange()
     {
-        if (ModalState.IsOpen && currentStep != StepUpload)
-        {
-            currentStep = StepUpload;
-        }
-
         _ = InvokeAsync(StateHasChanged);
     }
 
     public void Dispose()
     {
         ModalState.OnChange -= HandleModalChange;
-    }
-
-    private enum ProcessStatus
-    {
-        Queued,
-        Processing,
-        Done,
-        Failed
     }
 
     private enum FileType

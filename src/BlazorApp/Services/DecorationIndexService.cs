@@ -176,23 +176,17 @@ public sealed class DecorationIndexService
 
             await _assetStore.UpsertUnityPackageAsync(inventory, cancellationToken);
             
-            var avatarError = TryExtractAvatarGlb(context, out var avatarGlbBytes);
-            if (avatarError is null && avatarGlbBytes is not null && avatarGlbBytes.Length > 0)
-            {
-                var avatar = new StoredAvatar(
-                    sha256 + "_avatar",
-                    Path.GetFileName(fileName),
-                    avatarGlbBytes,
-                    avatarGlbBytes.LongLength,
-                    now,
-                    now);
-                await _assetStore.UpsertAvatarAsync(avatar, cancellationToken);
-                LastAvatarInventory = new AvatarInventory(avatar.Id);
-            }
-            else
-            {
-                LastAvatarInventory = null;
-            }
+            // Store raw .unitypackage bytes (not GLB) for on-the-fly composition
+            // CompositionService will parse and merge decorations as needed
+            var avatar = new StoredAvatar(
+                sha256 + "_avatar",
+                Path.GetFileName(fileName),
+                fileBytes,  // Store raw .unitypackage bytes
+                fileBytes.LongLength,
+                now,
+                now);
+            await _assetStore.UpsertAvatarAsync(avatar, cancellationToken);
+            LastAvatarInventory = new AvatarInventory(avatar.Id);
 
             LastUnityPackageInventory = inventory;
             LastUnityPackageScanSucceeded = true;
@@ -318,16 +312,16 @@ public sealed class DecorationIndexService
 
     private async Task PersistEntryAsync(string modId, ReadEntryResult result, CancellationToken cancellationToken)
     {
-        var conversionContext = new BaseAssetsContext();
-        var glbBytes = _hhhParser.ConvertToGlb(result.Bytes, conversionContext);
+        // Store raw .hhh bytes, not GLB
+        // Decorations will be merged into avatar context and rendered on-the-fly in ModsWizard
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         var asset = new StoredAsset(
             result.Entry.Sha256,
             modId,
             DecorationNameFormatter.GetDisplayName(result.Entry.FilePath),
-            glbBytes,
+            result.Bytes,  // Store raw .hhh binary
             null,
-            glbBytes.LongLength,
+            result.Bytes.LongLength,
             now,
             now,
             now,

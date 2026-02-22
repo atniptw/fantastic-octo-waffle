@@ -119,7 +119,17 @@ export async function getAssetById(id) {
   const tx = db.transaction(STORE_ASSETS, "readonly");
   const store = tx.objectStore(STORE_ASSETS);
 
-  return runRequest(store.get(id));
+  const result = await runRequest(store.get(id));
+  if (!result) {
+    return null;
+  }
+
+  // Convert ArrayBuffers to Uint8Array for Blazor interop
+  return {
+    ...result,
+    glb: result.glb ? new Uint8Array(result.glb) : null,
+    thumbnail: result.thumbnail ? new Uint8Array(result.thumbnail) : null
+  };
 }
 
 export async function touchAsset(id, processedAt, lastUsed) {
@@ -205,7 +215,11 @@ export async function getAvatarById(id) {
     return null;
   }
 
-  return result;
+  // Convert ArrayBuffer to Uint8Array for Blazor interop
+  return {
+    ...result,
+    glb: result.glb ? new Uint8Array(result.glb) : null
+  };
 }
 
 export async function getAllAvatarIds() {

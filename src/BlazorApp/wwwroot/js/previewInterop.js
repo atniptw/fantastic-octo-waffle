@@ -325,3 +325,154 @@ export function clearAllPreviews(containerId) {
 
   log("info", "all previews cleared", { containerId });
 }
+
+/**
+ * Display a single merged GLB (avatar + decorations composed on-the-fly)
+ */
+export async function previewMergedGlb(containerId, glbBytes) {
+  log("info", "previewMergedGlb start", { containerId, byteLength: glbBytes?.length });
+
+  const container = getElement(containerId);
+  if (!container) {
+    log("error", "preview container not found", { containerId });
+    return buildResult(false, "Preview container not found.");
+  }
+
+  const modelViewerReady = await ensureModelViewerLoaded();
+  if (!modelViewerReady) {
+    clearAllPreviews(containerId);
+    log("warn", "model-viewer failed to load");
+    return buildResult(false, "Preview renderer failed to load.");
+  }
+
+  if (!glbBytes || glbBytes.length === 0) {
+    clearAllPreviews(containerId);
+    log("warn", "no GLB bytes provided");
+    return buildResult(false, "No GLB data provided.");
+  }
+
+  // Convert to ArrayBuffer if needed
+  const glbArrayBuffer = glbBytes instanceof ArrayBuffer
+    ? glbBytes
+    : glbBytes.buffer instanceof ArrayBuffer
+      ? glbBytes.buffer.slice(glbBytes.byteOffset, glbBytes.byteOffset + glbBytes.byteLength)
+      : null;
+
+  if (!glbArrayBuffer) {
+    clearAllPreviews(containerId);
+    log("warn", "GLB bytes invalid");
+    return buildResult(false, "Invalid GLB data.");
+  }
+
+  const glbJson = parseGlbJson(glbArrayBuffer);
+  if (!hasRenderableMesh(glbJson)) {
+    clearAllPreviews(containerId);
+    const warning = extractConversionWarning(glbJson);
+    log("warn", "merged GLB has no renderable mesh", { warning });
+    return buildResult(
+      false,
+      warning ?? "GLB has no renderable mesh yet (parser decode incomplete)."
+    );
+  }
+
+  // Clear any existing previews first
+  clearAllPreviews(containerId);
+
+  // Create blob and model-viewer
+  const blob = new Blob([glbArrayBuffer], { type: "model/gltf-binary" });
+  const url = URL.createObjectURL(blob);
+
+  const viewer = document.createElement("model-viewer");
+  viewer.setAttribute("camera-controls", "");
+  viewer.setAttribute("auto-rotate", "");
+  viewer.setAttribute("touch-action", "pan-y");
+  viewer.style.position = "absolute";
+  viewer.style.inset = "0";
+  viewer.style.width = "100%";
+  viewer.style.height = "100%";
+  viewer.style.background = "transparent";
+  viewer.className = "planner-model-viewer planner-model-viewer--merged";
+  viewer.src = url;
+
+  container.appendChild(viewer);
+  previewViewersInContainer.set(containerId, [{ viewer, url, assetId: "merged", isAvatar: false }]);
+  previewUrlsByElement.set("merged", url);
+
+  log("info", "previewMergedGlb success");
+  return buildResult(true);
+}
+
+/**
+ * Display avatar-only preview (from stored raw .unitypackage bytes converted to GLB)
+ */
+export async function previewAvatarOnly(containerId, avatarId) {
+  log("info", "previewAvatarOnly start", { containerId, avatarId });
+
+  const container = getElement(containerId);
+  if (!container) {
+    log("error", "preview container not found", { containerId });
+    return buildResult(false, "Preview container not found.");
+  }
+
+  const modelViewerReady = await ensureModelViewerLoaded();
+  if (!modelViewerReady) {
+    clearAllPreviews(containerId);
+    log("warn", "model-viewer failed to load");
+    return buildResult(false, "Preview renderer failed to load.");
+  }
+
+  const avatar = await getAvatarById(avatarId);
+  if (!avatar?.glb) {
+    clearAllPreviews(containerId);
+    log("warn", "avatar has no GLB payload", { avatarId });
+    return buildResult(false, "Avatar has no stored GLB data.");
+  }
+
+  const glbBytes = avatar.glb instanceof ArrayBuffer
+    ? avatar.glb
+    : avatar.glb.buffer instanceof ArrayBuffer
+      ? avatar.glb.buffer.slice(avatar.glb.byteOffset, avatar.glb.byteOffset + avatar.glb.byteLength)
+      : null;
+
+  if (!glbBytes) {
+    clearAllPreviews(containerId);
+    log("warn", "avatar GLB payload invalid", { avatarId });
+    return buildResult(false, "Stored GLB payload is invalid.");
+  }
+
+  const glbJson = parseGlbJson(glbBytes);
+  if (!hasRenderableMesh(glbJson)) {
+    clearAllPreviews(containerId);
+    const warning = extractConversionWarning(glbJson);
+    log("warn", "avatar GLB has no renderable mesh", { avatarId, warning });
+    return buildResult(
+      false,
+      warning ?? "Avatar GLB has no renderable mesh yet (parser decode incomplete)."
+    );
+  }
+
+  // Clear any existing previews first
+  clearAllPreviews(containerId);
+
+  const blob = new Blob([glbBytes], { type: "model/gltf-binary" });
+  const url = URL.createObjectURL(blob);
+
+  const viewer = document.createElement("model-viewer");
+  viewer.setAttribute("camera-controls", "");
+  viewer.setAttribute("auto-rotate", "");
+  viewer.setAttribute("touch-action", "pan-y");
+  viewer.style.position = "absolute";
+  viewer.style.inset = "0";
+  viewer.style.width = "100%";
+  viewer.style.height = "100%";
+  viewer.style.background = "transparent";
+  viewer.className = "planner-model-viewer planner-model-viewer--avatar";
+  viewer.src = url;
+
+  container.appendChild(viewer);
+  previewViewersInContainer.set(containerId, [{ viewer, url, assetId: avatarId, isAvatar: true }]);
+  previewUrlsByElement.set(avatarId, url);
+
+  log("info", "previewAvatarOnly success");
+  return buildResult(true);
+}

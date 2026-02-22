@@ -2,6 +2,7 @@
 @layout PlannerLayout
 @inject DecorationIndexService DecorationIndex
 @inject AssetStoreService AssetStore
+@inject CompositionService Composition
 @inject ModalStateService ModalState
 @inject IJSRuntime JS
 @implements IAsyncDisposable
@@ -172,6 +173,8 @@
 			return;
 		}
 
+		Console.WriteLine($"[Home] SyncPreview - avatarId: {avatarId}, selections: {selectedByBodyPart.Count}");
+
 		if (selectedByBodyPart.Count == 0 && string.IsNullOrEmpty(avatarId))
 		{
 			await previewModule.InvokeVoidAsync("clearAllPreviews", PreviewContainerId);
@@ -180,24 +183,63 @@
 			return;
 		}
 
-		var selectedAssets = selectedByBodyPart.Count > 0 ? selectedByBodyPart.Values.ToList() : new List<string>();
-		var previewResult = await previewModule.InvokeAsync<PreviewResult>("previewMultipleAssets", PreviewContainerId, selectedAssets, avatarId);
-		if (previewResult.Success)
+		try
 		{
-			if (selectedByBodyPart.Count > 0)
+			// Generate merged GLB using CompositionService
+			byte[]? mergedGlbBytes = null;
+			if (!string.IsNullOrEmpty(avatarId) && selectedByBodyPart.Count > 0)
 			{
-				var selectionSummary = string.Join(" + ", selectedByBodyPart.Keys.OrderBy(k => k, StringComparer.OrdinalIgnoreCase));
-				previewStatusMessage = $"Outfit: {selectionSummary}";
+				Console.WriteLine($"[Home] Composing avatar with decorations");
+				var decorationShas = selectedByBodyPart.Values.ToList();
+				mergedGlbBytes = await Composition.ComposeAvatarWithDecorationsAsync(avatarId, decorationShas);
 			}
 			else if (!string.IsNullOrEmpty(avatarId))
 			{
-				previewStatusMessage = "Avatar loaded.";
+				Console.WriteLine($"[Home] Getting avatar-only GLB");
+				// Get avatar-only GLB
+				mergedGlbBytes = await Composition.GetAvatarGlbAsync(avatarId);
+			}
+
+			Console.WriteLine($"[Home] GLB bytes: {(mergedGlbBytes?.Length ?? 0)}");
+
+			// Display the merged GLB
+			if (mergedGlbBytes is not null && mergedGlbBytes.Length > 0)
+			{
+				var previewResult = await previewModule.InvokeAsync<PreviewResult>("previewMergedGlb", PreviewContainerId, mergedGlbBytes);
+				Console.WriteLine($"[Home] Preview result: {previewResult.Success} - {previewResult.Reason}");
+				if (previewResult.Success)
+				{
+					if (selectedByBodyPart.Count > 0)
+					{
+						var selectionSummary = string.Join(" + ", selectedByBodyPart.Keys.OrderBy(k => k, StringComparer.OrdinalIgnoreCase));
+						previewStatusMessage = $"Outfit: {selectionSummary}";
+					}
+					else
+					{
+						previewStatusMessage = "Avatar loaded.";
+					}
+				}
+				else
+				{
+					previewStatusMessage = previewResult.Reason ?? "Preview unavailable.";
+				}
+			}
+			else
+			{
+				Console.WriteLine($"[Home] No GLB bytes generated");
+				// No avatar or composition failed
+				await previewModule.InvokeVoidAsync("clearAllPreviews", PreviewContainerId);
+				previewStatusMessage = selectedByBodyPart.Count > 0 ? "Load an avatar to preview selections." : "Select an item to preview.";
 			}
 		}
-		else
+		catch (Exception ex)
 		{
-			previewStatusMessage = previewResult.Reason ?? "Preview unavailable for selected items.";
+			Console.WriteLine($"[Home] Preview sync failed: {ex.Message}");
+			Console.WriteLine($"[Home] Stack trace: {ex.StackTrace}");
+			previewStatusMessage = "Preview failed.";
+			await previewModule.InvokeVoidAsync("clearAllPreviews", PreviewContainerId);
 		}
+
 		await InvokeAsync(StateHasChanged);
 	}
 
