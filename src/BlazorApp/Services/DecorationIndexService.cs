@@ -91,6 +91,8 @@ public sealed class DecorationIndexService
             var modId = GetModId(fileName);
             var storageWarnings = new List<string>();
 
+            System.Console.WriteLine($"[DecorationIndexService] Starting scan of {fileName}, modId: {modId}");
+
             foreach (var entry in archive.Entries)
             {
                 if (!IsHhhEntry(entry))
@@ -99,7 +101,8 @@ public sealed class DecorationIndexService
                 }
 
                 var result = await ReadEntryAsync(entry, cancellationToken);
-                _entries.Add(result.Entry);
+               _entries.Add(result.Entry);
+                System.Console.WriteLine($"[DecorationIndexService] Added entry: {result.Entry.FilePath}, SHA: {result.Entry.Sha256}, BodyPart: {result.Entry.BodyPart}");
 
                 try
                 {
@@ -110,6 +113,8 @@ public sealed class DecorationIndexService
                     storageWarnings.Add(ex.Message);
                 }
             }
+
+            System.Console.WriteLine($"[DecorationIndexService] Scan complete. Total entries: {_entries.Count}");
 
             LastScanSucceeded = true;
             LastScanMessage = storageWarnings.Count == 0

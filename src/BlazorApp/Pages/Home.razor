@@ -13,6 +13,11 @@
 	<section class="planner-home">
 		<aside class="planner-panel planner-library">
 			<div class="planner-panel__title">Parts / Mods</div>
+			@{
+				var visibleCount = VisibleEntries.Count;
+				var totalCount = DecorationIndex.Entries.Count;
+				Console.WriteLine($"[Home] Rendering - Total entries: {totalCount}, Visible entries: {visibleCount}, Active filter: {activeFilter}");
+			}
 			@if (VisibleEntries.Count == 0)
 			{
 				<div class="planner-empty">No mods loaded yet.</div>
@@ -23,7 +28,7 @@
 					@foreach (var entry in VisibleEntries)
 					{
 						var isSelected = IsSelected(entry);
-						<label class="planner-entry @(isSelected ? "planner-entry--selected" : string.Empty)">
+						<label class="planner-entry @(isSelected ? "planner-entry--selected" : string.Empty)" data-testid="decoration-entry">
 							<input
 								class="planner-entry__checkbox"
 								type="checkbox"
@@ -118,6 +123,7 @@
 
 	protected override async Task OnAfterRenderAsync(bool firstRender)
 	{
+		Console.WriteLine($"[Home] OnAfterRenderAsync - firstRender: {firstRender}, VisibleEntries: {VisibleEntries.Count}");
 		if (!firstRender)
 		{
 			return;
@@ -303,8 +309,10 @@
 
 	private void HandleDecorationIndexChanged()
 	{
+		Console.WriteLine($"[Home] HandleDecorationIndexChanged - Entries: {DecorationIndex.Entries.Count}, LastAvatarInventory: {DecorationIndex.LastAvatarInventory?.Id}");
 		avatarId = DecorationIndex.LastAvatarInventory?.Id;
 		RefreshSelectionAndStatusFromEntries();
+		StateHasChanged(); // Force immediate UI update
 		_ = InvokeAsync(async () =>
 		{
 			await SyncPreviewToAllSelectionsAsync();

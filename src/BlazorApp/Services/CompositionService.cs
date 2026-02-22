@@ -57,14 +57,20 @@ public sealed class CompositionService
                     continue;  // Skip decorations that can't be loaded
                 }
 
-                // Extract bone name from decoration filename
-                var boneName = ExtractBoneName(decorationAsset.Name);
+                // Extract bone name from decoration source path (which contains the original filename with body part tag)
+                var boneName = ExtractBoneName(decorationAsset.SourcePath);
+                Console.WriteLine($"[CompositionService] Merging decoration '{decorationAsset.Name}' (source: {decorationAsset.SourcePath}) -> bone tag '{boneName ?? "null"}'");
 
                 // Merge decoration into context
-                _hhhParser.TryMergeDecorationIntoContext(
+                var merged = _hhhParser.TryMergeDecorationIntoContext(
                     decorationAsset.Glb,  // Raw .hhh bytes
                     context,
                     boneName);
+                
+                if (!merged)
+                {
+                    Console.WriteLine($"[CompositionService] Failed to merge decoration '{decorationAsset.Name}'");
+                }
             }
 
             // Generate GLB from merged context

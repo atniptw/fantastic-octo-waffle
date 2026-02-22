@@ -80,12 +80,42 @@ public sealed class HhhParser
         long? targetBonePathId = null;
         if (!string.IsNullOrEmpty(targetBoneName))
         {
-            var boneName = targetBoneName.ToLowerInvariant();
-            var targetBone = existingContext.SemanticGameObjects
-                .FirstOrDefault(go => go.Name.Contains(boneName, System.StringComparison.OrdinalIgnoreCase));
+            // Map bone tags to actual anchor point GameObject names used in REPO
+            // Based on MoreHead mod's parentPathMap (last node in each path)
+            var boneAnchorNames = new Dictionary<string, string[]>(System.StringComparer.OrdinalIgnoreCase)
+            {
+                { "head", new[] { "code_head_top", "ANIM HEAD TOP" } },
+                { "neck", new[] { "code_head_bot_side", "ANIM HEAD BOT" } },
+                { "body", new[] { "ANIM BODY TOP SCALE", "ANIM BODY TOP" } },
+                { "hip", new[] { "ANIM BODY BOT" } },
+                { "leftarm", new[] { "code_arm_l", "ANIM ARM L" } },
+                { "rightarm", new[] { "ANIM ARM R SCALE", "code_arm_r" } },
+                { "leftleg", new[] { "ANIM LEG L TOP" } },
+                { "rightleg", new[] { "ANIM LEG R TOP" } }
+            };
+
+            if (!boneAnchorNames.TryGetValue(targetBoneName, out var possibleNames))
+            {
+                return false; // Unknown bone tag
+            }
+
+            // Try to find one of the possible anchor points
+            SemanticGameObjectInfo? targetBone = null;
+            foreach (var anchorName in possibleNames)
+            {
+                targetBone = existingContext.SemanticGameObjects
+                    .FirstOrDefault(go => go.Name.Equals(anchorName, System.StringComparison.OrdinalIgnoreCase));
+                
+                if (targetBone != null)
+                {
+                    System.Console.WriteLine($"[HhhParser] Found anchor point '{anchorName}' for bone tag '{targetBoneName}'");
+                    break;
+                }
+            }
             
             if (targetBone is null)
             {
+                System.Console.WriteLine($"[HhhParser] Failed to find anchor point for bone tag '{targetBoneName}'. Tried: {string.Join(", ", possibleNames)}");
                 return false; // Target bone not found
             }
 
