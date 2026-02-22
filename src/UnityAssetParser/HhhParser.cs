@@ -178,7 +178,13 @@ public sealed class HhhParser
             }
         }
 
-        // Merge other semantic data (meshes, materials, etc.)
+        // Merge other semantic data (meshes, materials, textures, etc.)
+        // These must be merged for colors and textures to render properly
+        foreach (var semanticObject in decorationContext.SemanticObjects)
+        {
+            existingContext.SemanticObjects.Add(semanticObject);
+        }
+
         foreach (var mesh in decorationContext.SemanticMeshes)
         {
             existingContext.SemanticMeshes.Add(mesh);
@@ -198,6 +204,18 @@ public sealed class HhhParser
         {
             existingContext.SemanticMaterials.Add(material);
         }
+
+        foreach (var texture in decorationContext.SemanticTextures)
+        {
+            existingContext.SemanticTextures.Add(texture);
+        }
+
+        foreach (var anchorPoint in decorationContext.SemanticAnchorPoints)
+        {
+            existingContext.SemanticAnchorPoints.Add(anchorPoint);
+        }
+
+        Console.WriteLine($"[HhhParser] Merged decoration - Objects: {decorationContext.SemanticObjects.Count}, Textures: {decorationContext.SemanticTextures.Count}, Materials: {decorationContext.SemanticMaterials.Count}");
 
         return true;
     }
