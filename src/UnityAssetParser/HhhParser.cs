@@ -65,6 +65,8 @@ public sealed class HhhParser
             return false;
         }
 
+        System.Console.WriteLine($"[HhhParser] Parsed decoration - Objects: {decorationContext.SemanticObjects.Count}, GameObjects: {decorationContext.SemanticGameObjects.Count}, Textures: {decorationContext.SemanticTextures.Count}, Materials: {decorationContext.SemanticMaterials.Count}, Meshes: {decorationContext.SemanticMeshes.Count}");
+
         // Find the root decoration GameObject(s) - typically the ones without parents
         var decorationRoots = decorationContext.SemanticTransforms
             .Where(t => !t.ParentPathId.HasValue)
@@ -788,14 +790,40 @@ public sealed class HhhParser
 
             // Export all materials from the context, regardless of MeshRenderer references
             // This ensures .hhh files with embedded materials are included
+            System.Console.WriteLine($"[HhhParser] BuildMaterials: Exporting {_context.SemanticMaterials.Count} materials");
+            
+            // Pre-defined colors for debugging if materials are all white
+            var debugColors = new[] {
+                new[] { 1f, 0f, 0f, 1f }, // Red
+                new[] { 0f, 1f, 0f, 1f }, // Green
+                new[] { 0f, 0f, 1f, 1f }, // Blue
+                new[] { 1f, 1f, 0f, 1f }, // Yellow
+                new[] { 1f, 0f, 1f, 1f }, // Magenta
+                new[] { 0f, 1f, 1f, 1f }  // Cyan
+            };
+            var colorIndex = 0;
+            
             foreach (var material in _context.SemanticMaterials)
             {
+                var baseColor = material.BaseColorFactor;
+                
+                // If material is pure white (default), assign a debug color
+                if (baseColor[0] == 1f && baseColor[1] == 1f && baseColor[2] == 1f)
+                {
+                    baseColor = debugColors[colorIndex % debugColors.Length];
+                    System.Console.WriteLine($"[HhhParser] Material {material.Name}: assigned debug color [{string.Join(",", baseColor)}]");
+                }
+                else
+                {
+                    System.Console.WriteLine($"[HhhParser] Material {material.Name}: using parsed color [{string.Join(",", baseColor)}]");
+                }
+                
                 var materialObject = new Dictionary<string, object>
                 {
                     ["name"] = material.Name,
                     ["pbrMetallicRoughness"] = new Dictionary<string, object>
                     {
-                        ["baseColorFactor"] = material.BaseColorFactor,
+                        ["baseColorFactor"] = baseColor,
                         ["metallicFactor"] = material.Metallic,
                         ["roughnessFactor"] = material.Roughness
                     },
@@ -809,9 +837,10 @@ public sealed class HhhParser
 
                 materialPathIdToIndex[material.PathId] = materials.Count;
                 materials.Add(materialObject);
+                colorIndex++;
             }
 
-            // If no materials were found, add a default white material
+            // If no materials were found, add a default material
             if (materials.Count == 0)
             {
                 materials.Add(new Dictionary<string, object>
@@ -819,7 +848,7 @@ public sealed class HhhParser
                     ["name"] = "DefaultMaterial",
                     ["pbrMetallicRoughness"] = new Dictionary<string, object>
                     {
-                        ["baseColorFactor"] = new[] { 1f, 1f, 1f, 1f },
+                        ["baseColorFactor"] = new[] { 0.8f, 0.8f, 0.8f, 1f }, // Light gray, not white
                         ["metallicFactor"] = 0f,
                         ["roughnessFactor"] = 0.5f
                     },

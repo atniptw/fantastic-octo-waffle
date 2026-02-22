@@ -1424,12 +1424,18 @@ internal static class SkeletonParser
                         testB >= 0 && testB <= 2f && testA >= 0 && testA <= 2f)
                     {
                         baseColorFactor = new[] { testR, testG, testB, testA };
+                        System.Console.WriteLine($"[SkeletonParser] Material {name} (pathId={pathId}): Extracted baseColor=[{testR},{testG},{testB},{testA}]");
+                    }
+                    else
+                    {
+                        System.Console.WriteLine($"[SkeletonParser] Material {name} (pathId={pathId}): Color validation failed [{testR},{testG},{testB},{testA}], using default white");
                     }
                 }
             }
-            catch
+            catch (Exception ex)
             {
                 // If color extraction fails, fall back to defaults
+                System.Console.WriteLine($"[SkeletonParser] Material {name} (pathId={pathId}): Failed to extract color - {ex.Message}");
             }
 
             candidate = new SemanticMaterialInfo(pathId, name, shaderPathId, baseColorFactor, metallic, roughness);

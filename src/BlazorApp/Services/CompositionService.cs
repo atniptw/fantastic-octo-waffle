@@ -48,6 +48,8 @@ public sealed class CompositionService
             var parser = new UnityPackageParser();
             var context = parser.Parse(avatar.Glb);
 
+            Console.WriteLine($"[CompositionService] Avatar context before merge - Materials: {context.SemanticMaterials.Count}, Textures: {context.SemanticTextures.Count}, Objects: {context.SemanticObjects.Count}");
+
             // Merge each selected decoration into context
             foreach (var sha256 in decorationShas)
             {
@@ -72,6 +74,8 @@ public sealed class CompositionService
                     Console.WriteLine($"[CompositionService] Failed to merge decoration '{decorationAsset.Name}'");
                 }
             }
+
+            Console.WriteLine($"[CompositionService] Avatar context after merge - Materials: {context.SemanticMaterials.Count}, Textures: {context.SemanticTextures.Count}, Objects: {context.SemanticObjects.Count}");
 
             // Generate GLB from merged context
             var glbBytes = _hhhParser.ConvertToGlbFromContext(context);
@@ -112,7 +116,7 @@ public sealed class CompositionService
             var parser = new UnityPackageParser();
             var context = parser.Parse(avatar.Glb);
             
-            Console.WriteLine($"[CompositionService] Context parsed: {context.SemanticGameObjects.Count} GameObjects, {context.SemanticMeshes.Count} Meshes");
+            Console.WriteLine($"[CompositionService] Context parsed: {context.SemanticGameObjects.Count} GameObjects, {context.SemanticMeshes.Count} Meshes, {context.SemanticMaterials.Count} Materials, {context.SemanticTextures.Count} Textures");
 
             // Generate GLB from context
             var glbBytes = _hhhParser.ConvertToGlbFromContext(context);
