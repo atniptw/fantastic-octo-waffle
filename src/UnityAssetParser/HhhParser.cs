@@ -33,6 +33,145 @@ public sealed class HhhParser
         return GlbBuilder.BuildFromContext(context);
     }
 
+    /// <summary>
+    /// Parse a .hhh decoration file into an existing context (e.g., skeleton from a .unitypackage).
+    /// This allows decorations to be merged with a skeleton for proper bone-relative positioning.
+    /// </summary>
+    /// <param name="hhhBytes">The .hhh decoration file bytes</param>
+    /// <param name="existingContext">Existing context (skeleton) to merge into</param>
+    /// <param name="targetBoneName">Optional: The skeleton bone to parent the decoration to (e.g., "head", "neck")</param>
+    /// <returns>True if merge successful, false if target bone not found or merge failed</returns>
+    public bool TryMergeDecorationIntoContext(byte[] hhhBytes, BaseAssetsContext existingContext, string? targetBoneName = null)
+    {
+        if (hhhBytes is null || existingContext is null)
+        {
+            return false;
+        }
+
+        // Parse the decoration into a temporary context first
+        var decorationContext = new BaseAssetsContext();
+        try
+        {
+            SkeletonParser.Parse(hhhBytes, "hhh_decoration", decorationContext);
+        }
+        catch
+        {
+            return false;
+        }
+
+        // If no decorations were parsed, fail
+        if (decorationContext.SemanticGameObjects.Count == 0)
+        {
+            return false;
+        }
+
+        // Find the root decoration GameObject(s) - typically the ones without parents
+        var decorationRoots = decorationContext.SemanticTransforms
+            .Where(t => !t.ParentPathId.HasValue)
+            .Where(t => decorationContext.SemanticGameObjects.Any(go => go.PathId == t.GameObjectPathId))
+            .ToList();
+
+        if (decorationRoots.Count == 0)
+        {
+            return false;
+        }
+
+        // Find target bone in skeleton if specified
+        long? targetBonePathId = null;
+        if (!string.IsNullOrEmpty(targetBoneName))
+        {
+            var boneName = targetBoneName.ToLowerInvariant();
+            var targetBone = existingContext.SemanticGameObjects
+                .FirstOrDefault(go => go.Name.Contains(boneName, System.StringComparison.OrdinalIgnoreCase));
+            
+            if (targetBone is null)
+            {
+                return false; // Target bone not found
+            }
+
+            var boneTransform = existingContext.SemanticTransforms
+                .FirstOrDefault(t => t.GameObjectPathId == targetBone.PathId);
+            
+            if (boneTransform is null)
+            {
+                return false;
+            }
+
+            targetBonePathId = boneTransform.PathId;
+        }
+
+        // Merge the decoration context into the existing context
+        foreach (var decorationGameObj in decorationContext.SemanticGameObjects)
+        {
+            existingContext.SemanticGameObjects.Add(decorationGameObj);
+        }
+
+        foreach (var decorationTransform in decorationContext.SemanticTransforms)
+        {
+            var decorationRoot = decorationRoots.FirstOrDefault(r => r.PathId == decorationTransform.PathId);
+            
+            // If this is a root decoration transform and we have a target bone, re-parent it
+            if (decorationRoot != null && targetBonePathId.HasValue)
+            {
+                var newTransform = new SemanticTransformInfo(
+                    decorationTransform.PathId,
+                    decorationTransform.GameObjectPathId,
+                    targetBonePathId, // Parent to target bone instead of null
+                    decorationTransform.ChildrenPathIds,
+                    decorationTransform.LocalPosition,
+                    decorationTransform.LocalRotation,
+                    decorationTransform.LocalScale);
+                
+                // Update target bone's children list to include this decoration
+                var targetBoneTransform = existingContext.SemanticTransforms.FirstOrDefault(t => t.PathId == targetBonePathId);
+                if (targetBoneTransform != null)
+                {
+                    var updatedChildren = new List<long>(targetBoneTransform.ChildrenPathIds) { decorationTransform.PathId };
+                    var updatedBoneTransform = new SemanticTransformInfo(
+                        targetBoneTransform.PathId,
+                        targetBoneTransform.GameObjectPathId,
+                        targetBoneTransform.ParentPathId,
+                        updatedChildren,
+                        targetBoneTransform.LocalPosition,
+                        targetBoneTransform.LocalRotation,
+                        targetBoneTransform.LocalScale);
+                    
+                    existingContext.SemanticTransforms.Remove(targetBoneTransform);
+                    existingContext.SemanticTransforms.Add(updatedBoneTransform);
+                }
+                
+                existingContext.SemanticTransforms.Add(newTransform);
+            }
+            else
+            {
+                existingContext.SemanticTransforms.Add(decorationTransform);
+            }
+        }
+
+        // Merge other semantic data (meshes, materials, etc.)
+        foreach (var mesh in decorationContext.SemanticMeshes)
+        {
+            existingContext.SemanticMeshes.Add(mesh);
+        }
+
+        foreach (var meshFilter in decorationContext.SemanticMeshFilters)
+        {
+            existingContext.SemanticMeshFilters.Add(meshFilter);
+        }
+
+        foreach (var meshRenderer in decorationContext.SemanticMeshRenderers)
+        {
+            existingContext.SemanticMeshRenderers.Add(meshRenderer);
+        }
+
+        foreach (var material in decorationContext.SemanticMaterials)
+        {
+            existingContext.SemanticMaterials.Add(material);
+        }
+
+        return true;
+    }
+
     private static class GlbBuilder
     {
         private static readonly JsonSerializerOptions JsonOptions = new()
