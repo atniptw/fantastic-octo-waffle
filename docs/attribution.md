@@ -127,5 +127,5 @@ Manifest reference:
 
 ### Validation
 - Fixture set used: not started
-- Test command results: partial compile-in enabled for allowlisted vendor subset; full vendor compile still staged.
+- Test command results: partial compile-in enabled for allowlisted vendor subset including endian reader primitives; full vendor compile still staged.
 - Known deltas: unitypackage extraction paths pending follow-up mapping; most vendor code remains compile-excluded until adapter integration phase.

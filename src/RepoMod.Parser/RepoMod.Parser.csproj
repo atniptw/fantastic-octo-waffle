@@ -18,6 +18,8 @@
     <Compile Include="Vendor/AssetStudio/AssetStudio/FileType.cs" />
     <Compile Include="Vendor/AssetStudio/AssetStudio/BuildTarget.cs" />
     <Compile Include="Vendor/AssetStudio/AssetStudio/ClassIDType.cs" />
+    <Compile Include="Vendor/AssetStudio/AssetStudio/EndianBinaryReader.cs" />
+    <Compile Include="Vendor/AssetStudio/AssetStudio/EndianSpanReader.cs" />
     <Compile Include="Vendor/AssetStudio/AssetStudio/EndianType.cs" />
   </ItemGroup>
 
