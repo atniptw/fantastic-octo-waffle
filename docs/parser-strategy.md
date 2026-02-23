@@ -58,6 +58,8 @@ First-batch candidate files are tracked in `CandidateBatch1SourcePaths` in the m
 
 Current extraction status:
 - Batch 1 imported: `BuildTarget.cs`, `ClassIDType.cs`, `FileType.cs`, `ImportHelper.cs`
+- Batch 2 imported: reader primitives (`Endian*`, `FileReader`, `ResourceReader`, `ObjectInfo`, `SerializedFileHeader`, `FileIdentifier`)
+- Batch 3 imported: bundle/decompression path staging (`BundleFile`, `BundleDecompressionHelper`, `StreamFile`, `WebFile`, related options/logger helpers)
 - Vendor source is currently compile-excluded to enable staged adapter integration without breaking builds.
 
 Known scope note:

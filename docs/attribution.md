@@ -85,6 +85,36 @@ Manifest reference:
 	- Local path: `src/RepoMod.Parser/Vendor/AssetStudio/AssetStudio/ResourceReader.cs`
 - Upstream path: `AssetStudio/SerializedFileHeader.cs`
 	- Local path: `src/RepoMod.Parser/Vendor/AssetStudio/AssetStudio/SerializedFileHeader.cs`
+- Upstream path: `AssetStudio/BundleFile.cs`
+	- Local path: `src/RepoMod.Parser/Vendor/AssetStudio/AssetStudio/BundleFile.cs`
+- Upstream path: `AssetStudio/BundleDecompressionHelper.cs`
+	- Local path: `src/RepoMod.Parser/Vendor/AssetStudio/AssetStudio/BundleDecompressionHelper.cs`
+- Upstream path: `AssetStudio/StreamFile.cs`
+	- Local path: `src/RepoMod.Parser/Vendor/AssetStudio/AssetStudio/StreamFile.cs`
+- Upstream path: `AssetStudio/WebFile.cs`
+	- Local path: `src/RepoMod.Parser/Vendor/AssetStudio/AssetStudio/WebFile.cs`
+- Upstream path: `AssetStudio/TempFileStream.cs`
+	- Local path: `src/RepoMod.Parser/Vendor/AssetStudio/AssetStudio/TempFileStream.cs`
+- Upstream path: `AssetStudio/UnityVersion.cs`
+	- Local path: `src/RepoMod.Parser/Vendor/AssetStudio/AssetStudio/UnityVersion.cs`
+- Upstream path: `AssetStudio/ColorConsole.cs`
+	- Local path: `src/RepoMod.Parser/Vendor/AssetStudio/AssetStudio/ColorConsole.cs`
+- Upstream path: `AssetStudio/ColorConsoleHelper.cs`
+	- Local path: `src/RepoMod.Parser/Vendor/AssetStudio/AssetStudio/ColorConsoleHelper.cs`
+- Upstream path: `AssetStudio/ILogger.cs`
+	- Local path: `src/RepoMod.Parser/Vendor/AssetStudio/AssetStudio/ILogger.cs`
+- Upstream path: `AssetStudio/Logger.cs`
+	- Local path: `src/RepoMod.Parser/Vendor/AssetStudio/AssetStudio/Logger.cs`
+- Upstream path: `AssetStudio/Progress.cs`
+	- Local path: `src/RepoMod.Parser/Vendor/AssetStudio/AssetStudio/Progress.cs`
+- Upstream path: `AssetStudio/CustomOptions/CustomBundleOptions.cs`
+	- Local path: `src/RepoMod.Parser/Vendor/AssetStudio/AssetStudio/CustomOptions/CustomBundleOptions.cs`
+- Upstream path: `AssetStudio/CustomOptions/ImportOptions.cs`
+	- Local path: `src/RepoMod.Parser/Vendor/AssetStudio/AssetStudio/CustomOptions/ImportOptions.cs`
+- Upstream path: `AssetStudio/BundleCompression/Oodle/Oodle.cs`
+	- Local path: `src/RepoMod.Parser/Vendor/AssetStudio/AssetStudio/BundleCompression/Oodle/Oodle.cs`
+- Upstream path: `AssetStudio/BundleCompression/SevenZipLzma/SevenZipLzma.cs`
+	- Local path: `src/RepoMod.Parser/Vendor/AssetStudio/AssetStudio/BundleCompression/SevenZipLzma/SevenZipLzma.cs`
 
 ### Excluded Areas Confirmed
 - GUI paths excluded: planned (`AssetStudio.GUI`)
@@ -98,4 +128,4 @@ Manifest reference:
 ### Validation
 - Fixture set used: not started
 - Test command results: pending (batch imported as staged vendor source, excluded from compile by project guard)
-- Known deltas: unitypackage extraction paths pending follow-up mapping
+- Known deltas: unitypackage extraction paths pending follow-up mapping; vendor code remains compile-excluded until adapter integration phase.

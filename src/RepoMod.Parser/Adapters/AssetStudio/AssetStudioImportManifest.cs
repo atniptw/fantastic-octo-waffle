@@ -9,17 +9,32 @@ public static class AssetStudioImportManifest
     public static readonly string[] AllowedSourcePaths =
     [
         "AssetStudio/BuildTarget.cs",
+        "AssetStudio/BundleCompression/Oodle/Oodle.cs",
+        "AssetStudio/BundleCompression/SevenZipLzma/SevenZipLzma.cs",
+        "AssetStudio/BundleDecompressionHelper.cs",
+        "AssetStudio/BundleFile.cs",
         "AssetStudio/ClassIDType.cs",
+        "AssetStudio/ColorConsole.cs",
+        "AssetStudio/ColorConsoleHelper.cs",
+        "AssetStudio/CustomOptions/CustomBundleOptions.cs",
+        "AssetStudio/CustomOptions/ImportOptions.cs",
         "AssetStudio/EndianBinaryReader.cs",
         "AssetStudio/EndianSpanReader.cs",
         "AssetStudio/EndianType.cs",
         "AssetStudio/FileIdentifier.cs",
         "AssetStudio/FileReader.cs",
         "AssetStudio/FileType.cs",
+        "AssetStudio/ILogger.cs",
         "AssetStudio/ImportHelper.cs",
+        "AssetStudio/Logger.cs",
         "AssetStudio/ObjectInfo.cs",
+        "AssetStudio/Progress.cs",
         "AssetStudio/ResourceReader.cs",
-        "AssetStudio/SerializedFileHeader.cs"
+        "AssetStudio/SerializedFileHeader.cs",
+        "AssetStudio/StreamFile.cs",
+        "AssetStudio/TempFileStream.cs",
+        "AssetStudio/UnityVersion.cs",
+        "AssetStudio/WebFile.cs"
     ];
 
     public static readonly string[] CandidateBatch1SourcePaths =
