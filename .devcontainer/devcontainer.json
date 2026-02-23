@@ -18,6 +18,6 @@
   "remoteEnv": {
     "PLAYWRIGHT_BROWSERS_PATH": "/ms-playwright"
   },
-  "forwardPorts": [5000, 5001, 5173],
+  "forwardPorts": [5075, 5000, 5001, 5173],
   "postCreateCommand": "git lfs install"
 }

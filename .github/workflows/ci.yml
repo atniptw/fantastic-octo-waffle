@@ -3,12 +3,128 @@ name: CI
 on:
   pull_request:
     branches: [main]
+    paths:
+      - '.github/workflows/**'
+      - '.github/copilot-instructions.md'
+      - '.github/pull_request_template.md'
+      - '.devcontainer/**'
+      - 'src/**'
+      - 'tests/**'
+      - 'docs/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'global.json'
+      - 'Directory.Build.props'
+      - '.editorconfig'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/**'
+      - '.github/copilot-instructions.md'
+      - '.github/pull_request_template.md'
+      - '.devcontainer/**'
+      - 'src/**'
+      - 'tests/**'
+      - 'docs/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'global.json'
+      - 'Directory.Build.props'
+      - '.editorconfig'
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PLAYWRIGHT_BASE_URL: http://localhost:5075
 
 jobs:
+  lint:
+    name: Lint + Analyzers
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Run lint gate
+        run: npm run lint
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [lint]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Build app
+        run: npm run build:app
+
+  unit:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [build]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Run unit tests
+        run: npm run test:unit
+
   e2e:
     name: Playwright E2E
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    needs: [unit]
 
     steps:
       - name: Checkout
@@ -33,12 +149,10 @@ jobs:
 
       - name: Start Blazor app
         run: |
-          dotnet run --project src/BlazorApp/BlazorApp.csproj --urls http://localhost:5075 &
+          npm run app:run &
           npx wait-on http://localhost:5075
 
       - name: Run Playwright tests
-        env:
-          PLAYWRIGHT_BASE_URL: http://localhost:5075
         run: npm run test:e2e
 
       - name: Upload Playwright report

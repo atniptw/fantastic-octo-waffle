@@ -1,0 +1,32 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/tasks.json
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# .NET / Blazor
+**/bin/
+**/obj/
+**/TestResults/
+*.user
+*.suo
+*.rsuser
+
+# Playwright
+playwright-report/
+test-results/
+.playwright-artifacts/
+
+# Coverage / diagnostics
+coverage/
+*.coverage
+*.coveragexml

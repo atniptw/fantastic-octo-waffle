@@ -9,25 +9,25 @@ Use this skill when implementing fixes/features or triaging reported issues in t
 - Reproduce first using local commands.
 - Run the narrowest deterministic check first, then escalate only as needed.
 - Prefer automated logs and test outputs over user-provided logs.
-- For parser ambiguity, use UnityPy oracle workflow from `docs/parser-oracle-workflow.md`.
 - Only request manual user input after local fallback steps are exhausted.
 
 ## Command routing
 - App runtime: `npm run app:run`
+- Lint + analyzers: `npm run lint`
 - App build: `npm run build:app`
 - Unit tests: `npm run test:unit`
-- E2E smoke: `npm run test:e2e:landing`
 - E2E full: `npm run test:e2e`
-- Parser bundle: `npm run verify:parser`
+- Full gate: `npm run verify`
 
 ## Decision matrix
-- UI-only change: run `npm run test:e2e:landing`; escalate to full `npm run test:e2e` for multi-step behavior.
-- Parser-only change: run `npm run test:unit`; escalate to `npm run verify:parser` for broad parsing changes.
-- Mixed UI + parser change: run both `npm run test:unit` and `npm run test:e2e`.
+- Documentation-only change: run targeted checks as needed and state rationale.
+- App code change: run `npm run lint`, `npm run build:app`, and `npm run test:unit`.
+- UI behavior change: add `npm run test:e2e`.
+- Cross-cutting or release-critical change: run `npm run verify`.
 
 ## Handoff requirements
 Include:
 1. Commands run.
 2. Pass/fail status.
 3. Key errors and fallback steps.
-4. Parser oracle parity status where applicable.
+4. Any known flake indicators and artifact references where applicable.
