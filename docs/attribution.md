@@ -65,10 +65,26 @@ Manifest reference:
 	- Local path: `src/RepoMod.Parser/Vendor/AssetStudio/AssetStudio/BuildTarget.cs`
 - Upstream path: `AssetStudio/ClassIDType.cs`
 	- Local path: `src/RepoMod.Parser/Vendor/AssetStudio/AssetStudio/ClassIDType.cs`
+- Upstream path: `AssetStudio/EndianBinaryReader.cs`
+	- Local path: `src/RepoMod.Parser/Vendor/AssetStudio/AssetStudio/EndianBinaryReader.cs`
+- Upstream path: `AssetStudio/EndianSpanReader.cs`
+	- Local path: `src/RepoMod.Parser/Vendor/AssetStudio/AssetStudio/EndianSpanReader.cs`
+- Upstream path: `AssetStudio/EndianType.cs`
+	- Local path: `src/RepoMod.Parser/Vendor/AssetStudio/AssetStudio/EndianType.cs`
+- Upstream path: `AssetStudio/FileIdentifier.cs`
+	- Local path: `src/RepoMod.Parser/Vendor/AssetStudio/AssetStudio/FileIdentifier.cs`
+- Upstream path: `AssetStudio/FileReader.cs`
+	- Local path: `src/RepoMod.Parser/Vendor/AssetStudio/AssetStudio/FileReader.cs`
 - Upstream path: `AssetStudio/FileType.cs`
 	- Local path: `src/RepoMod.Parser/Vendor/AssetStudio/AssetStudio/FileType.cs`
 - Upstream path: `AssetStudio/ImportHelper.cs`
 	- Local path: `src/RepoMod.Parser/Vendor/AssetStudio/AssetStudio/ImportHelper.cs`
+- Upstream path: `AssetStudio/ObjectInfo.cs`
+	- Local path: `src/RepoMod.Parser/Vendor/AssetStudio/AssetStudio/ObjectInfo.cs`
+- Upstream path: `AssetStudio/ResourceReader.cs`
+	- Local path: `src/RepoMod.Parser/Vendor/AssetStudio/AssetStudio/ResourceReader.cs`
+- Upstream path: `AssetStudio/SerializedFileHeader.cs`
+	- Local path: `src/RepoMod.Parser/Vendor/AssetStudio/AssetStudio/SerializedFileHeader.cs`
 
 ### Excluded Areas Confirmed
 - GUI paths excluded: planned (`AssetStudio.GUI`)

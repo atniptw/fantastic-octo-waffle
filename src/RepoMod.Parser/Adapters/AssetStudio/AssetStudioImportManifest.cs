@@ -10,8 +10,16 @@ public static class AssetStudioImportManifest
     [
         "AssetStudio/BuildTarget.cs",
         "AssetStudio/ClassIDType.cs",
+        "AssetStudio/EndianBinaryReader.cs",
+        "AssetStudio/EndianSpanReader.cs",
+        "AssetStudio/EndianType.cs",
+        "AssetStudio/FileIdentifier.cs",
+        "AssetStudio/FileReader.cs",
         "AssetStudio/FileType.cs",
-        "AssetStudio/ImportHelper.cs"
+        "AssetStudio/ImportHelper.cs",
+        "AssetStudio/ObjectInfo.cs",
+        "AssetStudio/ResourceReader.cs",
+        "AssetStudio/SerializedFileHeader.cs"
     ];
 
     public static readonly string[] CandidateBatch1SourcePaths =

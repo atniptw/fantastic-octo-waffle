@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using RepoMod.Parser.Adapters.AssetStudio;
 using RepoMod.Parser.Abstractions;
 using RepoMod.Parser.Implementation;
 
@@ -10,6 +11,7 @@ public static class ParserServiceCollectionExtensions
     {
         services.AddScoped<IArchiveScanner, ArchiveScanner>();
         services.AddScoped<IModParser, ModParser>();
+        services.AddScoped<IBundleFormatProbe, AssetStudioBundleFormatProbe>();
 
         return services;
     }
