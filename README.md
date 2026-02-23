@@ -2,6 +2,20 @@
 
 Blazor WebAssembly app workspace with a deterministic local/CI workflow for both developers and coding agents.
 
+## Planning documentation
+
+Project planning and architecture decisions are documented in:
+
+- [docs/docs-index.md](docs/docs-index.md)
+- [docs/product-brief.md](docs/product-brief.md)
+- [docs/support-matrix.md](docs/support-matrix.md)
+- [docs/parser-strategy.md](docs/parser-strategy.md)
+- [docs/architecture.md](docs/architecture.md)
+- [docs/data-model.md](docs/data-model.md)
+- [docs/roadmap.md](docs/roadmap.md)
+- [docs/attribution.md](docs/attribution.md)
+- [docs/verification.md](docs/verification.md)
+
 ## Quick start (devcontainer-first)
 
 1. Open this repository in VS Code.
