@@ -37,6 +37,8 @@ Use UnityPy only as a correctness oracle and troubleshooting reference, not as p
 	- `IArchiveScanner`
 	- `IModParser`
 - Current app integration: parser services registered via DI in Blazor startup.
+- Adapter staging area: [src/RepoMod.Parser/Adapters/AssetStudio](../src/RepoMod.Parser/Adapters/AssetStudio)
+- Vendor staging area: [src/RepoMod.Parser/Vendor/AssetStudio](../src/RepoMod.Parser/Vendor/AssetStudio)
 
 ## Extraction Manifest (To Fill During Import)
 - Source repository URL
@@ -45,6 +47,26 @@ Use UnityPy only as a correctness oracle and troubleshooting reference, not as p
 - Excluded paths (GUI/export/native)
 - License/notice files copied
 - Local modifications summary
+
+Reference implementation scaffold:
+- [src/RepoMod.Parser/Adapters/AssetStudio/AssetStudioImportManifest.cs](../src/RepoMod.Parser/Adapters/AssetStudio/AssetStudioImportManifest.cs)
+
+## Implementation Checklist
+1. Pin upstream commit SHA in manifest and attribution docs.
+2. Populate allowlist with exact upstream source paths before copying files.
+3. Copy only allowlisted files into vendor staging folder.
+4. Copy LICENSE and required third-party notices.
+5. Run forbidden-dependency review (`DllImport`, native wrappers, networking APIs).
+6. Implement adapter mapping from vendor types to parser contracts.
+7. Validate fixture corpus and record results.
+8. Apply fallback criteria only if primary source blocks MVP fixtures.
+
+## Definition of Done (Extraction Step)
+- Vendor files are pinned to a documented commit SHA.
+- Attribution record includes source paths and notices.
+- Parser compiles without GUI/native/server dependencies.
+- Fixture tests pass for MVP corpus.
+- App still passes repository verification contract.
 
 ## Switch Criteria (Primary -> Fallback)
 Switch from primary to fallback source when any of these hold on the fixture corpus:

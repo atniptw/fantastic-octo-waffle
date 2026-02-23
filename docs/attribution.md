@@ -20,3 +20,34 @@ This project plans to extract parser-relevant code from third-party repositories
 - Local destination paths
 - License/notice files copied
 - Notes on any local modifications
+
+## Extraction Record Template
+
+Use this template for each import batch:
+
+### Batch
+- Date:
+- Maintainer:
+- Source repo:
+- Commit SHA:
+
+### Imported Files
+- Upstream path:
+- Local path:
+
+### Excluded Areas Confirmed
+- GUI paths excluded:
+- Native/export paths excluded:
+- Network/server-related paths excluded:
+
+### License and Notice Files
+- LICENSE copied:
+- Third-party notices copied:
+
+### Validation
+- Fixture set used:
+- Test command results:
+- Known deltas:
+
+Manifest reference:
+- [src/RepoMod.Parser/Adapters/AssetStudio/AssetStudioImportManifest.cs](../src/RepoMod.Parser/Adapters/AssetStudio/AssetStudioImportManifest.cs)
