@@ -51,3 +51,28 @@ Use this template for each import batch:
 
 Manifest reference:
 - [src/RepoMod.Parser/Adapters/AssetStudio/AssetStudioImportManifest.cs](../src/RepoMod.Parser/Adapters/AssetStudio/AssetStudioImportManifest.cs)
+
+## Current Extraction Record
+
+### Batch
+- Date: 2026-02-23
+- Maintainer: Project owner
+- Source repo: https://github.com/aelurum/AssetStudio
+- Commit SHA: 6b66ec74674f61d7b331d0766fc38511e9c885f3
+
+### Imported Files
+- None yet (pin + candidate list only)
+
+### Excluded Areas Confirmed
+- GUI paths excluded: planned (`AssetStudio.GUI`)
+- Native/export paths excluded: planned (`AssetStudioFBXNative`, native decoder bindings)
+- Network/server-related paths excluded: planned by policy
+
+### License and Notice Files
+- LICENSE copied: pending first file import batch
+- Third-party notices copied: pending first file import batch
+
+### Validation
+- Fixture set used: not started
+- Test command results: not started
+- Known deltas: unitypackage extraction paths pending follow-up mapping

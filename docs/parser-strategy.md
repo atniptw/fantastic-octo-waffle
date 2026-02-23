@@ -31,6 +31,9 @@ Use UnityPy only as a correctness oracle and troubleshooting reference, not as p
 - Pin source by commit SHA in docs before importing
 - Keep processing local-only with no network upload requirement for parse operations
 
+Current pin:
+- `aelurum/AssetStudio` @ `6b66ec74674f61d7b331d0766fc38511e9c885f3`
+
 ## Library Boundary (Implemented)
 - Runtime parser project: [src/RepoMod.Parser/RepoMod.Parser.csproj](../src/RepoMod.Parser/RepoMod.Parser.csproj)
 - Current abstractions:
@@ -50,6 +53,11 @@ Use UnityPy only as a correctness oracle and troubleshooting reference, not as p
 
 Reference implementation scaffold:
 - [src/RepoMod.Parser/Adapters/AssetStudio/AssetStudioImportManifest.cs](../src/RepoMod.Parser/Adapters/AssetStudio/AssetStudioImportManifest.cs)
+
+First-batch candidate files are tracked in `CandidateBatch1SourcePaths` in the manifest.
+
+Known scope note:
+- Explicit `unitypackage` handling is not yet mapped in the first candidate batch and will be added in a follow-up extraction pass after AssetBundle baseline import.
 
 ## Implementation Checklist
 1. Pin upstream commit SHA in manifest and attribution docs.

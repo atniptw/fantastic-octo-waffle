@@ -4,7 +4,7 @@ This directory is reserved for allowlisted source files imported from AssetStudi
 
 ## Primary Source
 - Repository: https://github.com/aelurum/AssetStudio
-- Commit SHA: TODO_PIN_COMMIT_SHA
+- Commit SHA: 6b66ec74674f61d7b331d0766fc38511e9c885f3
 
 ## Import Checklist
 1. Copy only allowlisted parser files.
