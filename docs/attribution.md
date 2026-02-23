@@ -115,6 +115,8 @@ Manifest reference:
 	- Local path: `src/RepoMod.Parser/Vendor/AssetStudio/AssetStudio/BundleCompression/Oodle/Oodle.cs`
 - Upstream path: `AssetStudio/BundleCompression/SevenZipLzma/SevenZipLzma.cs`
 	- Local path: `src/RepoMod.Parser/Vendor/AssetStudio/AssetStudio/BundleCompression/SevenZipLzma/SevenZipLzma.cs`
+- Upstream path: `AssetStudio/BundleCompression/SevenZipLzma/7zip/**/*.cs`
+	- Local path: `src/RepoMod.Parser/Vendor/AssetStudio/AssetStudio/BundleCompression/SevenZipLzma/7zip/**/*.cs`
 - Upstream path: `AssetStudio/Brotli/*.cs`
 	- Local path: `src/RepoMod.Parser/Vendor/AssetStudio/AssetStudio/Brotli/*.cs`
 
@@ -129,5 +131,5 @@ Manifest reference:
 
 ### Validation
 - Fixture set used: not started
-- Test command results: partial compile-in enabled for allowlisted vendor subset including endian reader primitives, `FileReader`, `ImportHelper`, and `Brotli/*`; full vendor compile still staged.
+- Test command results: partial compile-in enabled for allowlisted vendor subset including endian reader primitives, `FileReader`, `ImportHelper`, `Brotli/*`, and `BundleCompression/SevenZipLzma/*`; full vendor compile still staged.
 - Known deltas: unitypackage extraction paths pending follow-up mapping; most vendor code remains compile-excluded until adapter integration phase.

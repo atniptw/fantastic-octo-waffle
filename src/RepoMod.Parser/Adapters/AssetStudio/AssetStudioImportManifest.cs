@@ -11,6 +11,7 @@ public static class AssetStudioImportManifest
         "AssetStudio/BuildTarget.cs",
         "AssetStudio/Brotli/*.cs",
         "AssetStudio/BundleCompression/Oodle/Oodle.cs",
+        "AssetStudio/BundleCompression/SevenZipLzma/7zip/**/*.cs",
         "AssetStudio/BundleCompression/SevenZipLzma/SevenZipLzma.cs",
         "AssetStudio/BundleDecompressionHelper.cs",
         "AssetStudio/BundleFile.cs",
