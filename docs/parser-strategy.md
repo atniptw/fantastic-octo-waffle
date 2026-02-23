@@ -63,7 +63,7 @@ Current extraction status:
 - Vendor source is currently compile-excluded to enable staged adapter integration without breaking builds.
 
 Compile integration status:
-- A small allowlisted vendor subset is now compile-enabled (`FileType`, `BuildTarget`, `ClassIDType`, `EndianType`, `EndianBinaryReader`, `EndianSpanReader`, `FileReader`).
+- A small allowlisted vendor subset is now compile-enabled (`FileType`, `BuildTarget`, `ClassIDType`, `EndianType`, `EndianBinaryReader`, `EndianSpanReader`, `FileReader`, `ILogger`, `Logger`, `ImportHelper`, `Brotli/*`).
 - Remaining vendor files stay compile-excluded until adapter dependencies are resolved incrementally.
 
 Known scope note:

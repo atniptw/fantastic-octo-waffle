@@ -9,6 +9,7 @@ public static class AssetStudioImportManifest
     public static readonly string[] AllowedSourcePaths =
     [
         "AssetStudio/BuildTarget.cs",
+        "AssetStudio/Brotli/*.cs",
         "AssetStudio/BundleCompression/Oodle/Oodle.cs",
         "AssetStudio/BundleCompression/SevenZipLzma/SevenZipLzma.cs",
         "AssetStudio/BundleDecompressionHelper.cs",
