@@ -7,7 +7,12 @@ public static class AssetStudioImportManifest
     public const string SourceCommitSha = "6b66ec74674f61d7b331d0766fc38511e9c885f3";
 
     public static readonly string[] AllowedSourcePaths =
-        [];
+    [
+        "AssetStudio/BuildTarget.cs",
+        "AssetStudio/ClassIDType.cs",
+        "AssetStudio/FileType.cs",
+        "AssetStudio/ImportHelper.cs"
+    ];
 
     public static readonly string[] CandidateBatch1SourcePaths =
     [

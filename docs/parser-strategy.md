@@ -56,6 +56,10 @@ Reference implementation scaffold:
 
 First-batch candidate files are tracked in `CandidateBatch1SourcePaths` in the manifest.
 
+Current extraction status:
+- Batch 1 imported: `BuildTarget.cs`, `ClassIDType.cs`, `FileType.cs`, `ImportHelper.cs`
+- Vendor source is currently compile-excluded to enable staged adapter integration without breaking builds.
+
 Known scope note:
 - Explicit `unitypackage` handling is not yet mapped in the first candidate batch and will be added in a follow-up extraction pass after AssetBundle baseline import.
 

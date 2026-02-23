@@ -61,7 +61,14 @@ Manifest reference:
 - Commit SHA: 6b66ec74674f61d7b331d0766fc38511e9c885f3
 
 ### Imported Files
-- None yet (pin + candidate list only)
+- Upstream path: `AssetStudio/BuildTarget.cs`
+	- Local path: `src/RepoMod.Parser/Vendor/AssetStudio/AssetStudio/BuildTarget.cs`
+- Upstream path: `AssetStudio/ClassIDType.cs`
+	- Local path: `src/RepoMod.Parser/Vendor/AssetStudio/AssetStudio/ClassIDType.cs`
+- Upstream path: `AssetStudio/FileType.cs`
+	- Local path: `src/RepoMod.Parser/Vendor/AssetStudio/AssetStudio/FileType.cs`
+- Upstream path: `AssetStudio/ImportHelper.cs`
+	- Local path: `src/RepoMod.Parser/Vendor/AssetStudio/AssetStudio/ImportHelper.cs`
 
 ### Excluded Areas Confirmed
 - GUI paths excluded: planned (`AssetStudio.GUI`)
@@ -69,10 +76,10 @@ Manifest reference:
 - Network/server-related paths excluded: planned by policy
 
 ### License and Notice Files
-- LICENSE copied: pending first file import batch
-- Third-party notices copied: pending first file import batch
+- LICENSE copied: `src/RepoMod.Parser/Vendor/AssetStudio/LICENSE.upstream`
+- Third-party notices copied: pending additional notice mapping in next batch
 
 ### Validation
 - Fixture set used: not started
-- Test command results: not started
+- Test command results: pending (batch imported as staged vendor source, excluded from compile by project guard)
 - Known deltas: unitypackage extraction paths pending follow-up mapping
