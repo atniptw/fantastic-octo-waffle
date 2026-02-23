@@ -127,5 +127,5 @@ Manifest reference:
 
 ### Validation
 - Fixture set used: not started
-- Test command results: pending (batch imported as staged vendor source, excluded from compile by project guard)
-- Known deltas: unitypackage extraction paths pending follow-up mapping; vendor code remains compile-excluded until adapter integration phase.
+- Test command results: partial compile-in enabled for allowlisted vendor subset; full vendor compile still staged.
+- Known deltas: unitypackage extraction paths pending follow-up mapping; most vendor code remains compile-excluded until adapter integration phase.

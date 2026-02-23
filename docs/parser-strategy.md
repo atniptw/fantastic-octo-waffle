@@ -62,6 +62,10 @@ Current extraction status:
 - Batch 3 imported: bundle/decompression path staging (`BundleFile`, `BundleDecompressionHelper`, `StreamFile`, `WebFile`, related options/logger helpers)
 - Vendor source is currently compile-excluded to enable staged adapter integration without breaking builds.
 
+Compile integration status:
+- A small allowlisted vendor subset is now compile-enabled (`FileType`, `BuildTarget`, `ClassIDType`, `EndianType`).
+- Remaining vendor files stay compile-excluded until adapter dependencies are resolved incrementally.
+
 Known scope note:
 - Explicit `unitypackage` handling is not yet mapped in the first candidate batch and will be added in a follow-up extraction pass after AssetBundle baseline import.
 
