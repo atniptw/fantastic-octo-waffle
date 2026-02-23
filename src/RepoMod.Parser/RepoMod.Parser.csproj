@@ -21,6 +21,7 @@
     <Compile Include="Vendor/AssetStudio/AssetStudio/EndianBinaryReader.cs" />
     <Compile Include="Vendor/AssetStudio/AssetStudio/EndianSpanReader.cs" />
     <Compile Include="Vendor/AssetStudio/AssetStudio/EndianType.cs" />
+    <Compile Include="Vendor/AssetStudio/AssetStudio/FileReader.cs" />
   </ItemGroup>
 
 </Project>
