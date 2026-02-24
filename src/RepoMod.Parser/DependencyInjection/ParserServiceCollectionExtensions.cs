@@ -12,6 +12,7 @@ public static class ParserServiceCollectionExtensions
         services.AddScoped<IArchiveScanner, ArchiveScanner>();
         services.AddScoped<IModParser, ModParser>();
         services.AddScoped<IBundleFormatProbe, AssetStudioBundleFormatProbe>();
+        services.AddScoped<ISceneExtractor, SceneExtractor>();
 
         return services;
     }

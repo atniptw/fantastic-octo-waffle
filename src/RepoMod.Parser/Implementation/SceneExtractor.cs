@@ -1,0 +1,409 @@
+using System.Formats.Tar;
+using System.IO.Compression;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.RegularExpressions;
+using RepoMod.Parser.Abstractions;
+using RepoMod.Parser.Contracts;
+
+namespace RepoMod.Parser.Implementation;
+
+public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser modParser) : ISceneExtractor
+{
+    private static readonly Regex MetaGuidRegex = new(@"^guid:\s*([0-9a-fA-F]+)", RegexOptions.Multiline | RegexOptions.Compiled);
+    private static readonly Regex ReferenceGuidRegex = new(@"guid:\s*([0-9a-fA-F]{32})", RegexOptions.Compiled);
+    private static readonly Regex GenericGuidRegex = new(@"\b[0-9a-fA-F]{32}\b", RegexOptions.Compiled);
+    private static readonly StringComparer PathComparer = StringComparer.OrdinalIgnoreCase;
+
+    public ParseSceneResult ParseUnityPackage(string unityPackagePath)
+    {
+        if (string.IsNullOrWhiteSpace(unityPackagePath))
+        {
+            return ParseSceneResult.Failed("Unitypackage path is required.");
+        }
+
+        if (!File.Exists(unityPackagePath))
+        {
+            return ParseSceneResult.Failed($"Unitypackage not found: {unityPackagePath}");
+        }
+
+        var scanResult = archiveScanner.ScanUnityPackage(unityPackagePath);
+        if (!scanResult.Success)
+        {
+            return ParseSceneResult.Failed(scanResult.Error ?? "Unitypackage scan failed.");
+        }
+
+        try
+        {
+            var containerId = BuildContainerId("unitypackage", unityPackagePath);
+            var container = new ContainerDescriptor(containerId, Path.GetFullPath(unityPackagePath), "unitypackage", Path.GetFileName(unityPackagePath));
+
+            var packageItems = ReadUnityPackageItems(unityPackagePath);
+            var byPath = packageItems
+                .Where(item => !string.IsNullOrWhiteSpace(item.Pathname))
+                .ToDictionary(item => item.Pathname!, item => item, PathComparer);
+
+            var assets = new List<ParsedAssetRecord>();
+            var refs = new List<UnityObjectRef>();
+            var avatarAssetIds = new List<string>();
+            var warnings = new List<string>(scanResult.Warnings);
+
+            foreach (var discovered in scanResult.Bundles)
+            {
+                byPath.TryGetValue(discovered.FullPath, out var packageItem);
+                var packageGuid = packageItem?.Guid;
+                var metaGuid = TryExtractMetaGuid(packageItem?.MetaText);
+                var assetId = BuildAssetId(containerId, packageGuid, discovered.FullPath);
+                var isAvatar = IsAvatarPath(discovered.FullPath);
+                var slotTag = modParser.ExtractMetadata(discovered.FileName).SlotTag;
+                var assetKind = InferAssetKind(discovered.FullPath, discovered.Extension);
+                var referencedGuids = ExtractReferencedGuids(packageItem?.AssetBytes, packageItem?.MetaText);
+
+                assets.Add(new ParsedAssetRecord(
+                    assetId,
+                    containerId,
+                    discovered.FullPath,
+                    discovered.FileName,
+                    discovered.Extension,
+                    assetKind,
+                    discovered.SizeBytes,
+                    packageGuid,
+                    metaGuid,
+                    referencedGuids,
+                    isAvatar,
+                    false,
+                    slotTag));
+
+                refs.Add(new UnityObjectRef(
+                    BuildObjectId(assetId, packageGuid),
+                    assetId,
+                    containerId,
+                    packageGuid,
+                    null,
+                    null,
+                    null,
+                    discovered.FileName));
+
+                if (isAvatar)
+                {
+                    avatarAssetIds.Add(assetId);
+                }
+            }
+
+            if (avatarAssetIds.Count == 0)
+            {
+                warnings.Add("No avatar candidate assets were detected in unitypackage output.");
+            }
+
+            var scene = new ParsedModScene(
+                BuildSceneId(containerId),
+                container,
+                assets,
+                refs,
+                [],
+                avatarAssetIds,
+                warnings);
+
+            return ParseSceneResult.Succeeded(scene);
+        }
+        catch (Exception ex)
+        {
+            return ParseSceneResult.Failed($"Failed to parse unitypackage scene metadata: {ex.Message}");
+        }
+    }
+
+    public ParseSceneResult ParseCosmeticBundle(string bundlePath)
+    {
+        if (string.IsNullOrWhiteSpace(bundlePath))
+        {
+            return ParseSceneResult.Failed("Bundle path is required.");
+        }
+
+        if (!File.Exists(bundlePath))
+        {
+            return ParseSceneResult.Failed($"Bundle not found: {bundlePath}");
+        }
+
+        var fileInfo = new FileInfo(bundlePath);
+        var containerId = BuildContainerId("hhh", bundlePath);
+        var container = new ContainerDescriptor(containerId, fileInfo.FullName, "hhh", fileInfo.Name);
+        var slotTag = modParser.ExtractMetadata(fileInfo.Name).SlotTag;
+        var assetId = BuildAssetId(containerId, null, fileInfo.Name);
+        var bundleBytes = File.ReadAllBytes(fileInfo.FullName);
+        var externalReferenceGuids = ExtractExternalGuids(bundleBytes);
+
+        var assets = new[]
+        {
+            new ParsedAssetRecord(
+                assetId,
+                containerId,
+                fileInfo.FullName,
+                fileInfo.Name,
+                fileInfo.Extension.ToLowerInvariant(),
+                "cosmetic-bundle",
+                fileInfo.Length,
+                null,
+                null,
+                [],
+                false,
+                true,
+                slotTag)
+        };
+
+        var refs = new[]
+        {
+            new UnityObjectRef(
+                BuildObjectId(assetId, null),
+                assetId,
+                containerId,
+                null,
+                null,
+                null,
+                null,
+                fileInfo.Name)
+        };
+
+        var hint = new AttachmentHint(
+            assetId,
+            slotTag,
+            BuildCandidateBoneNames(slotTag),
+            BuildCandidateNodePaths(slotTag),
+            externalReferenceGuids);
+
+        var warnings = new List<string>
+        {
+            "Cosmetic bundle requires avatar-package context for downstream attachment/linking."
+        };
+
+        if (externalReferenceGuids.Count == 0)
+        {
+            warnings.Add("No explicit external GUID references were detected in cosmetic bundle bytes.");
+        }
+
+        var scene = new ParsedModScene(
+            BuildSceneId(containerId),
+            container,
+            assets,
+            refs,
+            [hint],
+            [],
+            warnings);
+
+        return ParseSceneResult.Succeeded(scene);
+    }
+
+    private static List<UnityPackageItem> ReadUnityPackageItems(string unityPackagePath)
+    {
+        var itemsByGuid = new Dictionary<string, UnityPackageItem>(StringComparer.Ordinal);
+
+        using var packageStream = File.OpenRead(unityPackagePath);
+        using var gzipStream = new GZipStream(packageStream, CompressionMode.Decompress, leaveOpen: false);
+        using var tarReader = new TarReader(gzipStream, leaveOpen: false);
+
+        TarEntry? entry;
+        while ((entry = tarReader.GetNextEntry()) is not null)
+        {
+            if (entry.EntryType is TarEntryType.Directory || entry.DataStream is null || string.IsNullOrWhiteSpace(entry.Name))
+            {
+                continue;
+            }
+
+            var separatorIndex = entry.Name.IndexOf('/');
+            if (separatorIndex <= 0 || separatorIndex >= entry.Name.Length - 1)
+            {
+                continue;
+            }
+
+            var guid = entry.Name[..separatorIndex];
+            var memberName = entry.Name[(separatorIndex + 1)..];
+
+            if (!itemsByGuid.TryGetValue(guid, out var item))
+            {
+                item = new UnityPackageItem { Guid = guid };
+                itemsByGuid[guid] = item;
+            }
+
+            switch (memberName)
+            {
+                case "pathname":
+                    item.Pathname = ReadUtf8(entry.DataStream);
+                    break;
+                case "asset":
+                    item.AssetBytes = ReadAllBytes(entry.DataStream);
+                    break;
+                case "asset.meta":
+                    item.MetaText = ReadUtf8(entry.DataStream);
+                    break;
+            }
+        }
+
+        return itemsByGuid.Values.ToList();
+    }
+
+    private static string? TryExtractMetaGuid(string? metaText)
+    {
+        if (string.IsNullOrWhiteSpace(metaText))
+        {
+            return null;
+        }
+
+        var match = MetaGuidRegex.Match(metaText);
+        return match.Success ? match.Groups[1].Value : null;
+    }
+
+    private static string BuildContainerId(string sourceType, string sourcePath)
+    {
+        var fullPath = Path.GetFullPath(sourcePath);
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{sourceType}:{fullPath}")));
+        return $"{sourceType}:{hash[..16].ToLowerInvariant()}";
+    }
+
+    private static string BuildAssetId(string containerId, string? packageGuid, string path)
+    {
+        var identity = packageGuid is null ? path : $"{packageGuid}:{path}";
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(identity)));
+        return $"{containerId}:asset:{hash[..16].ToLowerInvariant()}";
+    }
+
+    private static string BuildObjectId(string assetId, string? packageGuid)
+        => packageGuid is null ? $"{assetId}:obj:root" : $"{assetId}:obj:{packageGuid}";
+
+    private static string BuildSceneId(string containerId)
+        => $"{containerId}:scene";
+
+    private static bool IsAvatarPath(string path)
+        => path.Contains("PlayerAvatar", StringComparison.OrdinalIgnoreCase)
+           || path.Contains("avatar", StringComparison.OrdinalIgnoreCase);
+
+    private static string InferAssetKind(string path, string extension)
+    {
+        if (path.Contains("/Meshes/", StringComparison.OrdinalIgnoreCase) || path.Contains("\\Meshes\\", StringComparison.OrdinalIgnoreCase))
+        {
+            return "mesh";
+        }
+
+        if (path.Contains("/Textures/", StringComparison.OrdinalIgnoreCase)
+            || path.Contains("\\Textures\\", StringComparison.OrdinalIgnoreCase)
+            || extension is ".png" or ".jpg" or ".jpeg" or ".tga" or ".dds")
+        {
+            return "texture";
+        }
+
+        if (path.Contains("/Materials/", StringComparison.OrdinalIgnoreCase)
+            || path.Contains("\\Materials\\", StringComparison.OrdinalIgnoreCase)
+            || extension == ".mat")
+        {
+            return "material";
+        }
+
+        if (extension == ".shader")
+        {
+            return "shader";
+        }
+
+        if (extension == ".prefab")
+        {
+            return "prefab";
+        }
+
+        if (extension == ".hhh")
+        {
+            return "cosmetic-bundle";
+        }
+
+        return "asset";
+    }
+
+    private static IReadOnlyList<string> ExtractReferencedGuids(byte[]? assetBytes, string? metaText)
+    {
+        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        if (!string.IsNullOrWhiteSpace(metaText))
+        {
+            foreach (Match match in ReferenceGuidRegex.Matches(metaText))
+            {
+                set.Add(match.Groups[1].Value.ToLowerInvariant());
+            }
+        }
+
+        if (assetBytes is { Length: > 0 })
+        {
+            try
+            {
+                var text = Encoding.UTF8.GetString(assetBytes);
+                foreach (Match match in ReferenceGuidRegex.Matches(text))
+                {
+                    set.Add(match.Groups[1].Value.ToLowerInvariant());
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        return set.ToArray();
+    }
+
+    private static IReadOnlyList<string> ExtractExternalGuids(byte[] bundleBytes)
+    {
+        if (bundleBytes.Length == 0)
+        {
+            return [];
+        }
+
+        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        var utf8Text = Encoding.UTF8.GetString(bundleBytes);
+        foreach (Match match in GenericGuidRegex.Matches(utf8Text))
+        {
+            set.Add(match.Value.ToLowerInvariant());
+        }
+
+        var asciiText = Encoding.ASCII.GetString(bundleBytes);
+        foreach (Match match in GenericGuidRegex.Matches(asciiText))
+        {
+            set.Add(match.Value.ToLowerInvariant());
+        }
+
+        return set.Take(64).ToArray();
+    }
+
+    private static string[] BuildCandidateBoneNames(string slotTag)
+    {
+        return slotTag switch
+        {
+            "head" => ["head", "Head", "mixamorig:Head", "Bip001 Head"],
+            "neck" => ["neck", "Neck", "mixamorig:Neck", "Bip001 Neck"],
+            "body" => ["spine", "Spine", "mixamorig:Spine", "Bip001 Spine"],
+            "leftarm" => ["leftarm", "LeftArm", "mixamorig:LeftArm", "Bip001 L UpperArm"],
+            "rightarm" => ["rightarm", "RightArm", "mixamorig:RightArm", "Bip001 R UpperArm"],
+            "leftleg" => ["leftleg", "LeftLeg", "mixamorig:LeftLeg", "Bip001 L Thigh"],
+            "rightleg" => ["rightleg", "RightLeg", "mixamorig:RightLeg", "Bip001 R Thigh"],
+            _ => [slotTag]
+        };
+    }
+
+    private static string[] BuildCandidateNodePaths(string slotTag)
+        => [$"PlayerAvatar/{slotTag}", $"Avatar/{slotTag}", slotTag];
+
+    private static byte[] ReadAllBytes(Stream stream)
+    {
+        using var buffer = new MemoryStream();
+        stream.CopyTo(buffer);
+        return buffer.ToArray();
+    }
+
+    private static string ReadUtf8(Stream stream)
+    {
+        using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
+        return reader.ReadToEnd().Trim();
+    }
+
+    private sealed class UnityPackageItem
+    {
+        public string Guid { get; set; } = string.Empty;
+        public string? Pathname { get; set; }
+        public byte[]? AssetBytes { get; set; }
+        public string? MetaText { get; set; }
+    }
+}

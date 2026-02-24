@@ -13,7 +13,14 @@ public sealed class ArchiveScanner : IArchiveScanner
     {
         ".asset",
         ".prefab",
-        ".hhh"
+        ".hhh",
+        ".mat",
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".tga",
+        ".dds",
+        ".shader"
     };
 
     public ScanModArchiveResult Scan(IReadOnlyList<ArchiveEntryDescriptor> entries)
