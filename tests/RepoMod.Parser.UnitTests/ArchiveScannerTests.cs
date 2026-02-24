@@ -23,4 +23,26 @@ public class ArchiveScannerTests
         Assert.Equal(2, result.Bundles.Count);
         Assert.All(result.Bundles, bundle => Assert.Equal(".hhh", bundle.Extension));
     }
+
+    [Fact]
+    public void ScanUnityPackage_RealFixture_DiscoversUnityAssets_AndRunsThroughParser()
+    {
+        var fixturePath = Path.Combine(AppContext.BaseDirectory, "Fixtures", "MoreHead-Asset-Pack_v1.3.unitypackage");
+        Assert.True(File.Exists(fixturePath), $"Fixture file not found: {fixturePath}");
+
+        var scanner = new ArchiveScanner();
+        var parser = new ModParser();
+
+        var result = scanner.ScanUnityPackage(fixturePath);
+
+        Assert.True(result.Success, result.Error);
+        Assert.NotEmpty(result.Bundles);
+        Assert.Contains(result.Bundles, bundle => bundle.Extension == ".asset");
+        Assert.DoesNotContain(result.Bundles, bundle => bundle.Extension == ".cs");
+
+        var headCandidate = result.Bundles.FirstOrDefault(bundle => bundle.FileName.Contains("head", StringComparison.OrdinalIgnoreCase));
+        Assert.NotNull(headCandidate);
+        var metadata = parser.ExtractMetadata(headCandidate.FileName);
+        Assert.Equal("head", metadata.SlotTag);
+    }
 }

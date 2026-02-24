@@ -4,11 +4,13 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <WarningsNotAsErrors>$(WarningsNotAsErrors);CS8600;CS8601;CS8602;CS8603;CS8604;CS8618;CS8625;CS8765</WarningsNotAsErrors>
+    <WarningsNotAsErrors>$(WarningsNotAsErrors);CS8600;CS8601;CS8602;CS8603;CS8604;CS8618;CS8625;CS8765;CS8767</WarningsNotAsErrors>
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="K4os.Compression.LZ4" Version="1.3.8" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.0" />
+    <PackageReference Include="ZstdSharp.Port" Version="0.8.6" />
   </ItemGroup>
 
   <ItemGroup>
@@ -19,16 +21,38 @@
     <Compile Include="Vendor/AssetStudio/AssetStudio/FileType.cs" />
     <Compile Include="Vendor/AssetStudio/AssetStudio/BuildTarget.cs" />
     <Compile Include="Vendor/AssetStudio/AssetStudio/ClassIDType.cs" />
+    <Compile Include="Vendor/AssetStudio/AssetStudio/BigArrayPool.cs" />
+    <Compile Include="Vendor/AssetStudio/AssetStudio/BundleFile.cs" />
     <Compile Include="Vendor/AssetStudio/AssetStudio/EndianBinaryReader.cs" />
     <Compile Include="Vendor/AssetStudio/AssetStudio/EndianSpanReader.cs" />
     <Compile Include="Vendor/AssetStudio/AssetStudio/EndianType.cs" />
+    <Compile Include="Vendor/AssetStudio/AssetStudio/Extensions/BinaryReaderExtensions.cs" />
+    <Compile Include="Vendor/AssetStudio/AssetStudio/Extensions/BinaryWriterExtensions.cs" />
     <Compile Include="Vendor/AssetStudio/AssetStudio/FileReader.cs" />
     <Compile Include="Vendor/AssetStudio/AssetStudio/ILogger.cs" />
     <Compile Include="Vendor/AssetStudio/AssetStudio/Logger.cs" />
+    <Compile Include="Vendor/AssetStudio/AssetStudio/ColorConsole.cs" />
+    <Compile Include="Vendor/AssetStudio/AssetStudio/ColorConsoleHelper.cs" />
     <Compile Include="Vendor/AssetStudio/AssetStudio/Progress.cs" />
+    <Compile Include="Vendor/AssetStudio/AssetStudio/StreamFile.cs" />
+    <Compile Include="Vendor/AssetStudio/AssetStudio/TempFileStream.cs" />
+    <Compile Include="Vendor/AssetStudio/AssetStudio/UnityVersion.cs" />
     <Compile Include="Vendor/AssetStudio/AssetStudio/ImportHelper.cs" />
+    <Compile Include="Vendor/AssetStudio/AssetStudio/OffsetStream.cs" />
+    <Compile Include="Vendor/AssetStudio/AssetStudio/Extensions/StreamExtensions.cs" />
+    <Compile Include="Vendor/AssetStudio/AssetStudio/Math/Color.cs" />
+    <Compile Include="Vendor/AssetStudio/AssetStudio/Math/Matrix4x4.cs" />
+    <Compile Include="Vendor/AssetStudio/AssetStudio/Math/Quaternion.cs" />
+    <Compile Include="Vendor/AssetStudio/AssetStudio/Math/Vector2.cs" />
+    <Compile Include="Vendor/AssetStudio/AssetStudio/Math/Vector3.cs" />
+    <Compile Include="Vendor/AssetStudio/AssetStudio/Math/Vector4.cs" />
+    <Compile Include="Vendor/AssetStudio/AssetStudio/CustomOptions/CustomBundleOptions.cs" />
+    <Compile Include="Vendor/AssetStudio/AssetStudio/CustomOptions/ImportOptions.cs" />
+    <Compile Include="Vendor/AssetStudio/AssetStudio/CustomOptions/Asmo/OptionsFile.cs" />
     <Compile Include="Vendor/AssetStudio/AssetStudio/Brotli/**/*.cs" />
+    <Compile Include="Vendor/AssetStudio/AssetStudio/BundleCompression/Oodle/Oodle.cs" />
     <Compile Include="Vendor/AssetStudio/AssetStudio/BundleCompression/SevenZipLzma/**/*.cs" />
+    <Compile Include="Vendor/AssetStudio/AssetStudio/BundleDecompressionHelper.cs" />
   </ItemGroup>
 
 </Project>

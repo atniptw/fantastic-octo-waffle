@@ -19,6 +19,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Content Include="Fixtures/**/*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
     <Using Include="Xunit" />
   </ItemGroup>
 

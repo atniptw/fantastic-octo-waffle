@@ -63,11 +63,13 @@ Current extraction status:
 - Vendor source is currently compile-excluded to enable staged adapter integration without breaking builds.
 
 Compile integration status:
-- A small allowlisted vendor subset is now compile-enabled (`FileType`, `BuildTarget`, `ClassIDType`, `EndianType`, `EndianBinaryReader`, `EndianSpanReader`, `FileReader`, `ILogger`, `Logger`, `ImportHelper`, `Brotli/*`, `BundleCompression/SevenZipLzma/*`).
+- A small allowlisted vendor subset is now compile-enabled (`FileType`, `BuildTarget`, `ClassIDType`, `EndianType`, `EndianBinaryReader`, `EndianSpanReader`, `FileReader`, `ILogger`, `Logger`, `ImportHelper`, `UnityVersion`, `BundleFile`, `StreamFile`, `TempFileStream`, `ColorConsole`, `BigArrayPool`, `OffsetStream`, `Extensions/StreamExtensions`, `Extensions/BinaryReaderExtensions`, `Extensions/BinaryWriterExtensions`, `Math/*` core structs, `CustomOptions/CustomBundleOptions`, `CustomOptions/ImportOptions`, `CustomOptions/Asmo/OptionsFile`, `Brotli/*`, `BundleCompression/SevenZipLzma/*`, `BundleDecompressionHelper`, `BundleCompression/Oodle/Oodle.cs`).
+- Temporary adapter shims for current compile-enabled surface have been removed; imported vendor option types now include `CustomOptions/ImportOptions` and `CustomOptions/Asmo/OptionsFile`.
 - Remaining vendor files stay compile-excluded until adapter dependencies are resolved incrementally.
 
 Known scope note:
-- Explicit `unitypackage` handling is not yet mapped in the first candidate batch and will be added in a follow-up extraction pass after AssetBundle baseline import.
+- Direct `.unitypackage` scanning is now implemented for MVP fixture coverage (standalone package input, no nested-archive scan expansion).
+- Scanner parses gzipped tar members, probes `asset` payloads with AssetStudio `FileReader`, and maps supported discovered entries (`.asset`, `.prefab`, `.hhh`) into parser contracts.
 
 ## Implementation Checklist
 1. Pin upstream commit SHA in manifest and attribution docs.

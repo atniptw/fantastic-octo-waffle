@@ -32,6 +32,17 @@ public sealed class ModParser : IModParser
         if (lowered.EndsWith("_rightleg", StringComparison.Ordinal)) return "rightleg";
         if (lowered.EndsWith("_world", StringComparison.Ordinal)) return "world";
 
+        var tokens = lowered.Split(['_', '-', ' ', '.'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (tokens.Contains("head")) return "head";
+        if (tokens.Contains("neck")) return "neck";
+        if (tokens.Contains("body")) return "body";
+        if (tokens.Contains("hip")) return "hip";
+        if (tokens.Contains("leftarm")) return "leftarm";
+        if (tokens.Contains("rightarm")) return "rightarm";
+        if (tokens.Contains("leftleg")) return "leftleg";
+        if (tokens.Contains("rightleg")) return "rightleg";
+        if (tokens.Contains("world")) return "world";
+
         return "unknown";
     }
 }
