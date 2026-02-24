@@ -27,6 +27,12 @@ public class SceneExtractorTests
         Assert.Contains(result.Scene.Assets, asset => asset.AssetKind == "material");
         Assert.Contains(result.Scene.Assets, asset => asset.AssetKind == "prefab");
         Assert.Contains(result.Scene.Assets, asset => asset.ReferencedGuids.Count > 0);
+        Assert.NotNull(result.Scene.Graph);
+        Assert.NotEmpty(result.Scene.Graph.Nodes);
+        Assert.Contains(result.Scene.Graph.Edges, edge => edge.EdgeKind == "contains");
+        Assert.Contains(result.Scene.Graph.Edges, edge => edge.EdgeKind == "describes");
+        Assert.Contains(result.Scene.Graph.Edges, edge => edge.EdgeKind == "guid-ref");
+        Assert.Contains(result.Scene.Graph.RefLinks, link => link.Status == "resolved" || link.Status == "unresolved");
     }
 
     [Fact]
@@ -52,6 +58,8 @@ public class SceneExtractorTests
         Assert.NotEmpty(hint.CandidateBoneNames);
         Assert.NotEmpty(hint.CandidateNodePaths);
         Assert.Contains(result.Scene.Warnings, warning => warning.Contains("avatar-package context", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(result.Scene.Graph.Edges, edge => edge.EdgeKind == "contains");
+        Assert.Contains(result.Scene.Graph.Edges, edge => edge.EdgeKind == "describes");
     }
 
     [Fact]
@@ -75,5 +83,9 @@ public class SceneExtractorTests
         Assert.Equal("neck", hint.SlotTag);
         Assert.Contains(hint.CandidateBoneNames, name => name.Contains("neck", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(result.Scene.Warnings, warning => warning.Contains("avatar-package context", StringComparison.OrdinalIgnoreCase));
+        Assert.NotEmpty(result.Scene.Graph.Nodes);
+        Assert.Contains(result.Scene.Graph.Edges, edge => edge.EdgeKind == "contains");
+        Assert.Contains(result.Scene.Graph.Edges, edge => edge.EdgeKind == "describes");
+        Assert.Contains(result.Scene.Graph.Edges, edge => edge.EdgeKind == "has-warning");
     }
 }

@@ -7,4 +7,5 @@ public sealed record ParsedModScene(
     IReadOnlyList<UnityObjectRef> ObjectRefs,
     IReadOnlyList<AttachmentHint> AttachmentHints,
     IReadOnlyList<string> AvatarAssetIds,
+    ParsedSceneGraph Graph,
     IReadOnlyList<string> Warnings);

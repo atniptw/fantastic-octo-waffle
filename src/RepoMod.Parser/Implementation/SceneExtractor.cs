@@ -102,6 +102,7 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
                 refs,
                 [],
                 avatarAssetIds,
+                BuildGraph(container, assets, refs, [], warnings),
                 warnings);
 
             return ParseSceneResult.Succeeded(scene);
@@ -187,6 +188,7 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
             refs,
             [hint],
             [],
+            BuildGraph(container, assets, refs, [hint], warnings),
             warnings);
 
         return ParseSceneResult.Succeeded(scene);
@@ -366,6 +368,144 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
         }
 
         return set.Take(64).ToArray();
+    }
+
+    private static ParsedSceneGraph BuildGraph(
+        ContainerDescriptor container,
+        IReadOnlyList<ParsedAssetRecord> assets,
+        IReadOnlyList<UnityObjectRef> refs,
+        IReadOnlyList<AttachmentHint> hints,
+        IReadOnlyList<string> warnings)
+    {
+        var nodes = new Dictionary<string, SceneNode>(StringComparer.Ordinal);
+        var edges = new List<SceneEdge>();
+        var refLinks = new List<RefLink>();
+
+        var containerNodeId = BuildContainerNodeId(container.ContainerId);
+        nodes[containerNodeId] = new SceneNode(containerNodeId, "container", container.DisplayName, null, null);
+
+        foreach (var asset in assets)
+        {
+            var assetNodeId = BuildAssetNodeId(asset.AssetId);
+            nodes[assetNodeId] = new SceneNode(assetNodeId, "asset", asset.FileName, asset.AssetId, asset.PackageGuid ?? asset.MetaGuid);
+
+            edges.Add(new SceneEdge(
+                BuildEdgeId(containerNodeId, assetNodeId, "contains"),
+                containerNodeId,
+                assetNodeId,
+                "contains",
+                "high"));
+
+            foreach (var objectRef in refs.Where(item => item.AssetId == asset.AssetId))
+            {
+                var objectNodeId = BuildObjectNodeId(objectRef.ObjectId);
+                nodes[objectNodeId] = new SceneNode(objectNodeId, "object", objectRef.ObjectName, objectRef.AssetId, objectRef.PackageGuid);
+
+                edges.Add(new SceneEdge(
+                    BuildEdgeId(assetNodeId, objectNodeId, "describes"),
+                    assetNodeId,
+                    objectNodeId,
+                    "describes",
+                    "high"));
+            }
+        }
+
+        var guidToAsset = assets
+            .Where(asset => !string.IsNullOrWhiteSpace(asset.MetaGuid))
+            .GroupBy(asset => asset.MetaGuid!, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+
+        foreach (var asset in assets)
+        {
+            var assetNodeId = BuildAssetNodeId(asset.AssetId);
+            foreach (var referencedGuid in asset.ReferencedGuids)
+            {
+                if (guidToAsset.TryGetValue(referencedGuid, out var targetAsset))
+                {
+                    var targetNodeId = BuildAssetNodeId(targetAsset.AssetId);
+                    edges.Add(new SceneEdge(
+                        BuildEdgeId(assetNodeId, targetNodeId, "guid-ref"),
+                        assetNodeId,
+                        targetNodeId,
+                        "guid-ref",
+                        "high"));
+
+                    refLinks.Add(new RefLink(asset.AssetId, asset.ContainerId, referencedGuid, targetAsset.AssetId, null, null, "resolved"));
+                }
+                else
+                {
+                    var unresolvedNodeId = BuildGuidNodeId(referencedGuid);
+                    if (!nodes.ContainsKey(unresolvedNodeId))
+                    {
+                        nodes[unresolvedNodeId] = new SceneNode(unresolvedNodeId, "external-guid", referencedGuid, null, referencedGuid);
+                    }
+
+                    edges.Add(new SceneEdge(
+                        BuildEdgeId(assetNodeId, unresolvedNodeId, "guid-ref"),
+                        assetNodeId,
+                        unresolvedNodeId,
+                        "guid-ref",
+                        "medium"));
+
+                    refLinks.Add(new RefLink(asset.AssetId, asset.ContainerId, referencedGuid, null, null, null, "unresolved"));
+                }
+            }
+        }
+
+        foreach (var hint in hints)
+        {
+            var sourceNodeId = BuildAssetNodeId(hint.SourceAssetId);
+            foreach (var externalGuid in hint.ExternalReferenceGuids)
+            {
+                var externalNodeId = BuildGuidNodeId(externalGuid);
+                if (!nodes.ContainsKey(externalNodeId))
+                {
+                    nodes[externalNodeId] = new SceneNode(externalNodeId, "external-guid", externalGuid, null, externalGuid);
+                }
+
+                edges.Add(new SceneEdge(
+                    BuildEdgeId(sourceNodeId, externalNodeId, "attach-hint"),
+                    sourceNodeId,
+                    externalNodeId,
+                    "attach-hint",
+                    "medium"));
+
+                refLinks.Add(new RefLink(hint.SourceAssetId, container.ContainerId, externalGuid, null, null, null, "hint"));
+            }
+        }
+
+        if (warnings.Count > 0)
+        {
+            var warningNodeId = $"warning:{container.ContainerId}";
+            nodes[warningNodeId] = new SceneNode(warningNodeId, "warning", "parse-warnings", null, null);
+            edges.Add(new SceneEdge(
+                BuildEdgeId(containerNodeId, warningNodeId, "has-warning"),
+                containerNodeId,
+                warningNodeId,
+                "has-warning",
+                "high"));
+        }
+
+        return new ParsedSceneGraph(nodes.Values.ToArray(), edges, refLinks);
+    }
+
+    private static string BuildContainerNodeId(string containerId)
+        => $"container:{containerId}";
+
+    private static string BuildAssetNodeId(string assetId)
+        => $"asset:{assetId}";
+
+    private static string BuildObjectNodeId(string objectId)
+        => $"object:{objectId}";
+
+    private static string BuildGuidNodeId(string guid)
+        => $"guid:{guid.ToLowerInvariant()}";
+
+    private static string BuildEdgeId(string fromNodeId, string toNodeId, string edgeKind)
+    {
+        var raw = $"{fromNodeId}|{toNodeId}|{edgeKind}";
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(raw)));
+        return $"edge:{hash[..16].ToLowerInvariant()}";
     }
 
     private static string[] BuildCandidateBoneNames(string slotTag)
