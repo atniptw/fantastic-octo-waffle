@@ -50,6 +50,9 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
             var assets = new List<ParsedAssetRecord>();
             var refs = new List<UnityObjectRef>();
             var renderObjects = new List<UnityRenderObject>();
+            var renderMeshes = new List<UnityRenderMesh>();
+            var renderMaterials = new List<UnityRenderMaterial>();
+            var renderTextures = new List<UnityRenderTexture>();
             var avatarAssetIds = new List<string>();
             var warnings = new List<string>(scanResult.Warnings);
 
@@ -89,6 +92,9 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
 
                 refs.AddRange(extracted.ObjectRefs);
                 renderObjects.AddRange(extracted.RenderObjects);
+                renderMeshes.AddRange(extracted.RenderMeshes);
+                renderMaterials.AddRange(extracted.RenderMaterials);
+                renderTextures.AddRange(extracted.RenderTextures);
 
                 if (isAvatar)
                 {
@@ -107,6 +113,9 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
                 assets,
                 refs,
                 renderObjects,
+                renderMeshes,
+                renderMaterials,
+                renderTextures,
                 [],
                 avatarAssetIds,
                 BuildGraph(container, assets, refs, [], warnings),
@@ -194,6 +203,9 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
             container,
             assets,
             refs,
+                [],
+                [],
+                [],
                 [],
             [hint],
             [],
@@ -379,7 +391,12 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
         return set.Take(64).ToArray();
     }
 
-    private static (IReadOnlyList<UnityObjectRef> ObjectRefs, IReadOnlyList<UnityRenderObject> RenderObjects) BuildObjectRefsFromSerializedAsset(
+    private static (
+        IReadOnlyList<UnityObjectRef> ObjectRefs,
+        IReadOnlyList<UnityRenderObject> RenderObjects,
+        IReadOnlyList<UnityRenderMesh> RenderMeshes,
+        IReadOnlyList<UnityRenderMaterial> RenderMaterials,
+        IReadOnlyList<UnityRenderTexture> RenderTextures) BuildObjectRefsFromSerializedAsset(
         string assetId,
         string containerId,
         string? packageGuid,
@@ -402,6 +419,9 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
                         fallbackName,
                         [])
                 ],
+                [],
+                [],
+                [],
                 []);
         }
 
@@ -424,7 +444,10 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
                             fallbackName,
                             [])
                     ],
-                    []);
+                        [],
+                        [],
+                        [],
+                        []);
             }
 
             var assetsManager = new AssetsManager();
@@ -444,11 +467,17 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
                             fallbackName,
                             [])
                     ],
-                    []);
+                        [],
+                        [],
+                        [],
+                        []);
             }
 
             var objectRefs = new List<UnityObjectRef>(serializedFile.m_Objects.Count);
             var renderObjects = new List<UnityRenderObject>();
+                    var renderMeshes = new List<UnityRenderMesh>();
+                    var renderMaterials = new List<UnityRenderMaterial>();
+                    var renderTextures = new List<UnityRenderTexture>();
             foreach (var objectInfo in serializedFile.m_Objects)
             {
                 var pathIdText = objectInfo.m_PathID.ToString(CultureInfo.InvariantCulture);
@@ -470,9 +499,27 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
                 {
                     renderObjects.Add(renderObject);
                 }
+
+                var renderMesh = TryBuildRenderMesh(assetId, objectInfo, serializedFile);
+                if (renderMesh is not null)
+                {
+                    renderMeshes.Add(renderMesh);
+                }
+
+                var renderMaterial = TryBuildRenderMaterial(assetId, objectInfo, serializedFile);
+                if (renderMaterial is not null)
+                {
+                    renderMaterials.Add(renderMaterial);
+                }
+
+                var renderTexture = TryBuildRenderTexture(assetId, objectInfo, serializedFile);
+                if (renderTexture is not null)
+                {
+                    renderTextures.Add(renderTexture);
+                }
             }
 
-            return (objectRefs, renderObjects);
+            return (objectRefs, renderObjects, renderMeshes, renderMaterials, renderTextures);
         }
         catch (Exception ex)
         {
@@ -490,8 +537,192 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
                         fallbackName,
                         [])
                 ],
+                [],
+                [],
+                [],
                 []);
         }
+    }
+
+    private static UnityRenderMesh? TryBuildRenderMesh(string assetId, ObjectInfo objectInfo, SerializedFile serializedFile)
+    {
+        if (objectInfo.classID != (int)ClassIDType.Mesh)
+        {
+            return null;
+        }
+
+        var objectId = $"{assetId}:obj:{objectInfo.m_PathID.ToString(CultureInfo.InvariantCulture)}";
+        var data = ReadObjectTypeData(serializedFile, objectInfo);
+        var vertexCount = ReadIntValue(data, "m_VertexCount")
+            ?? ReadNestedIntValue(data, "m_VertexData", "m_VertexCount");
+        var subMeshCount = ReadArrayCount(data, "m_SubMeshes");
+        var blendShapeCount = ReadNestedArrayCount(data, "m_Shapes", "channels");
+
+        return new UnityRenderMesh(
+            objectId,
+            assetId,
+            BuildObjectDisplayName(objectInfo.classID, objectInfo.m_PathID),
+            vertexCount,
+            subMeshCount,
+            blendShapeCount);
+    }
+
+    private static UnityRenderMaterial? TryBuildRenderMaterial(string assetId, ObjectInfo objectInfo, SerializedFile serializedFile)
+    {
+        if (objectInfo.classID != (int)ClassIDType.Material)
+        {
+            return null;
+        }
+
+        var objectId = $"{assetId}:obj:{objectInfo.m_PathID.ToString(CultureInfo.InvariantCulture)}";
+        var data = ReadObjectTypeData(serializedFile, objectInfo);
+
+        string? shaderObjectId = null;
+        if (TryGetDictionaryValue(data, "m_Shader", out var shaderValue)
+            && shaderValue is OrderedDictionary shaderDict
+            && TryReadObjectPointer(shaderDict, out var shaderPointer))
+        {
+            shaderObjectId = ResolvePointerObjectId(assetId, shaderPointer.FileId, ParsePathId(shaderPointer.PathId));
+        }
+
+        var textureBindings = ExtractTextureBindings(assetId, data);
+        return new UnityRenderMaterial(
+            objectId,
+            assetId,
+            BuildObjectDisplayName(objectInfo.classID, objectInfo.m_PathID),
+            shaderObjectId,
+            textureBindings);
+    }
+
+    private static UnityRenderTexture? TryBuildRenderTexture(string assetId, ObjectInfo objectInfo, SerializedFile serializedFile)
+    {
+        if (objectInfo.classID != (int)ClassIDType.Texture2D)
+        {
+            return null;
+        }
+
+        var objectId = $"{assetId}:obj:{objectInfo.m_PathID.ToString(CultureInfo.InvariantCulture)}";
+        var data = ReadObjectTypeData(serializedFile, objectInfo);
+        return new UnityRenderTexture(
+            objectId,
+            assetId,
+            BuildObjectDisplayName(objectInfo.classID, objectInfo.m_PathID),
+            ReadIntValue(data, "m_Width"),
+            ReadIntValue(data, "m_Height"),
+            ReadIntValue(data, "m_TextureFormat"));
+    }
+
+    private static OrderedDictionary ReadObjectTypeData(SerializedFile serializedFile, ObjectInfo objectInfo)
+    {
+        if (objectInfo.serializedType?.m_Type?.m_Nodes is not { Count: > 0 })
+        {
+            return new OrderedDictionary();
+        }
+
+        try
+        {
+            using var objectReader = new ObjectReader(serializedFile.reader, serializedFile, objectInfo);
+            return TypeTreeHelper.ReadType(objectInfo.serializedType.m_Type, objectReader);
+        }
+        catch
+        {
+            return new OrderedDictionary();
+        }
+    }
+
+    private static IReadOnlyList<UnityRenderTextureBinding> ExtractTextureBindings(string assetId, OrderedDictionary data)
+    {
+        if (!TryGetDictionaryValue(data, "m_SavedProperties", out var savedProperties)
+            || savedProperties is not OrderedDictionary savedPropertiesDictionary
+            || !TryGetDictionaryValue(savedPropertiesDictionary, "m_TexEnvs", out var texEnvs)
+            || texEnvs is not Array texEnvArray)
+        {
+            return [];
+        }
+
+        var bindings = new List<UnityRenderTextureBinding>();
+        foreach (var entry in texEnvArray)
+        {
+            if (entry is not OrderedDictionary pair)
+            {
+                continue;
+            }
+
+            if (!TryGetDictionaryValue(pair, "first", out var slotNameValue)
+                || slotNameValue is not string slotName
+                || !TryGetDictionaryValue(pair, "second", out var secondValue)
+                || secondValue is not OrderedDictionary texEnv
+                || !TryGetDictionaryValue(texEnv, "m_Texture", out var textureValue)
+                || textureValue is not OrderedDictionary texturePointer)
+            {
+                continue;
+            }
+
+            if (!TryReadObjectPointer(texturePointer, out var pointer))
+            {
+                continue;
+            }
+
+            var textureObjectId = ResolvePointerObjectId(assetId, pointer.FileId, ParsePathId(pointer.PathId));
+            if (string.IsNullOrWhiteSpace(textureObjectId))
+            {
+                continue;
+            }
+
+            bindings.Add(new UnityRenderTextureBinding(slotName, textureObjectId));
+        }
+
+        return bindings;
+    }
+
+    private static int? ReadIntValue(OrderedDictionary dictionary, string key)
+    {
+        if (!TryGetDictionaryValue(dictionary, key, out var value))
+        {
+            return null;
+        }
+
+        return TryConvertToInt(value, out var parsed) ? parsed : null;
+    }
+
+    private static int? ReadNestedIntValue(OrderedDictionary dictionary, string outerKey, string innerKey)
+    {
+        if (!TryGetDictionaryValue(dictionary, outerKey, out var outerValue)
+            || outerValue is not OrderedDictionary outerDictionary)
+        {
+            return null;
+        }
+
+        return ReadIntValue(outerDictionary, innerKey);
+    }
+
+    private static int? ReadArrayCount(OrderedDictionary dictionary, string key)
+    {
+        if (!TryGetDictionaryValue(dictionary, key, out var value)
+            || value is not Array array)
+        {
+            return null;
+        }
+
+        return array.Length;
+    }
+
+    private static int? ReadNestedArrayCount(OrderedDictionary dictionary, string outerKey, string innerKey)
+    {
+        if (!TryGetDictionaryValue(dictionary, outerKey, out var outerValue)
+            || outerValue is not OrderedDictionary outerDictionary)
+        {
+            return null;
+        }
+
+        return ReadArrayCount(outerDictionary, innerKey);
+    }
+
+    private static long ParsePathId(string pathId)
+    {
+        return long.TryParse(pathId, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : 0;
     }
 
     private static UnityRenderObject? TryBuildRenderObject(string assetId, ObjectInfo objectInfo, SerializedFile serializedFile)

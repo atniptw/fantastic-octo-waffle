@@ -20,6 +20,9 @@ public class SceneExtractorTests
         Assert.NotEmpty(result.Scene.Assets);
         Assert.NotEmpty(result.Scene.ObjectRefs);
         Assert.NotNull(result.Scene.RenderObjects);
+        Assert.NotNull(result.Scene.RenderMeshes);
+        Assert.NotNull(result.Scene.RenderMaterials);
+        Assert.NotNull(result.Scene.RenderTextures);
         Assert.NotEmpty(result.Scene.AvatarAssetIds);
         Assert.Contains(result.Scene.Assets, asset => asset.IsAvatarCandidate);
         Assert.Contains(result.Scene.Assets, asset => !string.IsNullOrWhiteSpace(asset.PackageGuid));
@@ -65,6 +68,21 @@ public class SceneExtractorTests
                 result.Scene.RenderObjects,
                 item => item.Kind is "transform" or "gameobject" or "meshfilter" or "meshrenderer" or "skinnedmeshrenderer");
         }
+
+        if (result.Scene.RenderMeshes.Count > 0)
+        {
+            Assert.Contains(result.Scene.RenderMeshes, mesh => mesh.ObjectId.Contains(":obj:", StringComparison.Ordinal));
+        }
+
+        if (result.Scene.RenderMaterials.Count > 0)
+        {
+            Assert.Contains(result.Scene.RenderMaterials, material => material.ObjectId.Contains(":obj:", StringComparison.Ordinal));
+        }
+
+        if (result.Scene.RenderTextures.Count > 0)
+        {
+            Assert.Contains(result.Scene.RenderTextures, texture => texture.ObjectId.Contains(":obj:", StringComparison.Ordinal));
+        }
     }
 
     [Fact]
@@ -80,6 +98,9 @@ public class SceneExtractorTests
         Assert.True(result.Success, result.Error);
         Assert.NotNull(result.Scene);
         Assert.Empty(result.Scene.RenderObjects);
+        Assert.Empty(result.Scene.RenderMeshes);
+        Assert.Empty(result.Scene.RenderMaterials);
+        Assert.Empty(result.Scene.RenderTextures);
         Assert.Equal("hhh", result.Scene.Container.SourceType);
         var asset = Assert.Single(result.Scene.Assets);
         Assert.True(asset.IsCosmeticCandidate);
@@ -108,6 +129,9 @@ public class SceneExtractorTests
         Assert.True(result.Success, result.Error);
         Assert.NotNull(result.Scene);
         Assert.Empty(result.Scene.RenderObjects);
+        Assert.Empty(result.Scene.RenderMeshes);
+        Assert.Empty(result.Scene.RenderMaterials);
+        Assert.Empty(result.Scene.RenderTextures);
 
         var asset = Assert.Single(result.Scene.Assets);
         Assert.Equal("neck", asset.SlotTag);
