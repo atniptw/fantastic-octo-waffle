@@ -8,4 +8,5 @@ public sealed record UnityObjectRef(
     string? FileId,
     string? PathId,
     int? ClassId,
-    string ObjectName);
+    string ObjectName,
+    IReadOnlyList<UnityObjectPointer> OutboundObjectRefs);

@@ -1,8 +1,12 @@
 using System.Formats.Tar;
+using System.Collections;
+using System.Collections.Specialized;
+using System.Globalization;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
+using AssetStudio;
 using RepoMod.Parser.Abstractions;
 using RepoMod.Parser.Contracts;
 
@@ -74,15 +78,13 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
                     false,
                     slotTag));
 
-                refs.Add(new UnityObjectRef(
-                    BuildObjectId(assetId, packageGuid),
+                refs.AddRange(BuildObjectRefsFromSerializedAsset(
                     assetId,
                     containerId,
                     packageGuid,
-                    null,
-                    null,
-                    null,
-                    discovered.FileName));
+                    discovered.FileName,
+                    packageItem?.AssetBytes,
+                    warnings));
 
                 if (isAvatar)
                 {
@@ -161,7 +163,8 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
                 null,
                 null,
                 null,
-                fileInfo.Name)
+                fileInfo.Name,
+                [])
         };
 
         var hint = new AttachmentHint(
@@ -370,6 +373,280 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
         return set.Take(64).ToArray();
     }
 
+    private static IReadOnlyList<UnityObjectRef> BuildObjectRefsFromSerializedAsset(
+        string assetId,
+        string containerId,
+        string? packageGuid,
+        string fallbackName,
+        byte[]? assetBytes,
+        List<string> warnings)
+    {
+        if (assetBytes is not { Length: > 0 })
+        {
+            return [
+                new UnityObjectRef(
+                    BuildObjectId(assetId, packageGuid),
+                    assetId,
+                    containerId,
+                    packageGuid,
+                    null,
+                    null,
+                    null,
+                    fallbackName,
+                    [])
+            ];
+        }
+
+        try
+        {
+            using var stream = new MemoryStream(assetBytes, writable: false);
+            using var fileReader = new FileReader(fallbackName, stream);
+            if (fileReader.FileType != FileType.AssetsFile)
+            {
+                return [
+                    new UnityObjectRef(
+                        BuildObjectId(assetId, packageGuid),
+                        assetId,
+                        containerId,
+                        packageGuid,
+                        null,
+                        null,
+                        null,
+                        fallbackName,
+                        [])
+                ];
+            }
+
+            var assetsManager = new AssetsManager();
+            var serializedFile = new SerializedFile(fileReader, assetsManager);
+            if (serializedFile.m_Objects.Count == 0)
+            {
+                return [
+                    new UnityObjectRef(
+                        BuildObjectId(assetId, packageGuid),
+                        assetId,
+                        containerId,
+                        packageGuid,
+                        null,
+                        null,
+                        null,
+                        fallbackName,
+                        [])
+                ];
+            }
+
+            var objectRefs = new List<UnityObjectRef>(serializedFile.m_Objects.Count);
+            foreach (var objectInfo in serializedFile.m_Objects)
+            {
+                var pathIdText = objectInfo.m_PathID.ToString(CultureInfo.InvariantCulture);
+                var objectName = BuildObjectDisplayName(objectInfo.classID, objectInfo.m_PathID);
+                var outboundRefs = ExtractOutboundObjectPointers(serializedFile, objectInfo);
+                objectRefs.Add(new UnityObjectRef(
+                    $"{assetId}:obj:{pathIdText}",
+                    assetId,
+                    containerId,
+                    packageGuid,
+                    serializedFile.fileName,
+                    pathIdText,
+                    objectInfo.classID,
+                    objectName,
+                    outboundRefs));
+            }
+
+            return objectRefs;
+        }
+        catch (Exception ex)
+        {
+            warnings.Add($"Object-level read failed for '{fallbackName}': {ex.Message}");
+            return [
+                new UnityObjectRef(
+                    BuildObjectId(assetId, packageGuid),
+                    assetId,
+                    containerId,
+                    packageGuid,
+                    null,
+                    null,
+                    null,
+                    fallbackName,
+                    [])
+            ];
+        }
+    }
+
+    private static IReadOnlyList<UnityObjectPointer> ExtractOutboundObjectPointers(SerializedFile serializedFile, ObjectInfo objectInfo)
+    {
+        if (objectInfo.serializedType?.m_Type?.m_Nodes is not { Count: > 0 })
+        {
+            return [];
+        }
+
+        try
+        {
+            using var objectReader = new ObjectReader(serializedFile.reader, serializedFile, objectInfo);
+            var typeData = TypeTreeHelper.ReadType(objectInfo.serializedType.m_Type, objectReader);
+            var pointers = new List<UnityObjectPointer>();
+            CollectObjectPointers(typeData, pointers);
+
+            return pointers
+                .Where(pointer => pointer.PathId != "0" && pointer.FileId >= 0)
+                .Distinct()
+                .Take(128)
+                .ToArray();
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
+    private static void CollectObjectPointers(object? value, List<UnityObjectPointer> pointers)
+    {
+        switch (value)
+        {
+            case null:
+                return;
+            case OrderedDictionary dictionary:
+                if (TryReadObjectPointer(dictionary, out var pointer))
+                {
+                    pointers.Add(pointer);
+                }
+
+                foreach (DictionaryEntry entry in dictionary)
+                {
+                    CollectObjectPointers(entry.Value, pointers);
+                }
+
+                return;
+            case Array array:
+                foreach (var item in array)
+                {
+                    CollectObjectPointers(item, pointers);
+                }
+
+                return;
+            case IEnumerable enumerable when value is not string:
+                foreach (var item in enumerable)
+                {
+                    CollectObjectPointers(item, pointers);
+                }
+
+                return;
+            default:
+                return;
+        }
+    }
+
+    private static bool TryReadObjectPointer(OrderedDictionary dictionary, out UnityObjectPointer pointer)
+    {
+        pointer = default!;
+        if (!TryGetDictionaryValue(dictionary, "m_FileID", out var fileIdValue)
+            || !TryGetDictionaryValue(dictionary, "m_PathID", out var pathIdValue)
+            || !TryConvertToInt(fileIdValue, out var fileId)
+            || !TryConvertToLong(pathIdValue, out var pathId))
+        {
+            return false;
+        }
+
+        pointer = new UnityObjectPointer(fileId, pathId.ToString(CultureInfo.InvariantCulture));
+        return true;
+    }
+
+    private static bool TryGetDictionaryValue(OrderedDictionary dictionary, string key, out object? value)
+    {
+        foreach (DictionaryEntry entry in dictionary)
+        {
+            if (entry.Key is string currentKey && string.Equals(currentKey, key, StringComparison.Ordinal))
+            {
+                value = entry.Value;
+                return true;
+            }
+        }
+
+        value = null;
+        return false;
+    }
+
+    private static bool TryConvertToInt(object? value, out int result)
+    {
+        switch (value)
+        {
+            case int intValue:
+                result = intValue;
+                return true;
+            case long longValue when longValue <= int.MaxValue && longValue >= int.MinValue:
+                result = (int)longValue;
+                return true;
+            case uint uintValue when uintValue <= int.MaxValue:
+                result = (int)uintValue;
+                return true;
+            case short shortValue:
+                result = shortValue;
+                return true;
+            case ushort ushortValue:
+                result = ushortValue;
+                return true;
+            case byte byteValue:
+                result = byteValue;
+                return true;
+            case sbyte sbyteValue:
+                result = sbyteValue;
+                return true;
+            case string text when int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed):
+                result = parsed;
+                return true;
+            default:
+                result = default;
+                return false;
+        }
+    }
+
+    private static bool TryConvertToLong(object? value, out long result)
+    {
+        switch (value)
+        {
+            case long longValue:
+                result = longValue;
+                return true;
+            case int intValue:
+                result = intValue;
+                return true;
+            case uint uintValue:
+                result = uintValue;
+                return true;
+            case short shortValue:
+                result = shortValue;
+                return true;
+            case ushort ushortValue:
+                result = ushortValue;
+                return true;
+            case byte byteValue:
+                result = byteValue;
+                return true;
+            case sbyte sbyteValue:
+                result = sbyteValue;
+                return true;
+            case ulong ulongValue when ulongValue <= long.MaxValue:
+                result = (long)ulongValue;
+                return true;
+            case string text when long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed):
+                result = parsed;
+                return true;
+            default:
+                result = default;
+                return false;
+        }
+    }
+
+    private static string BuildObjectDisplayName(int classId, long pathId)
+    {
+        if (Enum.IsDefined(typeof(ClassIDType), classId))
+        {
+            return $"{(ClassIDType)classId}:{pathId}";
+        }
+
+        return $"Class{classId}:{pathId}";
+    }
+
     private static ParsedSceneGraph BuildGraph(
         ContainerDescriptor container,
         IReadOnlyList<ParsedAssetRecord> assets,
@@ -399,7 +676,12 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
             foreach (var objectRef in refs.Where(item => item.AssetId == asset.AssetId))
             {
                 var objectNodeId = BuildObjectNodeId(objectRef.ObjectId);
-                nodes[objectNodeId] = new SceneNode(objectNodeId, "object", objectRef.ObjectName, objectRef.AssetId, objectRef.PackageGuid);
+                nodes[objectNodeId] = new SceneNode(
+                    objectNodeId,
+                    BuildObjectKind(objectRef.ClassId),
+                    objectRef.ObjectName,
+                    objectRef.AssetId,
+                    objectRef.PackageGuid);
 
                 edges.Add(new SceneEdge(
                     BuildEdgeId(assetNodeId, objectNodeId, "describes"),
@@ -407,6 +689,61 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
                     objectNodeId,
                     "describes",
                     "high"));
+
+                if (objectRef.ClassId is int classId)
+                {
+                    var classNodeId = BuildClassNodeId(classId);
+                    if (!nodes.ContainsKey(classNodeId))
+                    {
+                        nodes[classNodeId] = new SceneNode(
+                            classNodeId,
+                            "unity-class",
+                            ResolveClassLabel(classId),
+                            null,
+                            null);
+                    }
+
+                    edges.Add(new SceneEdge(
+                        BuildEdgeId(objectNodeId, classNodeId, "typed-as"),
+                        objectNodeId,
+                        classNodeId,
+                        "typed-as",
+                        "high"));
+                }
+
+                foreach (var outboundRef in objectRef.OutboundObjectRefs)
+                {
+                    var targetNodeId = ResolveObjectReferenceNodeId(asset.AssetId, outboundRef);
+                    if (!nodes.ContainsKey(targetNodeId))
+                    {
+                        nodes[targetNodeId] = new SceneNode(
+                            targetNodeId,
+                            outboundRef.FileId == 0 ? "object-unresolved" : "object-external",
+                            outboundRef.FileId == 0
+                                ? $"PathId:{outboundRef.PathId}"
+                                : $"External[{outboundRef.FileId}]:{outboundRef.PathId}",
+                            outboundRef.FileId == 0 ? asset.AssetId : null,
+                            null);
+                    }
+
+                    edges.Add(new SceneEdge(
+                        BuildEdgeId(objectNodeId, targetNodeId, "object-ref"),
+                        objectNodeId,
+                        targetNodeId,
+                        "object-ref",
+                        outboundRef.FileId == 0 ? "high" : "medium"));
+
+                    refLinks.Add(new RefLink(
+                        objectRef.AssetId,
+                        objectRef.ContainerId,
+                        $"object:{outboundRef.FileId}:{outboundRef.PathId}",
+                        outboundRef.FileId == 0 ? objectRef.AssetId : null,
+                        outboundRef.FileId == 0 ? $"{objectRef.AssetId}:obj:{outboundRef.PathId}" : null,
+                        outboundRef.FileId.ToString(CultureInfo.InvariantCulture),
+                        outboundRef.FileId == 0
+                            ? (nodes.ContainsKey(BuildObjectNodeId($"{objectRef.AssetId}:obj:{outboundRef.PathId}")) ? "object-resolved" : "object-unresolved")
+                            : "object-external"));
+                }
             }
         }
 
@@ -498,14 +835,47 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
     private static string BuildObjectNodeId(string objectId)
         => $"object:{objectId}";
 
+    private static string BuildClassNodeId(int classId)
+        => $"class:{classId}";
+
     private static string BuildGuidNodeId(string guid)
         => $"guid:{guid.ToLowerInvariant()}";
+
+    private static string ResolveObjectReferenceNodeId(string assetId, UnityObjectPointer pointer)
+    {
+        if (pointer.FileId == 0)
+        {
+            var localObjectId = $"{assetId}:obj:{pointer.PathId}";
+            return BuildObjectNodeId(localObjectId);
+        }
+
+        return $"objectref:file{pointer.FileId}:path{pointer.PathId}";
+    }
 
     private static string BuildEdgeId(string fromNodeId, string toNodeId, string edgeKind)
     {
         var raw = $"{fromNodeId}|{toNodeId}|{edgeKind}";
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(raw)));
         return $"edge:{hash[..16].ToLowerInvariant()}";
+    }
+
+    private static string BuildObjectKind(int? classId)
+    {
+        if (classId is null)
+        {
+            return "object";
+        }
+
+        return Enum.IsDefined(typeof(ClassIDType), classId.Value)
+            ? $"object:{((ClassIDType)classId.Value).ToString().ToLowerInvariant()}"
+            : "object";
+    }
+
+    private static string ResolveClassLabel(int classId)
+    {
+        return Enum.IsDefined(typeof(ClassIDType), classId)
+            ? ((ClassIDType)classId).ToString()
+            : $"Class{classId}";
     }
 
     private static string[] BuildCandidateBoneNames(string slotTag)

@@ -27,11 +27,27 @@ public class SceneExtractorTests
         Assert.Contains(result.Scene.Assets, asset => asset.AssetKind == "material");
         Assert.Contains(result.Scene.Assets, asset => asset.AssetKind == "prefab");
         Assert.Contains(result.Scene.Assets, asset => asset.ReferencedGuids.Count > 0);
+        Assert.Contains(result.Scene.ObjectRefs, objectRef => objectRef.ObjectId.Contains(":obj:", StringComparison.Ordinal));
         Assert.NotNull(result.Scene.Graph);
         Assert.NotEmpty(result.Scene.Graph.Nodes);
         Assert.Contains(result.Scene.Graph.Edges, edge => edge.EdgeKind == "contains");
         Assert.Contains(result.Scene.Graph.Edges, edge => edge.EdgeKind == "describes");
         Assert.Contains(result.Scene.Graph.Edges, edge => edge.EdgeKind == "guid-ref");
+
+        if (result.Scene.ObjectRefs.Any(objectRef => objectRef.ClassId is not null))
+        {
+            Assert.Contains(result.Scene.Graph.Edges, edge => edge.EdgeKind == "typed-as");
+            Assert.Contains(result.Scene.Graph.Nodes, node => node.Kind == "unity-class");
+        }
+
+        if (result.Scene.ObjectRefs.Any(objectRef => objectRef.OutboundObjectRefs.Count > 0))
+        {
+            Assert.Contains(result.Scene.Graph.Edges, edge => edge.EdgeKind == "object-ref");
+            Assert.Contains(
+                result.Scene.Graph.RefLinks,
+                link => link.Status is "object-resolved" or "object-unresolved" or "object-external");
+        }
+
         Assert.Contains(result.Scene.Graph.RefLinks, link => link.Status == "resolved" || link.Status == "unresolved");
     }
 
