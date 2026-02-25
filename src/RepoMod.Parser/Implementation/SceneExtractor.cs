@@ -1083,7 +1083,6 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
     {
         if (!channels.TryGetValue(channelIndex, out var channelInfo)
             || channelInfo.Dimension < expectedDimension
-            || channelInfo.Format != 0
             || !streamBaseOffsets.TryGetValue(channelInfo.Stream, out var streamBaseOffset))
         {
             return [];
@@ -1103,7 +1102,13 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
         for (var vertexIndex = 0; vertexIndex < vertexCount; vertexIndex++)
         {
             var baseOffset = streamBaseOffset + vertexIndex * stride + channelInfo.Offset;
-            var endOffset = baseOffset + expectedDimension * sizeof(float);
+            var componentSize = ResolveVertexFormatSize(channelInfo.Format);
+            if (componentSize <= 0)
+            {
+                return [];
+            }
+
+            var endOffset = baseOffset + expectedDimension * componentSize;
             if (baseOffset < 0 || endOffset > vertexDataBytes.Length)
             {
                 return [];
@@ -1111,11 +1116,125 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
 
             for (var component = 0; component < expectedDimension; component++)
             {
-                values.Add(BitConverter.ToSingle(vertexDataBytes, baseOffset + component * sizeof(float)));
+                var componentOffset = baseOffset + component * componentSize;
+                if (!TryReadVertexComponentAsFloat(vertexDataBytes, componentOffset, channelInfo.Format, out var componentValue))
+                {
+                    return [];
+                }
+
+                values.Add(componentValue);
             }
         }
 
         return values;
+    }
+
+    private static bool TryReadVertexComponentAsFloat(byte[] data, int offset, int format, out float value)
+    {
+        value = default;
+        switch (format)
+        {
+            case 0:
+                if (offset + 4 > data.Length)
+                {
+                    return false;
+                }
+
+                value = BitConverter.ToSingle(data, offset);
+                return true;
+            case 1:
+                if (offset + 2 > data.Length)
+                {
+                    return false;
+                }
+
+                var halfBits = BitConverter.ToUInt16(data, offset);
+                value = (float)BitConverter.UInt16BitsToHalf(halfBits);
+                return true;
+            case 2:
+                if (offset + 1 > data.Length)
+                {
+                    return false;
+                }
+
+                value = data[offset] / 255f;
+                return true;
+            case 3:
+                if (offset + 1 > data.Length)
+                {
+                    return false;
+                }
+
+                value = Math.Clamp((sbyte)data[offset] / 127f, -1f, 1f);
+                return true;
+            case 4:
+                if (offset + 2 > data.Length)
+                {
+                    return false;
+                }
+
+                value = BitConverter.ToUInt16(data, offset) / 65535f;
+                return true;
+            case 5:
+                if (offset + 2 > data.Length)
+                {
+                    return false;
+                }
+
+                var signed16 = BitConverter.ToInt16(data, offset);
+                value = Math.Clamp(signed16 / 32767f, -1f, 1f);
+                return true;
+            case 6:
+                if (offset + 1 > data.Length)
+                {
+                    return false;
+                }
+
+                value = data[offset];
+                return true;
+            case 7:
+                if (offset + 1 > data.Length)
+                {
+                    return false;
+                }
+
+                value = (sbyte)data[offset];
+                return true;
+            case 8:
+                if (offset + 2 > data.Length)
+                {
+                    return false;
+                }
+
+                value = BitConverter.ToUInt16(data, offset);
+                return true;
+            case 9:
+                if (offset + 2 > data.Length)
+                {
+                    return false;
+                }
+
+                value = BitConverter.ToInt16(data, offset);
+                return true;
+            case 10:
+                if (offset + 4 > data.Length)
+                {
+                    return false;
+                }
+
+                value = BitConverter.ToUInt32(data, offset);
+                return true;
+            case 11:
+                if (offset + 4 > data.Length)
+                {
+                    return false;
+                }
+
+                value = BitConverter.ToInt32(data, offset);
+                return true;
+            default:
+                return false;
+        }
     }
 
     private static int ResolveVertexFormatSize(int format)
