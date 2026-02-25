@@ -82,6 +82,15 @@ public class SceneExtractorTests
                     result.Scene.RenderMeshes,
                     mesh => !string.IsNullOrWhiteSpace(mesh.VertexDataBase64) || mesh.IndexValues is { Count: > 0 });
             }
+
+            if (result.Scene.RenderMeshes.Any(mesh => mesh.Positions is { Count: > 0 } || mesh.Normals is { Count: > 0 } || mesh.Uv0 is { Count: > 0 }))
+            {
+                Assert.Contains(
+                    result.Scene.RenderMeshes,
+                    mesh => (mesh.Positions is { Count: > 0 } && mesh.Positions.Count % 3 == 0)
+                            || (mesh.Normals is { Count: > 0 } && mesh.Normals.Count % 3 == 0)
+                            || (mesh.Uv0 is { Count: > 0 } && mesh.Uv0.Count % 2 == 0));
+            }
         }
 
         if (result.Scene.RenderMaterials.Count > 0)

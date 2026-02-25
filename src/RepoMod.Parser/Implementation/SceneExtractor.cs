@@ -564,6 +564,7 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
         var vertexDataBytes = ReadNestedByteArray(data, "m_VertexData", "m_DataSize");
         var indexBufferBytes = ReadByteArray(data, "m_IndexBuffer");
         var indexValues = DecodeIndexValues(indexBufferBytes, indexFormat);
+        var decodedChannels = DecodeVertexChannels(data, vertexDataBytes, vertexCount);
 
         return new UnityRenderMesh(
             objectId,
@@ -577,7 +578,10 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
             indexBufferElementCount,
             indexFormat,
             vertexDataBytes is { Length: > 0 } ? Convert.ToBase64String(vertexDataBytes) : null,
-            indexValues.Count > 0 ? indexValues : null);
+            indexValues.Count > 0 ? indexValues : null,
+            decodedChannels.Positions,
+            decodedChannels.Normals,
+            decodedChannels.Uv0);
     }
 
     private static UnityRenderMaterial? TryBuildRenderMaterial(string assetId, ObjectInfo objectInfo, SerializedFile serializedFile)
@@ -933,6 +937,208 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
 
         return defaultValues;
     }
+
+    private static (IReadOnlyList<float>? Positions, IReadOnlyList<float>? Normals, IReadOnlyList<float>? Uv0) DecodeVertexChannels(
+        OrderedDictionary meshData,
+        byte[]? vertexDataBytes,
+        int? vertexCount)
+    {
+        if (vertexDataBytes is not { Length: > 0 }
+            || vertexCount is not > 0
+            || !TryGetDictionaryValue(meshData, "m_VertexData", out var vertexDataValue)
+            || vertexDataValue is not OrderedDictionary vertexDataDictionary
+            || !TryGetDictionaryValue(vertexDataDictionary, "m_Channels", out var channelsValue)
+            || channelsValue is not Array channelsArray
+            || channelsArray.Length == 0)
+        {
+            return (null, null, null);
+        }
+
+        var channelInfos = ParseVertexChannels(channelsArray);
+        if (channelInfos.Count == 0)
+        {
+            return (null, null, null);
+        }
+
+        var streamLayouts = BuildStreamLayouts(channelInfos);
+        if (streamLayouts.Count == 0)
+        {
+            return (null, null, null);
+        }
+
+        var streamBaseOffsets = BuildStreamBaseOffsets(streamLayouts, vertexCount.Value, vertexDataBytes.Length);
+
+        var positions = DecodeFloatChannel(vertexDataBytes, vertexCount.Value, channelInfos, streamLayouts, streamBaseOffsets, channelIndex: 0, expectedDimension: 3);
+        var normals = DecodeFloatChannel(vertexDataBytes, vertexCount.Value, channelInfos, streamLayouts, streamBaseOffsets, channelIndex: 1, expectedDimension: 3);
+        var uv0 = DecodeFloatChannel(vertexDataBytes, vertexCount.Value, channelInfos, streamLayouts, streamBaseOffsets, channelIndex: 4, expectedDimension: 2);
+
+        return (
+            positions.Count > 0 ? positions : null,
+            normals.Count > 0 ? normals : null,
+            uv0.Count > 0 ? uv0 : null);
+    }
+
+    private static Dictionary<int, VertexChannelInfo> ParseVertexChannels(Array channelsArray)
+    {
+        var result = new Dictionary<int, VertexChannelInfo>();
+        for (var index = 0; index < channelsArray.Length; index++)
+        {
+            if (channelsArray.GetValue(index) is not OrderedDictionary channel)
+            {
+                continue;
+            }
+
+            if (!TryGetDictionaryValue(channel, "stream", out var streamValue)
+                && !TryGetDictionaryValue(channel, "m_Stream", out streamValue))
+            {
+                continue;
+            }
+
+            if (!TryGetDictionaryValue(channel, "offset", out var offsetValue)
+                && !TryGetDictionaryValue(channel, "m_Offset", out offsetValue))
+            {
+                continue;
+            }
+
+            if (!TryGetDictionaryValue(channel, "format", out var formatValue)
+                && !TryGetDictionaryValue(channel, "m_Format", out formatValue))
+            {
+                continue;
+            }
+
+            if (!TryGetDictionaryValue(channel, "dimension", out var dimensionValue)
+                && !TryGetDictionaryValue(channel, "m_Dimension", out dimensionValue))
+            {
+                continue;
+            }
+
+            if (!TryConvertToInt(streamValue, out var stream)
+                || !TryConvertToInt(offsetValue, out var offset)
+                || !TryConvertToInt(formatValue, out var format)
+                || !TryConvertToInt(dimensionValue, out var dimension)
+                || dimension <= 0)
+            {
+                continue;
+            }
+
+            result[index] = new VertexChannelInfo(stream, offset, format, dimension);
+        }
+
+        return result;
+    }
+
+    private static Dictionary<int, int> BuildStreamLayouts(IReadOnlyDictionary<int, VertexChannelInfo> channels)
+    {
+        var streamStrides = new Dictionary<int, int>();
+        foreach (var channel in channels.Values)
+        {
+            var componentSize = ResolveVertexFormatSize(channel.Format);
+            if (componentSize <= 0)
+            {
+                continue;
+            }
+
+            var requiredStride = channel.Offset + componentSize * channel.Dimension;
+            if (!streamStrides.TryGetValue(channel.Stream, out var existingStride)
+                || requiredStride > existingStride)
+            {
+                streamStrides[channel.Stream] = requiredStride;
+            }
+        }
+
+        return streamStrides;
+    }
+
+    private static Dictionary<int, int> BuildStreamBaseOffsets(
+        IReadOnlyDictionary<int, int> streamStrides,
+        int vertexCount,
+        int bufferLength)
+    {
+        var baseOffsets = new Dictionary<int, int>();
+        var runningOffset = 0;
+        foreach (var stream in streamStrides.Keys.OrderBy(key => key))
+        {
+            baseOffsets[stream] = runningOffset;
+
+            var stride = streamStrides[stream];
+            var streamSize = checked(stride * vertexCount);
+            runningOffset += streamSize;
+            if (runningOffset >= bufferLength)
+            {
+                break;
+            }
+        }
+
+        return baseOffsets;
+    }
+
+    private static List<float> DecodeFloatChannel(
+        byte[] vertexDataBytes,
+        int vertexCount,
+        IReadOnlyDictionary<int, VertexChannelInfo> channels,
+        IReadOnlyDictionary<int, int> streamStrides,
+        IReadOnlyDictionary<int, int> streamBaseOffsets,
+        int channelIndex,
+        int expectedDimension)
+    {
+        if (!channels.TryGetValue(channelIndex, out var channelInfo)
+            || channelInfo.Dimension < expectedDimension
+            || channelInfo.Format != 0
+            || !streamBaseOffsets.TryGetValue(channelInfo.Stream, out var streamBaseOffset))
+        {
+            return [];
+        }
+
+        if (!streamStrides.TryGetValue(channelInfo.Stream, out var stride))
+        {
+            return [];
+        }
+
+        if (stride <= 0)
+        {
+            return [];
+        }
+
+        var values = new List<float>(vertexCount * expectedDimension);
+        for (var vertexIndex = 0; vertexIndex < vertexCount; vertexIndex++)
+        {
+            var baseOffset = streamBaseOffset + vertexIndex * stride + channelInfo.Offset;
+            var endOffset = baseOffset + expectedDimension * sizeof(float);
+            if (baseOffset < 0 || endOffset > vertexDataBytes.Length)
+            {
+                return [];
+            }
+
+            for (var component = 0; component < expectedDimension; component++)
+            {
+                values.Add(BitConverter.ToSingle(vertexDataBytes, baseOffset + component * sizeof(float)));
+            }
+        }
+
+        return values;
+    }
+
+    private static int ResolveVertexFormatSize(int format)
+    {
+        return format switch
+        {
+            0 => 4,
+            1 => 2,
+            2 => 1,
+            3 => 1,
+            4 => 2,
+            5 => 2,
+            6 => 1,
+            7 => 1,
+            8 => 2,
+            9 => 2,
+            10 => 4,
+            11 => 4,
+            _ => 0
+        };
+    }
+
+    private sealed record VertexChannelInfo(int Stream, int Offset, int Format, int Dimension);
 
     private static long ParsePathId(string pathId)
     {

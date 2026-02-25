@@ -12,4 +12,7 @@ public sealed record UnityRenderMesh(
     int? IndexBufferElementCount,
     int? IndexFormat,
     string? VertexDataBase64,
-    IReadOnlyList<int>? IndexValues);
+    IReadOnlyList<int>? IndexValues,
+    IReadOnlyList<float>? Positions,
+    IReadOnlyList<float>? Normals,
+    IReadOnlyList<float>? Uv0);
