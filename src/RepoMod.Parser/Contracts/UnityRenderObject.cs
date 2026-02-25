@@ -10,6 +10,7 @@ public sealed record UnityRenderObject(
     IReadOnlyList<string> ChildObjectIds,
     string? MeshObjectId,
     IReadOnlyList<string> MaterialObjectIds,
+    IReadOnlyList<UnityRenderMaterialAssignment> MaterialAssignments,
     IReadOnlyList<float>? LocalPosition,
     IReadOnlyList<float>? LocalRotation,
     IReadOnlyList<float>? LocalScale);

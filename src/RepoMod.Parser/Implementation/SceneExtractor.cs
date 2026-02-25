@@ -565,6 +565,7 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
         var indexBufferBytes = ReadByteArray(data, "m_IndexBuffer");
         var indexValues = DecodeIndexValues(indexBufferBytes, indexFormat);
         var decodedChannels = DecodeVertexChannels(data, vertexDataBytes, vertexCount);
+        var subMeshes = ExtractSubMeshes(data);
 
         return new UnityRenderMesh(
             objectId,
@@ -581,7 +582,37 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
             indexValues.Count > 0 ? indexValues : null,
             decodedChannels.Positions,
             decodedChannels.Normals,
-            decodedChannels.Uv0);
+            decodedChannels.Uv0,
+            subMeshes);
+    }
+
+    private static IReadOnlyList<UnityRenderSubMesh> ExtractSubMeshes(OrderedDictionary meshData)
+    {
+        if (!TryGetDictionaryValue(meshData, "m_SubMeshes", out var subMeshesValue)
+            || subMeshesValue is not Array subMeshesArray)
+        {
+            return [];
+        }
+
+        var subMeshes = new List<UnityRenderSubMesh>(subMeshesArray.Length);
+        for (var subMeshIndex = 0; subMeshIndex < subMeshesArray.Length; subMeshIndex++)
+        {
+            if (subMeshesArray.GetValue(subMeshIndex) is not OrderedDictionary subMeshDictionary)
+            {
+                continue;
+            }
+
+            subMeshes.Add(new UnityRenderSubMesh(
+                subMeshIndex,
+                ReadIntValue(subMeshDictionary, "firstByte"),
+                ReadIntValue(subMeshDictionary, "indexCount"),
+                ReadIntValue(subMeshDictionary, "topology"),
+                ReadIntValue(subMeshDictionary, "baseVertex"),
+                ReadIntValue(subMeshDictionary, "firstVertex"),
+                ReadIntValue(subMeshDictionary, "vertexCount")));
+        }
+
+        return subMeshes;
     }
 
     private static UnityRenderMaterial? TryBuildRenderMaterial(string assetId, ObjectInfo objectInfo, SerializedFile serializedFile)
@@ -1292,6 +1323,7 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
                         .ToArray(),
                     null,
                     [],
+                    [],
                     [transform.m_LocalPosition.X, transform.m_LocalPosition.Y, transform.m_LocalPosition.Z],
                     [transform.m_LocalRotation.X, transform.m_LocalRotation.Y, transform.m_LocalRotation.Z, transform.m_LocalRotation.W],
                     [transform.m_LocalScale.X, transform.m_LocalScale.Y, transform.m_LocalScale.Z]);
@@ -1314,6 +1346,7 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
                         .ToArray(),
                     null,
                     [],
+                    [],
                     null,
                     null,
                     null);
@@ -1332,6 +1365,7 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
                     [],
                     ResolvePointerObjectId(assetId, meshFilter.m_Mesh.m_FileID, meshFilter.m_Mesh.m_PathID),
                     [],
+                        [],
                     null,
                     null,
                     null);
@@ -1340,6 +1374,12 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
             if (objectReader.type == ClassIDType.MeshRenderer)
             {
                 var meshRenderer = new MeshRenderer(objectReader);
+                var materialObjectIds = meshRenderer.m_Materials
+                    .Select(material => ResolvePointerObjectId(assetId, material.m_FileID, material.m_PathID))
+                    .Where(id => !string.IsNullOrWhiteSpace(id))
+                    .Cast<string>()
+                    .ToArray();
+
                 return new UnityRenderObject(
                     objectId,
                     assetId,
@@ -1349,11 +1389,8 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
                     ResolvePointerObjectId(assetId, meshRenderer.m_GameObject.m_FileID, meshRenderer.m_GameObject.m_PathID),
                     [],
                     null,
-                    meshRenderer.m_Materials
-                        .Select(material => ResolvePointerObjectId(assetId, material.m_FileID, material.m_PathID))
-                        .Where(id => !string.IsNullOrWhiteSpace(id))
-                        .Cast<string>()
-                        .ToArray(),
+                    materialObjectIds,
+                    BuildMaterialAssignments(materialObjectIds),
                     null,
                     null,
                     null);
@@ -1362,6 +1399,12 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
             if (objectReader.type == ClassIDType.SkinnedMeshRenderer)
             {
                 var skinnedMeshRenderer = new SkinnedMeshRenderer(objectReader);
+                var materialObjectIds = skinnedMeshRenderer.m_Materials
+                    .Select(material => ResolvePointerObjectId(assetId, material.m_FileID, material.m_PathID))
+                    .Where(id => !string.IsNullOrWhiteSpace(id))
+                    .Cast<string>()
+                    .ToArray();
+
                 return new UnityRenderObject(
                     objectId,
                     assetId,
@@ -1375,11 +1418,8 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
                         .Cast<string>()
                         .ToArray(),
                     ResolvePointerObjectId(assetId, skinnedMeshRenderer.m_Mesh.m_FileID, skinnedMeshRenderer.m_Mesh.m_PathID),
-                    skinnedMeshRenderer.m_Materials
-                        .Select(material => ResolvePointerObjectId(assetId, material.m_FileID, material.m_PathID))
-                        .Where(id => !string.IsNullOrWhiteSpace(id))
-                        .Cast<string>()
-                        .ToArray(),
+                    materialObjectIds,
+                    BuildMaterialAssignments(materialObjectIds),
                     null,
                     null,
                     null);
@@ -1406,6 +1446,22 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
         }
 
         return $"external-file:{fileId.ToString(CultureInfo.InvariantCulture)}:obj:{pathId.ToString(CultureInfo.InvariantCulture)}";
+    }
+
+    private static IReadOnlyList<UnityRenderMaterialAssignment> BuildMaterialAssignments(IReadOnlyList<string> materialObjectIds)
+    {
+        if (materialObjectIds.Count == 0)
+        {
+            return [];
+        }
+
+        var assignments = new List<UnityRenderMaterialAssignment>(materialObjectIds.Count);
+        for (var index = 0; index < materialObjectIds.Count; index++)
+        {
+            assignments.Add(new UnityRenderMaterialAssignment(index, materialObjectIds[index]));
+        }
+
+        return assignments;
     }
 
     private static IReadOnlyList<UnityObjectPointer> ExtractOutboundObjectPointers(SerializedFile serializedFile, ObjectInfo objectInfo)

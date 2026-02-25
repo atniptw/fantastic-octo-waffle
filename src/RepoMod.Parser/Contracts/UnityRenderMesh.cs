@@ -15,4 +15,5 @@ public sealed record UnityRenderMesh(
     IReadOnlyList<int>? IndexValues,
     IReadOnlyList<float>? Positions,
     IReadOnlyList<float>? Normals,
-    IReadOnlyList<float>? Uv0);
+    IReadOnlyList<float>? Uv0,
+    IReadOnlyList<UnityRenderSubMesh> SubMeshes);

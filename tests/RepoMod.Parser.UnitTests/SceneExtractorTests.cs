@@ -67,6 +67,13 @@ public class SceneExtractorTests
             Assert.Contains(
                 result.Scene.RenderObjects,
                 item => item.Kind is "transform" or "gameobject" or "meshfilter" or "meshrenderer" or "skinnedmeshrenderer");
+
+            if (result.Scene.RenderObjects.Any(item => item.MaterialAssignments.Count > 0))
+            {
+                Assert.Contains(
+                    result.Scene.RenderObjects,
+                    item => item.MaterialAssignments.All(assignment => assignment.SubMeshIndex >= 0));
+            }
         }
 
         if (result.Scene.RenderMeshes.Count > 0)
@@ -90,6 +97,13 @@ public class SceneExtractorTests
                     mesh => (mesh.Positions is { Count: > 0 } && mesh.Positions.Count % 3 == 0)
                             || (mesh.Normals is { Count: > 0 } && mesh.Normals.Count % 3 == 0)
                             || (mesh.Uv0 is { Count: > 0 } && mesh.Uv0.Count % 2 == 0));
+            }
+
+            if (result.Scene.RenderMeshes.Any(mesh => mesh.SubMeshes.Count > 0))
+            {
+                Assert.Contains(
+                    result.Scene.RenderMeshes,
+                    mesh => mesh.SubMeshes.All(subMesh => subMesh.SubMeshIndex >= 0));
             }
         }
 
