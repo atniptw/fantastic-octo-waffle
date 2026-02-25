@@ -20,6 +20,7 @@ public class SceneExtractorTests
         Assert.NotEmpty(result.Scene.Assets);
         Assert.NotEmpty(result.Scene.ObjectRefs);
         Assert.NotNull(result.Scene.RenderObjects);
+        Assert.NotNull(result.Scene.RenderPrimitives);
         Assert.NotNull(result.Scene.RenderMeshes);
         Assert.NotNull(result.Scene.RenderMaterials);
         Assert.NotNull(result.Scene.RenderTextures);
@@ -74,6 +75,12 @@ public class SceneExtractorTests
                     result.Scene.RenderObjects,
                     item => item.MaterialAssignments.All(assignment => assignment.SubMeshIndex >= 0));
             }
+        }
+
+        if (result.Scene.RenderPrimitives.Count > 0)
+        {
+            Assert.Contains(result.Scene.RenderPrimitives, item => item.PrimitiveId.StartsWith("primitive:", StringComparison.Ordinal));
+            Assert.Contains(result.Scene.RenderPrimitives, item => item.SubMeshIndex >= 0 && !string.IsNullOrWhiteSpace(item.MeshObjectId));
         }
 
         if (result.Scene.RenderMeshes.Count > 0)
@@ -137,6 +144,7 @@ public class SceneExtractorTests
         Assert.True(result.Success, result.Error);
         Assert.NotNull(result.Scene);
         Assert.Empty(result.Scene.RenderObjects);
+        Assert.Empty(result.Scene.RenderPrimitives);
         Assert.Empty(result.Scene.RenderMeshes);
         Assert.Empty(result.Scene.RenderMaterials);
         Assert.Empty(result.Scene.RenderTextures);
@@ -168,6 +176,7 @@ public class SceneExtractorTests
         Assert.True(result.Success, result.Error);
         Assert.NotNull(result.Scene);
         Assert.Empty(result.Scene.RenderObjects);
+        Assert.Empty(result.Scene.RenderPrimitives);
         Assert.Empty(result.Scene.RenderMeshes);
         Assert.Empty(result.Scene.RenderMaterials);
         Assert.Empty(result.Scene.RenderTextures);

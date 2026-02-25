@@ -6,6 +6,7 @@ public sealed record ParsedModScene(
     IReadOnlyList<ParsedAssetRecord> Assets,
     IReadOnlyList<UnityObjectRef> ObjectRefs,
     IReadOnlyList<UnityRenderObject> RenderObjects,
+    IReadOnlyList<UnityRenderPrimitive> RenderPrimitives,
     IReadOnlyList<UnityRenderMesh> RenderMeshes,
     IReadOnlyList<UnityRenderMaterial> RenderMaterials,
     IReadOnlyList<UnityRenderTexture> RenderTextures,

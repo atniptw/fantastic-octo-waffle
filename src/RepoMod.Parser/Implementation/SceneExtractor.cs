@@ -107,12 +107,15 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
                 warnings.Add("No avatar candidate assets were detected in unitypackage output.");
             }
 
+            var renderPrimitives = BuildRenderPrimitives(renderObjects, renderMeshes);
+
             var scene = new ParsedModScene(
                 BuildSceneId(containerId),
                 container,
                 assets,
                 refs,
                 renderObjects,
+                renderPrimitives,
                 renderMeshes,
                 renderMaterials,
                 renderTextures,
@@ -203,6 +206,7 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
             container,
             assets,
             refs,
+                [],
                 [],
                 [],
                 [],
@@ -1462,6 +1466,143 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
         }
 
         return assignments;
+    }
+
+    private static IReadOnlyList<UnityRenderPrimitive> BuildRenderPrimitives(
+        IReadOnlyList<UnityRenderObject> renderObjects,
+        IReadOnlyList<UnityRenderMesh> renderMeshes)
+    {
+        if (renderObjects.Count == 0 || renderMeshes.Count == 0)
+        {
+            return [];
+        }
+
+        var meshByObjectId = renderMeshes
+            .GroupBy(mesh => mesh.ObjectId, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+
+        var meshByGameObjectId = renderObjects
+            .Where(item => item.Kind == "meshfilter"
+                && !string.IsNullOrWhiteSpace(item.ParentObjectId)
+                && !string.IsNullOrWhiteSpace(item.MeshObjectId))
+            .GroupBy(item => item.ParentObjectId!, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First().MeshObjectId!, StringComparer.Ordinal);
+
+        var primitives = new List<UnityRenderPrimitive>();
+        foreach (var renderObject in renderObjects)
+        {
+            if (renderObject.Kind is not ("meshrenderer" or "skinnedmeshrenderer"))
+            {
+                continue;
+            }
+
+            var meshObjectId = ResolveRenderObjectMeshObjectId(renderObject, meshByGameObjectId);
+            if (string.IsNullOrWhiteSpace(meshObjectId)
+                || !meshByObjectId.TryGetValue(meshObjectId, out var mesh))
+            {
+                continue;
+            }
+
+            var assignments = renderObject.MaterialAssignments.Count > 0
+                ? renderObject.MaterialAssignments
+                : BuildMaterialAssignments(renderObject.MaterialObjectIds);
+
+            if (mesh.SubMeshes.Count > 0)
+            {
+                foreach (var subMesh in mesh.SubMeshes)
+                {
+                    var materialObjectId = assignments
+                        .FirstOrDefault(assignment => assignment.SubMeshIndex == subMesh.SubMeshIndex)
+                        ?.MaterialObjectId;
+
+                    primitives.Add(new UnityRenderPrimitive(
+                        BuildRenderPrimitiveId(renderObject.ObjectId, mesh.ObjectId, subMesh.SubMeshIndex, materialObjectId),
+                        renderObject.AssetId,
+                        renderObject.ObjectId,
+                        renderObject.ParentObjectId,
+                        mesh.ObjectId,
+                        subMesh.SubMeshIndex,
+                        materialObjectId,
+                        subMesh.FirstByte,
+                        subMesh.IndexCount,
+                        subMesh.Topology,
+                        subMesh.BaseVertex,
+                        subMesh.FirstVertex,
+                        subMesh.VertexCount));
+                }
+
+                continue;
+            }
+
+            if (assignments.Count > 0)
+            {
+                foreach (var assignment in assignments)
+                {
+                    primitives.Add(new UnityRenderPrimitive(
+                        BuildRenderPrimitiveId(renderObject.ObjectId, mesh.ObjectId, assignment.SubMeshIndex, assignment.MaterialObjectId),
+                        renderObject.AssetId,
+                        renderObject.ObjectId,
+                        renderObject.ParentObjectId,
+                        mesh.ObjectId,
+                        assignment.SubMeshIndex,
+                        assignment.MaterialObjectId,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null));
+                }
+
+                continue;
+            }
+
+            primitives.Add(new UnityRenderPrimitive(
+                BuildRenderPrimitiveId(renderObject.ObjectId, mesh.ObjectId, 0, null),
+                renderObject.AssetId,
+                renderObject.ObjectId,
+                renderObject.ParentObjectId,
+                mesh.ObjectId,
+                0,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null));
+        }
+
+        return primitives;
+    }
+
+    private static string? ResolveRenderObjectMeshObjectId(
+        UnityRenderObject renderObject,
+        IReadOnlyDictionary<string, string> meshByGameObjectId)
+    {
+        if (!string.IsNullOrWhiteSpace(renderObject.MeshObjectId))
+        {
+            return renderObject.MeshObjectId;
+        }
+
+        if (!string.IsNullOrWhiteSpace(renderObject.ParentObjectId)
+            && meshByGameObjectId.TryGetValue(renderObject.ParentObjectId, out var meshObjectId))
+        {
+            return meshObjectId;
+        }
+
+        return null;
+    }
+
+    private static string BuildRenderPrimitiveId(
+        string renderObjectId,
+        string meshObjectId,
+        int subMeshIndex,
+        string? materialObjectId)
+    {
+        var raw = $"{renderObjectId}|{meshObjectId}|{subMeshIndex.ToString(CultureInfo.InvariantCulture)}|{materialObjectId ?? "none"}";
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(raw)));
+        return $"primitive:{hash[..16].ToLowerInvariant()}";
     }
 
     private static IReadOnlyList<UnityObjectPointer> ExtractOutboundObjectPointers(SerializedFile serializedFile, ObjectInfo objectInfo)
