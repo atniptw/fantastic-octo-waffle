@@ -1514,7 +1514,7 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
                     var materialObjectId = assignments
                         .FirstOrDefault(assignment => assignment.SubMeshIndex == subMesh.SubMeshIndex)
                         ?.MaterialObjectId;
-                    var primitiveIndexValues = BuildPrimitiveIndexValues(mesh, subMesh);
+                    var subMeshGeometry = BuildPrimitiveGeometry(mesh, subMesh);
 
                     primitives.Add(new UnityRenderPrimitive(
                         BuildRenderPrimitiveId(renderObject.ObjectId, mesh.ObjectId, subMesh.SubMeshIndex, materialObjectId),
@@ -1524,7 +1524,10 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
                         mesh.ObjectId,
                         subMesh.SubMeshIndex,
                         materialObjectId,
-                        primitiveIndexValues,
+                        subMeshGeometry.IndexValues,
+                        subMeshGeometry.Positions,
+                        subMeshGeometry.Normals,
+                        subMeshGeometry.Uv0,
                         subMesh.FirstByte,
                         subMesh.IndexCount,
                         subMesh.Topology,
@@ -1540,6 +1543,7 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
             {
                 foreach (var assignment in assignments)
                 {
+                    var assignmentGeometry = BuildPrimitiveGeometry(mesh, null);
                     primitives.Add(new UnityRenderPrimitive(
                         BuildRenderPrimitiveId(renderObject.ObjectId, mesh.ObjectId, assignment.SubMeshIndex, assignment.MaterialObjectId),
                         renderObject.AssetId,
@@ -1548,7 +1552,10 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
                         mesh.ObjectId,
                         assignment.SubMeshIndex,
                         assignment.MaterialObjectId,
-                        BuildPrimitiveIndexValues(mesh, null),
+                        assignmentGeometry.IndexValues,
+                        assignmentGeometry.Positions,
+                        assignmentGeometry.Normals,
+                        assignmentGeometry.Uv0,
                         null,
                         null,
                         null,
@@ -1560,6 +1567,7 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
                 continue;
             }
 
+            var fallbackGeometry = BuildPrimitiveGeometry(mesh, null);
             primitives.Add(new UnityRenderPrimitive(
                 BuildRenderPrimitiveId(renderObject.ObjectId, mesh.ObjectId, 0, null),
                 renderObject.AssetId,
@@ -1568,7 +1576,10 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
                 mesh.ObjectId,
                 0,
                 null,
-                BuildPrimitiveIndexValues(mesh, null),
+                fallbackGeometry.IndexValues,
+                fallbackGeometry.Positions,
+                fallbackGeometry.Normals,
+                fallbackGeometry.Uv0,
                 null,
                 null,
                 null,
@@ -1607,6 +1618,53 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
         var raw = $"{renderObjectId}|{meshObjectId}|{subMeshIndex.ToString(CultureInfo.InvariantCulture)}|{materialObjectId ?? "none"}";
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(raw)));
         return $"primitive:{hash[..16].ToLowerInvariant()}";
+    }
+
+    private static PrimitiveGeometry BuildPrimitiveGeometry(UnityRenderMesh mesh, UnityRenderSubMesh? subMesh)
+    {
+        var sourceIndexValues = BuildPrimitiveIndexValues(mesh, subMesh);
+        if (sourceIndexValues is not { Count: > 0 })
+        {
+            return new PrimitiveGeometry(null, null, null, null);
+        }
+
+        var availableVertexCount = ResolveAvailableVertexCount(mesh);
+        if (availableVertexCount <= 0)
+        {
+            return new PrimitiveGeometry(sourceIndexValues, null, null, null);
+        }
+
+        var indexMap = new Dictionary<int, int>();
+        var localIndices = new List<int>(sourceIndexValues.Count);
+        List<float>? localPositions = mesh.Positions is { Count: > 0 } ? [] : null;
+        List<float>? localNormals = mesh.Normals is { Count: > 0 } ? [] : null;
+        List<float>? localUv0 = mesh.Uv0 is { Count: > 0 } ? [] : null;
+
+        foreach (var sourceIndex in sourceIndexValues)
+        {
+            if (sourceIndex < 0 || sourceIndex >= availableVertexCount)
+            {
+                return new PrimitiveGeometry(sourceIndexValues, null, null, null);
+            }
+
+            if (!indexMap.TryGetValue(sourceIndex, out var localIndex))
+            {
+                localIndex = indexMap.Count;
+                indexMap[sourceIndex] = localIndex;
+
+                AppendVertexComponents(localPositions, mesh.Positions, sourceIndex, componentsPerVertex: 3);
+                AppendVertexComponents(localNormals, mesh.Normals, sourceIndex, componentsPerVertex: 3);
+                AppendVertexComponents(localUv0, mesh.Uv0, sourceIndex, componentsPerVertex: 2);
+            }
+
+            localIndices.Add(localIndex);
+        }
+
+        return new PrimitiveGeometry(
+            localIndices,
+            localPositions,
+            localNormals,
+            localUv0);
     }
 
     private static IReadOnlyList<int>? BuildPrimitiveIndexValues(UnityRenderMesh mesh, UnityRenderSubMesh? subMesh)
@@ -1653,6 +1711,61 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
 
         return sliced;
     }
+
+    private static int ResolveAvailableVertexCount(UnityRenderMesh mesh)
+    {
+        var counts = new List<int>(3);
+        if (mesh.Positions is { Count: > 0 })
+        {
+            counts.Add(mesh.Positions.Count / 3);
+        }
+
+        if (mesh.Normals is { Count: > 0 })
+        {
+            counts.Add(mesh.Normals.Count / 3);
+        }
+
+        if (mesh.Uv0 is { Count: > 0 })
+        {
+            counts.Add(mesh.Uv0.Count / 2);
+        }
+
+        if (counts.Count == 0)
+        {
+            return 0;
+        }
+
+        return counts.Min();
+    }
+
+    private static void AppendVertexComponents(
+        List<float>? destination,
+        IReadOnlyList<float>? source,
+        int vertexIndex,
+        int componentsPerVertex)
+    {
+        if (destination is null || source is null)
+        {
+            return;
+        }
+
+        var offset = vertexIndex * componentsPerVertex;
+        if (offset < 0 || offset + componentsPerVertex > source.Count)
+        {
+            return;
+        }
+
+        for (var component = 0; component < componentsPerVertex; component++)
+        {
+            destination.Add(source[offset + component]);
+        }
+    }
+
+    private sealed record PrimitiveGeometry(
+        IReadOnlyList<int>? IndexValues,
+        IReadOnlyList<float>? Positions,
+        IReadOnlyList<float>? Normals,
+        IReadOnlyList<float>? Uv0);
 
     private static IReadOnlyList<UnityObjectPointer> ExtractOutboundObjectPointers(SerializedFile serializedFile, ObjectInfo objectInfo)
     {

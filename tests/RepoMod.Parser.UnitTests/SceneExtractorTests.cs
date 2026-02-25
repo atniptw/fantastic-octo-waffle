@@ -89,6 +89,32 @@ public class SceneExtractorTests
                     item => item.IndexValues is { Count: > 0 }
                             && (item.IndexCount is null || item.IndexValues.Count <= item.IndexCount.Value));
             }
+
+            if (result.Scene.RenderPrimitives.Any(item => item.Positions is { Count: > 0 }))
+            {
+                Assert.Contains(
+                    result.Scene.RenderPrimitives,
+                    item => item.Positions is { Count: > 0 }
+                            && item.Positions.Count % 3 == 0
+                            && item.IndexValues is { Count: > 0 }
+                            && item.IndexValues.Max() < item.Positions.Count / 3);
+            }
+
+            if (result.Scene.RenderPrimitives.Any(item => item.Normals is { Count: > 0 }))
+            {
+                Assert.Contains(
+                    result.Scene.RenderPrimitives,
+                    item => item.Normals is { Count: > 0 }
+                            && item.Normals.Count % 3 == 0);
+            }
+
+            if (result.Scene.RenderPrimitives.Any(item => item.Uv0 is { Count: > 0 }))
+            {
+                Assert.Contains(
+                    result.Scene.RenderPrimitives,
+                    item => item.Uv0 is { Count: > 0 }
+                            && item.Uv0.Count % 2 == 0);
+            }
         }
 
         if (result.Scene.RenderMeshes.Count > 0)
