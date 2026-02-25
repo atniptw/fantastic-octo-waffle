@@ -46,6 +46,14 @@ public class SceneExtractorTests
             Assert.Contains(
                 result.Scene.Graph.RefLinks,
                 link => link.Status is "object-resolved" or "object-unresolved" or "object-external");
+
+            if (result.Scene.ObjectRefs.SelectMany(objectRef => objectRef.OutboundObjectRefs).Any(pointer => pointer.FileId > 0))
+            {
+                Assert.Contains(
+                    result.Scene.Graph.RefLinks,
+                    link => link.Status == "object-external"
+                            && link.TargetGuid.Contains(":obj:", StringComparison.Ordinal));
+            }
         }
 
         Assert.Contains(result.Scene.Graph.RefLinks, link => link.Status == "resolved" || link.Status == "unresolved");

@@ -489,6 +489,7 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
 
             return pointers
                 .Where(pointer => pointer.PathId != "0" && pointer.FileId >= 0)
+                .Select(pointer => ResolveExternalObjectPointer(serializedFile, pointer))
                 .Distinct()
                 .Take(128)
                 .ToArray();
@@ -547,8 +548,46 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
             return false;
         }
 
-        pointer = new UnityObjectPointer(fileId, pathId.ToString(CultureInfo.InvariantCulture));
+        pointer = new UnityObjectPointer(fileId, pathId.ToString(CultureInfo.InvariantCulture), null);
         return true;
+    }
+
+    private static UnityObjectPointer ResolveExternalObjectPointer(SerializedFile serializedFile, UnityObjectPointer pointer)
+    {
+        if (pointer.FileId <= 0)
+        {
+            return pointer;
+        }
+
+        var externalIndex = pointer.FileId - 1;
+        if (externalIndex < 0 || externalIndex >= serializedFile.m_Externals.Count)
+        {
+            return pointer;
+        }
+
+        var external = serializedFile.m_Externals[externalIndex];
+        var externalAssetId = ResolveExternalAssetId(external);
+        return pointer with { ExternalAssetId = externalAssetId };
+    }
+
+    private static string? ResolveExternalAssetId(FileIdentifier external)
+    {
+        if (external.guid != Guid.Empty)
+        {
+            return external.guid.ToString("N").ToLowerInvariant();
+        }
+
+        if (!string.IsNullOrWhiteSpace(external.fileName))
+        {
+            return $"file:{external.fileName.ToLowerInvariant()}";
+        }
+
+        if (!string.IsNullOrWhiteSpace(external.pathName))
+        {
+            return $"path:{external.pathName.ToLowerInvariant()}";
+        }
+
+        return null;
     }
 
     private static bool TryGetDictionaryValue(OrderedDictionary dictionary, string key, out object? value)
@@ -721,9 +760,9 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
                             outboundRef.FileId == 0 ? "object-unresolved" : "object-external",
                             outboundRef.FileId == 0
                                 ? $"PathId:{outboundRef.PathId}"
-                                : $"External[{outboundRef.FileId}]:{outboundRef.PathId}",
+                                : $"External[{outboundRef.FileId}]:{outboundRef.ExternalAssetId ?? "unknown"}:{outboundRef.PathId}",
                             outboundRef.FileId == 0 ? asset.AssetId : null,
-                            null);
+                            outboundRef.ExternalAssetId);
                     }
 
                     edges.Add(new SceneEdge(
@@ -736,7 +775,7 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
                     refLinks.Add(new RefLink(
                         objectRef.AssetId,
                         objectRef.ContainerId,
-                        $"object:{outboundRef.FileId}:{outboundRef.PathId}",
+                        BuildOutboundReferenceTargetKey(outboundRef),
                         outboundRef.FileId == 0 ? objectRef.AssetId : null,
                         outboundRef.FileId == 0 ? $"{objectRef.AssetId}:obj:{outboundRef.PathId}" : null,
                         outboundRef.FileId.ToString(CultureInfo.InvariantCulture),
@@ -849,7 +888,27 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
             return BuildObjectNodeId(localObjectId);
         }
 
-        return $"objectref:file{pointer.FileId}:path{pointer.PathId}";
+        return BuildExternalObjectReferenceNodeId(pointer.FileId, pointer.PathId, pointer.ExternalAssetId);
+    }
+
+    private static string BuildExternalObjectReferenceNodeId(int fileId, string pathId, string? externalAssetId)
+    {
+        var raw = $"{fileId}|{pathId}|{externalAssetId ?? "unknown"}";
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(raw)));
+        return $"objectref:{hash[..16].ToLowerInvariant()}";
+    }
+
+    private static string BuildOutboundReferenceTargetKey(UnityObjectPointer pointer)
+    {
+        if (pointer.FileId == 0)
+        {
+            return $"object:{pointer.FileId}:{pointer.PathId}";
+        }
+
+        var externalIdentity = pointer.ExternalAssetId
+            ?? $"external-file:{pointer.FileId.ToString(CultureInfo.InvariantCulture)}";
+
+        return $"{externalIdentity}:obj:{pointer.PathId}";
     }
 
     private static string BuildEdgeId(string fromNodeId, string toNodeId, string edgeKind)
