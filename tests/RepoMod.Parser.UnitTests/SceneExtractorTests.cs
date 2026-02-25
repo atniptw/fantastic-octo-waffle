@@ -19,6 +19,7 @@ public class SceneExtractorTests
         Assert.Equal("unitypackage", result.Scene.Container.SourceType);
         Assert.NotEmpty(result.Scene.Assets);
         Assert.NotEmpty(result.Scene.ObjectRefs);
+        Assert.NotNull(result.Scene.RenderObjects);
         Assert.NotEmpty(result.Scene.AvatarAssetIds);
         Assert.Contains(result.Scene.Assets, asset => asset.IsAvatarCandidate);
         Assert.Contains(result.Scene.Assets, asset => !string.IsNullOrWhiteSpace(asset.PackageGuid));
@@ -57,6 +58,13 @@ public class SceneExtractorTests
         }
 
         Assert.Contains(result.Scene.Graph.RefLinks, link => link.Status == "resolved" || link.Status == "unresolved");
+
+        if (result.Scene.RenderObjects.Count > 0)
+        {
+            Assert.Contains(
+                result.Scene.RenderObjects,
+                item => item.Kind is "transform" or "gameobject" or "meshfilter" or "meshrenderer" or "skinnedmeshrenderer");
+        }
     }
 
     [Fact]
@@ -71,6 +79,7 @@ public class SceneExtractorTests
 
         Assert.True(result.Success, result.Error);
         Assert.NotNull(result.Scene);
+        Assert.Empty(result.Scene.RenderObjects);
         Assert.Equal("hhh", result.Scene.Container.SourceType);
         var asset = Assert.Single(result.Scene.Assets);
         Assert.True(asset.IsCosmeticCandidate);
@@ -98,6 +107,7 @@ public class SceneExtractorTests
 
         Assert.True(result.Success, result.Error);
         Assert.NotNull(result.Scene);
+        Assert.Empty(result.Scene.RenderObjects);
 
         var asset = Assert.Single(result.Scene.Assets);
         Assert.Equal("neck", asset.SlotTag);

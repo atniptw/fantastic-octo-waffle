@@ -49,6 +49,7 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
 
             var assets = new List<ParsedAssetRecord>();
             var refs = new List<UnityObjectRef>();
+            var renderObjects = new List<UnityRenderObject>();
             var avatarAssetIds = new List<string>();
             var warnings = new List<string>(scanResult.Warnings);
 
@@ -78,13 +79,16 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
                     false,
                     slotTag));
 
-                refs.AddRange(BuildObjectRefsFromSerializedAsset(
+                var extracted = BuildObjectRefsFromSerializedAsset(
                     assetId,
                     containerId,
                     packageGuid,
                     discovered.FileName,
                     packageItem?.AssetBytes,
-                    warnings));
+                    warnings);
+
+                refs.AddRange(extracted.ObjectRefs);
+                renderObjects.AddRange(extracted.RenderObjects);
 
                 if (isAvatar)
                 {
@@ -102,6 +106,7 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
                 container,
                 assets,
                 refs,
+                renderObjects,
                 [],
                 avatarAssetIds,
                 BuildGraph(container, assets, refs, [], warnings),
@@ -189,6 +194,7 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
             container,
             assets,
             refs,
+                [],
             [hint],
             [],
             BuildGraph(container, assets, refs, [hint], warnings),
@@ -373,7 +379,7 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
         return set.Take(64).ToArray();
     }
 
-    private static IReadOnlyList<UnityObjectRef> BuildObjectRefsFromSerializedAsset(
+    private static (IReadOnlyList<UnityObjectRef> ObjectRefs, IReadOnlyList<UnityRenderObject> RenderObjects) BuildObjectRefsFromSerializedAsset(
         string assetId,
         string containerId,
         string? packageGuid,
@@ -383,18 +389,20 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
     {
         if (assetBytes is not { Length: > 0 })
         {
-            return [
-                new UnityObjectRef(
-                    BuildObjectId(assetId, packageGuid),
-                    assetId,
-                    containerId,
-                    packageGuid,
-                    null,
-                    null,
-                    null,
-                    fallbackName,
-                    [])
-            ];
+            return (
+                [
+                    new UnityObjectRef(
+                        BuildObjectId(assetId, packageGuid),
+                        assetId,
+                        containerId,
+                        packageGuid,
+                        null,
+                        null,
+                        null,
+                        fallbackName,
+                        [])
+                ],
+                []);
         }
 
         try
@@ -403,39 +411,44 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
             using var fileReader = new FileReader(fallbackName, stream);
             if (fileReader.FileType != FileType.AssetsFile)
             {
-                return [
-                    new UnityObjectRef(
-                        BuildObjectId(assetId, packageGuid),
-                        assetId,
-                        containerId,
-                        packageGuid,
-                        null,
-                        null,
-                        null,
-                        fallbackName,
-                        [])
-                ];
+                return (
+                    [
+                        new UnityObjectRef(
+                            BuildObjectId(assetId, packageGuid),
+                            assetId,
+                            containerId,
+                            packageGuid,
+                            null,
+                            null,
+                            null,
+                            fallbackName,
+                            [])
+                    ],
+                    []);
             }
 
             var assetsManager = new AssetsManager();
             var serializedFile = new SerializedFile(fileReader, assetsManager);
             if (serializedFile.m_Objects.Count == 0)
             {
-                return [
-                    new UnityObjectRef(
-                        BuildObjectId(assetId, packageGuid),
-                        assetId,
-                        containerId,
-                        packageGuid,
-                        null,
-                        null,
-                        null,
-                        fallbackName,
-                        [])
-                ];
+                return (
+                    [
+                        new UnityObjectRef(
+                            BuildObjectId(assetId, packageGuid),
+                            assetId,
+                            containerId,
+                            packageGuid,
+                            null,
+                            null,
+                            null,
+                            fallbackName,
+                            [])
+                    ],
+                    []);
             }
 
             var objectRefs = new List<UnityObjectRef>(serializedFile.m_Objects.Count);
+            var renderObjects = new List<UnityRenderObject>();
             foreach (var objectInfo in serializedFile.m_Objects)
             {
                 var pathIdText = objectInfo.m_PathID.ToString(CultureInfo.InvariantCulture);
@@ -451,26 +464,176 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
                     objectInfo.classID,
                     objectName,
                     outboundRefs));
+
+                var renderObject = TryBuildRenderObject(assetId, objectInfo, serializedFile);
+                if (renderObject is not null)
+                {
+                    renderObjects.Add(renderObject);
+                }
             }
 
-            return objectRefs;
+            return (objectRefs, renderObjects);
         }
         catch (Exception ex)
         {
             warnings.Add($"Object-level read failed for '{fallbackName}': {ex.Message}");
-            return [
-                new UnityObjectRef(
-                    BuildObjectId(assetId, packageGuid),
-                    assetId,
-                    containerId,
-                    packageGuid,
-                    null,
-                    null,
-                    null,
-                    fallbackName,
-                    [])
-            ];
+            return (
+                [
+                    new UnityObjectRef(
+                        BuildObjectId(assetId, packageGuid),
+                        assetId,
+                        containerId,
+                        packageGuid,
+                        null,
+                        null,
+                        null,
+                        fallbackName,
+                        [])
+                ],
+                []);
         }
+    }
+
+    private static UnityRenderObject? TryBuildRenderObject(string assetId, ObjectInfo objectInfo, SerializedFile serializedFile)
+    {
+        var objectId = $"{assetId}:obj:{objectInfo.m_PathID.ToString(CultureInfo.InvariantCulture)}";
+
+        try
+        {
+            using var objectReader = new ObjectReader(serializedFile.reader, serializedFile, objectInfo);
+            objectReader.Reset();
+
+            if (objectReader.type == ClassIDType.Transform)
+            {
+                var transform = new Transform(objectReader);
+                return new UnityRenderObject(
+                    objectId,
+                    assetId,
+                    objectInfo.classID,
+                    "transform",
+                    BuildObjectDisplayName(objectInfo.classID, objectInfo.m_PathID),
+                    ResolvePointerObjectId(assetId, transform.m_Father.m_FileID, transform.m_Father.m_PathID),
+                    transform.m_Children
+                        .Select(child => ResolvePointerObjectId(assetId, child.m_FileID, child.m_PathID))
+                        .Where(id => !string.IsNullOrWhiteSpace(id))
+                        .Cast<string>()
+                        .ToArray(),
+                    null,
+                    [],
+                    [transform.m_LocalPosition.X, transform.m_LocalPosition.Y, transform.m_LocalPosition.Z],
+                    [transform.m_LocalRotation.X, transform.m_LocalRotation.Y, transform.m_LocalRotation.Z, transform.m_LocalRotation.W],
+                    [transform.m_LocalScale.X, transform.m_LocalScale.Y, transform.m_LocalScale.Z]);
+            }
+
+            if (objectReader.type == ClassIDType.GameObject)
+            {
+                var gameObject = new GameObject(objectReader);
+                return new UnityRenderObject(
+                    objectId,
+                    assetId,
+                    objectInfo.classID,
+                    "gameobject",
+                    string.IsNullOrWhiteSpace(gameObject.m_Name) ? BuildObjectDisplayName(objectInfo.classID, objectInfo.m_PathID) : gameObject.m_Name,
+                    null,
+                    gameObject.m_Components
+                        .Select(component => ResolvePointerObjectId(assetId, component.m_FileID, component.m_PathID))
+                        .Where(id => !string.IsNullOrWhiteSpace(id))
+                        .Cast<string>()
+                        .ToArray(),
+                    null,
+                    [],
+                    null,
+                    null,
+                    null);
+            }
+
+            if (objectReader.type == ClassIDType.MeshFilter)
+            {
+                var meshFilter = new MeshFilter(objectReader);
+                return new UnityRenderObject(
+                    objectId,
+                    assetId,
+                    objectInfo.classID,
+                    "meshfilter",
+                    BuildObjectDisplayName(objectInfo.classID, objectInfo.m_PathID),
+                    ResolvePointerObjectId(assetId, meshFilter.m_GameObject.m_FileID, meshFilter.m_GameObject.m_PathID),
+                    [],
+                    ResolvePointerObjectId(assetId, meshFilter.m_Mesh.m_FileID, meshFilter.m_Mesh.m_PathID),
+                    [],
+                    null,
+                    null,
+                    null);
+            }
+
+            if (objectReader.type == ClassIDType.MeshRenderer)
+            {
+                var meshRenderer = new MeshRenderer(objectReader);
+                return new UnityRenderObject(
+                    objectId,
+                    assetId,
+                    objectInfo.classID,
+                    "meshrenderer",
+                    BuildObjectDisplayName(objectInfo.classID, objectInfo.m_PathID),
+                    ResolvePointerObjectId(assetId, meshRenderer.m_GameObject.m_FileID, meshRenderer.m_GameObject.m_PathID),
+                    [],
+                    null,
+                    meshRenderer.m_Materials
+                        .Select(material => ResolvePointerObjectId(assetId, material.m_FileID, material.m_PathID))
+                        .Where(id => !string.IsNullOrWhiteSpace(id))
+                        .Cast<string>()
+                        .ToArray(),
+                    null,
+                    null,
+                    null);
+            }
+
+            if (objectReader.type == ClassIDType.SkinnedMeshRenderer)
+            {
+                var skinnedMeshRenderer = new SkinnedMeshRenderer(objectReader);
+                return new UnityRenderObject(
+                    objectId,
+                    assetId,
+                    objectInfo.classID,
+                    "skinnedmeshrenderer",
+                    BuildObjectDisplayName(objectInfo.classID, objectInfo.m_PathID),
+                    ResolvePointerObjectId(assetId, skinnedMeshRenderer.m_GameObject.m_FileID, skinnedMeshRenderer.m_GameObject.m_PathID),
+                    skinnedMeshRenderer.m_Bones
+                        .Select(bone => ResolvePointerObjectId(assetId, bone.m_FileID, bone.m_PathID))
+                        .Where(id => !string.IsNullOrWhiteSpace(id))
+                        .Cast<string>()
+                        .ToArray(),
+                    ResolvePointerObjectId(assetId, skinnedMeshRenderer.m_Mesh.m_FileID, skinnedMeshRenderer.m_Mesh.m_PathID),
+                    skinnedMeshRenderer.m_Materials
+                        .Select(material => ResolvePointerObjectId(assetId, material.m_FileID, material.m_PathID))
+                        .Where(id => !string.IsNullOrWhiteSpace(id))
+                        .Cast<string>()
+                        .ToArray(),
+                    null,
+                    null,
+                    null);
+            }
+        }
+        catch
+        {
+            return null;
+        }
+
+        return null;
+    }
+
+    private static string? ResolvePointerObjectId(string assetId, int fileId, long pathId)
+    {
+        if (pathId == 0)
+        {
+            return null;
+        }
+
+        if (fileId == 0)
+        {
+            return $"{assetId}:obj:{pathId.ToString(CultureInfo.InvariantCulture)}";
+        }
+
+        return $"external-file:{fileId.ToString(CultureInfo.InvariantCulture)}:obj:{pathId.ToString(CultureInfo.InvariantCulture)}";
     }
 
     private static IReadOnlyList<UnityObjectPointer> ExtractOutboundObjectPointers(SerializedFile serializedFile, ObjectInfo objectInfo)

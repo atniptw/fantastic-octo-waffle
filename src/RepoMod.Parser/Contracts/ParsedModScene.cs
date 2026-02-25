@@ -5,6 +5,7 @@ public sealed record ParsedModScene(
     ContainerDescriptor Container,
     IReadOnlyList<ParsedAssetRecord> Assets,
     IReadOnlyList<UnityObjectRef> ObjectRefs,
+    IReadOnlyList<UnityRenderObject> RenderObjects,
     IReadOnlyList<AttachmentHint> AttachmentHints,
     IReadOnlyList<string> AvatarAssetIds,
     ParsedSceneGraph Graph,

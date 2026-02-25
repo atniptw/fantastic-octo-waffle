@@ -4,7 +4,7 @@ namespace AssetStudio
 {
     public sealed class SkinnedMeshRenderer : Renderer
     {
-        public PPtr<Mesh> m_Mesh;
+        public PPtr<Object> m_Mesh;
         public List<PPtr<Transform>> m_Bones;
         public float[] m_BlendShapeWeights;
 
@@ -17,10 +17,10 @@ namespace AssetStudio
 
             if (version < (2, 6)) //2.6 down
             {
-                var m_DisableAnimationWhenOffscreen = new PPtr<Animation>(reader);
+                var m_DisableAnimationWhenOffscreen = new PPtr<Object>(reader);
             }
 
-            m_Mesh = new PPtr<Mesh>(reader);
+            m_Mesh = new PPtr<Object>(reader);
 
             var numBones = reader.ReadInt32();
             m_Bones = new List<PPtr<Transform>>();

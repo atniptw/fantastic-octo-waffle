@@ -1,5 +1,4 @@
 ﻿using System.Collections.Generic;
-using System.Text.Json.Serialization;
 
 namespace AssetStudio
 {
@@ -12,10 +11,6 @@ namespace AssetStudio
         public MeshRenderer m_MeshRenderer;
         public MeshFilter m_MeshFilter;
         public SkinnedMeshRenderer m_SkinnedMeshRenderer;
-        public Animator m_Animator;
-        public Animation m_Animation;
-        [JsonIgnore]
-        public CubismModel CubismModel;
 
         public GameObject(ObjectReader reader) : base(reader)
         {

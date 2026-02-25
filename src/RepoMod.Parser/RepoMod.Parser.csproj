@@ -44,6 +44,16 @@
     <Compile Include="Vendor/AssetStudio/AssetStudio/JsonConverterHelper.cs" />
     <Compile Include="Vendor/AssetStudio/AssetStudio/Classes/Object.cs" />
     <Compile Include="Vendor/AssetStudio/AssetStudio/Classes/PPtr.cs" />
+    <Compile Include="Vendor/AssetStudio/AssetStudio/Classes/EditorExtension.cs" />
+    <Compile Include="Vendor/AssetStudio/AssetStudio/Classes/NamedObject.cs" />
+    <Compile Include="Vendor/AssetStudio/AssetStudio/Classes/Component.cs" />
+    <Compile Include="Vendor/AssetStudio/AssetStudio/Classes/Behaviour.cs" />
+    <Compile Include="Vendor/AssetStudio/AssetStudio/Classes/GameObject.cs" />
+    <Compile Include="Vendor/AssetStudio/AssetStudio/Classes/Transform.cs" />
+    <Compile Include="Vendor/AssetStudio/AssetStudio/Classes/Renderer.cs" />
+    <Compile Include="Vendor/AssetStudio/AssetStudio/Classes/MeshRenderer.cs" />
+    <Compile Include="Vendor/AssetStudio/AssetStudio/Classes/MeshFilter.cs" />
+    <Compile Include="Vendor/AssetStudio/AssetStudio/Classes/SkinnedMeshRenderer.cs" />
     <Compile Include="Vendor/AssetStudio/AssetStudio/Extensions/BinaryReaderExtensions.cs" />
     <Compile Include="Vendor/AssetStudio/AssetStudio/Extensions/BinaryWriterExtensions.cs" />
     <Compile Include="Vendor/AssetStudio/AssetStudio/FileReader.cs" />

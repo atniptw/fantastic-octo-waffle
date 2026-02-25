@@ -16,7 +16,7 @@ namespace AssetStudio
 
     public abstract class Renderer : Component
     {
-        public List<PPtr<Material>> m_Materials;
+        public List<PPtr<Object>> m_Materials;
         public StaticBatchInfo m_StaticBatchInfo;
         public uint[] m_SubsetIndices;
 
@@ -120,10 +120,10 @@ namespace AssetStudio
             }
 
             var m_MaterialsSize = reader.ReadInt32();
-            m_Materials = new List<PPtr<Material>>();
+            m_Materials = new List<PPtr<Object>>();
             for (var i = 0; i < m_MaterialsSize; i++)
             {
-                m_Materials.Add(new PPtr<Material>(reader));
+                m_Materials.Add(new PPtr<Object>(reader));
             }
 
             if (version < 3) //3.0 down
