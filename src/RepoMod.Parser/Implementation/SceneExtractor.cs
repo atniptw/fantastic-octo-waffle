@@ -696,6 +696,8 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
         var nodes = new Dictionary<string, SceneNode>(StringComparer.Ordinal);
         var edges = new List<SceneEdge>();
         var refLinks = new List<RefLink>();
+        var assetIdentityIndex = BuildAssetIdentityIndex(assets);
+        var objectIdentityIndex = BuildObjectIdentityIndex(refs);
 
         var containerNodeId = BuildContainerNodeId(container.ContainerId);
         nodes[containerNodeId] = new SceneNode(containerNodeId, "container", container.DisplayName, null, null);
@@ -752,16 +754,19 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
 
                 foreach (var outboundRef in objectRef.OutboundObjectRefs)
                 {
-                    var targetNodeId = ResolveObjectReferenceNodeId(asset.AssetId, outboundRef);
+                    var (targetNodeId, targetGuid, targetAssetId, targetObjectId, status) = ResolveObjectReference(
+                        objectRef.AssetId,
+                        outboundRef,
+                        assetIdentityIndex,
+                        objectIdentityIndex);
+
                     if (!nodes.ContainsKey(targetNodeId))
                     {
                         nodes[targetNodeId] = new SceneNode(
                             targetNodeId,
-                            outboundRef.FileId == 0 ? "object-unresolved" : "object-external",
-                            outboundRef.FileId == 0
-                                ? $"PathId:{outboundRef.PathId}"
-                                : $"External[{outboundRef.FileId}]:{outboundRef.ExternalAssetId ?? "unknown"}:{outboundRef.PathId}",
-                            outboundRef.FileId == 0 ? asset.AssetId : null,
+                            ResolveObjectReferenceKind(status),
+                            ResolveObjectReferenceLabel(outboundRef, targetAssetId),
+                            targetAssetId,
                             outboundRef.ExternalAssetId);
                     }
 
@@ -770,18 +775,16 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
                         objectNodeId,
                         targetNodeId,
                         "object-ref",
-                        outboundRef.FileId == 0 ? "high" : "medium"));
+                        status is "object-resolved" or "object-asset-resolved" ? "high" : "medium"));
 
                     refLinks.Add(new RefLink(
                         objectRef.AssetId,
                         objectRef.ContainerId,
-                        BuildOutboundReferenceTargetKey(outboundRef),
-                        outboundRef.FileId == 0 ? objectRef.AssetId : null,
-                        outboundRef.FileId == 0 ? $"{objectRef.AssetId}:obj:{outboundRef.PathId}" : null,
+                        targetGuid,
+                        targetAssetId,
+                        targetObjectId,
                         outboundRef.FileId.ToString(CultureInfo.InvariantCulture),
-                        outboundRef.FileId == 0
-                            ? (nodes.ContainsKey(BuildObjectNodeId($"{objectRef.AssetId}:obj:{outboundRef.PathId}")) ? "object-resolved" : "object-unresolved")
-                            : "object-external"));
+                        status));
                 }
             }
         }
@@ -879,6 +882,163 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
 
     private static string BuildGuidNodeId(string guid)
         => $"guid:{guid.ToLowerInvariant()}";
+
+    private static (string TargetNodeId, string TargetGuid, string? TargetAssetId, string? TargetObjectId, string Status) ResolveObjectReference(
+        string sourceAssetId,
+        UnityObjectPointer pointer,
+        IReadOnlyDictionary<string, string> assetIdentityIndex,
+        ISet<string> objectIdentityIndex)
+    {
+        var pathId = pointer.PathId;
+        if (pointer.FileId == 0)
+        {
+            var localObjectId = $"{sourceAssetId}:obj:{pathId}";
+            var status = objectIdentityIndex.Contains(BuildObjectIdentityKey(sourceAssetId, pathId))
+                ? "object-resolved"
+                : "object-unresolved";
+
+            return (
+                BuildObjectNodeId(localObjectId),
+                localObjectId,
+                sourceAssetId,
+                localObjectId,
+                status);
+        }
+
+        var resolvedTargetAssetId = ResolveTargetAssetId(pointer.ExternalAssetId, assetIdentityIndex);
+        if (!string.IsNullOrWhiteSpace(resolvedTargetAssetId))
+        {
+            var resolvedObjectId = $"{resolvedTargetAssetId}:obj:{pathId}";
+            var status = objectIdentityIndex.Contains(BuildObjectIdentityKey(resolvedTargetAssetId, pathId))
+                ? "object-resolved"
+                : "object-asset-resolved";
+
+            return (
+                BuildObjectNodeId(resolvedObjectId),
+                resolvedObjectId,
+                resolvedTargetAssetId,
+                resolvedObjectId,
+                status);
+        }
+
+        return (
+            BuildExternalObjectReferenceNodeId(pointer.FileId, pathId, pointer.ExternalAssetId),
+            BuildOutboundReferenceTargetKey(pointer),
+            null,
+            null,
+            "object-external");
+    }
+
+    private static IReadOnlyDictionary<string, string> BuildAssetIdentityIndex(IReadOnlyList<ParsedAssetRecord> assets)
+    {
+        var index = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var asset in assets)
+        {
+            AddAssetIdentity(index, asset.MetaGuid, asset.AssetId);
+            AddAssetIdentity(index, asset.PackageGuid, asset.AssetId);
+            AddAssetIdentity(index, $"guid:{asset.MetaGuid}", asset.AssetId);
+            AddAssetIdentity(index, $"guid:{asset.PackageGuid}", asset.AssetId);
+            AddAssetIdentity(index, $"file:{asset.FileName}", asset.AssetId);
+            AddAssetIdentity(index, $"path:{NormalizePath(asset.Pathname)}", asset.AssetId);
+        }
+
+        return index;
+    }
+
+    private static ISet<string> BuildObjectIdentityIndex(IReadOnlyList<UnityObjectRef> refs)
+    {
+        var set = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var reference in refs)
+        {
+            if (!string.IsNullOrWhiteSpace(reference.PathId))
+            {
+                set.Add(BuildObjectIdentityKey(reference.AssetId, reference.PathId));
+            }
+        }
+
+        return set;
+    }
+
+    private static void AddAssetIdentity(IDictionary<string, string> index, string? identity, string assetId)
+    {
+        if (string.IsNullOrWhiteSpace(identity))
+        {
+            return;
+        }
+
+        var normalized = identity.Trim().ToLowerInvariant();
+        if (!index.ContainsKey(normalized))
+        {
+            index[normalized] = assetId;
+        }
+    }
+
+    private static string? ResolveTargetAssetId(string? externalAssetId, IReadOnlyDictionary<string, string> assetIdentityIndex)
+    {
+        if (string.IsNullOrWhiteSpace(externalAssetId))
+        {
+            return null;
+        }
+
+        var normalized = externalAssetId.Trim().ToLowerInvariant();
+        if (assetIdentityIndex.TryGetValue(normalized, out var directAssetId))
+        {
+            return directAssetId;
+        }
+
+        if (!normalized.Contains(':'))
+        {
+            if (assetIdentityIndex.TryGetValue($"guid:{normalized}", out var guidAssetId))
+            {
+                return guidAssetId;
+            }
+        }
+
+        if (normalized.StartsWith("path:", StringComparison.Ordinal))
+        {
+            var pathText = normalized[5..];
+            var fileName = Path.GetFileName(pathText);
+            if (!string.IsNullOrWhiteSpace(fileName)
+                && assetIdentityIndex.TryGetValue($"file:{fileName}", out var fileAssetId))
+            {
+                return fileAssetId;
+            }
+        }
+
+        return null;
+    }
+
+    private static string BuildObjectIdentityKey(string assetId, string pathId)
+        => $"{assetId}|{pathId}";
+
+    private static string ResolveObjectReferenceKind(string status)
+    {
+        return status switch
+        {
+            "object-resolved" => "object",
+            "object-asset-resolved" => "object-unresolved",
+            "object-unresolved" => "object-unresolved",
+            _ => "object-external"
+        };
+    }
+
+    private static string ResolveObjectReferenceLabel(UnityObjectPointer pointer, string? targetAssetId)
+    {
+        if (pointer.FileId == 0)
+        {
+            return $"PathId:{pointer.PathId}";
+        }
+
+        if (!string.IsNullOrWhiteSpace(targetAssetId))
+        {
+            return $"Resolved[{targetAssetId}]:{pointer.PathId}";
+        }
+
+        return $"External[{pointer.FileId}]:{pointer.ExternalAssetId ?? "unknown"}:{pointer.PathId}";
+    }
+
+    private static string NormalizePath(string path)
+        => path.Replace('\\', '/').Trim().ToLowerInvariant();
 
     private static string ResolveObjectReferenceNodeId(string assetId, UnityObjectPointer pointer)
     {
