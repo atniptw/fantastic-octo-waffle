@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Deterministic developer and CI command contract for Blazor WASM.",
   "scripts": {
-    "app:run": "dotnet run --project src/BlazorApp/BlazorApp.csproj --urls http://localhost:5075",
+    "app:run": "dotnet run --project src/BlazorApp/BlazorApp.csproj -c Release --urls http://localhost:5075",
     "build:app": "dotnet restore src/BlazorApp/BlazorApp.csproj && dotnet build src/BlazorApp/BlazorApp.csproj -c Release --no-restore",
     "test:unit": "dotnet test --configuration Release",
     "test:e2e": "playwright test",

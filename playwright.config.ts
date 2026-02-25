@@ -12,5 +12,11 @@ export default defineConfig({
   use: {
     baseURL,
     trace: 'on-first-retry'
+  },
+  webServer: {
+    command: 'npm run app:run',
+    url: baseURL,
+    timeout: 120_000,
+    reuseExistingServer: false
   }
 });
