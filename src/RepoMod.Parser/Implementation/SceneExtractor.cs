@@ -560,6 +560,10 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
         var vertexChannelCount = ReadNestedArrayCount(data, "m_VertexData", "m_Channels");
         var vertexDataByteCount = ReadNestedArrayCount(data, "m_VertexData", "m_DataSize");
         var indexBufferElementCount = ReadArrayCount(data, "m_IndexBuffer");
+        var indexFormat = ReadIntValue(data, "m_IndexFormat");
+        var vertexDataBytes = ReadNestedByteArray(data, "m_VertexData", "m_DataSize");
+        var indexBufferBytes = ReadByteArray(data, "m_IndexBuffer");
+        var indexValues = DecodeIndexValues(indexBufferBytes, indexFormat);
 
         return new UnityRenderMesh(
             objectId,
@@ -570,7 +574,10 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
             blendShapeCount,
             vertexChannelCount,
             vertexDataByteCount,
-            indexBufferElementCount);
+            indexBufferElementCount,
+            indexFormat,
+            vertexDataBytes is { Length: > 0 } ? Convert.ToBase64String(vertexDataBytes) : null,
+            indexValues.Count > 0 ? indexValues : null);
     }
 
     private static UnityRenderMaterial? TryBuildRenderMaterial(string assetId, ObjectInfo objectInfo, SerializedFile serializedFile)
@@ -863,6 +870,68 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
         }
 
         return ReadArrayCount(outerDictionary, innerKey);
+    }
+
+    private static byte[]? ReadByteArray(OrderedDictionary dictionary, string key)
+    {
+        if (!TryGetDictionaryValue(dictionary, key, out var value)
+            || value is not Array array)
+        {
+            return null;
+        }
+
+        var bytes = new byte[array.Length];
+        for (var index = 0; index < array.Length; index++)
+        {
+            if (!TryConvertToInt(array.GetValue(index), out var intValue)
+                || intValue < byte.MinValue
+                || intValue > byte.MaxValue)
+            {
+                return null;
+            }
+
+            bytes[index] = (byte)intValue;
+        }
+
+        return bytes;
+    }
+
+    private static byte[]? ReadNestedByteArray(OrderedDictionary dictionary, string outerKey, string innerKey)
+    {
+        if (!TryGetDictionaryValue(dictionary, outerKey, out var outerValue)
+            || outerValue is not OrderedDictionary outerDictionary)
+        {
+            return null;
+        }
+
+        return ReadByteArray(outerDictionary, innerKey);
+    }
+
+    private static IReadOnlyList<int> DecodeIndexValues(byte[]? indexBufferBytes, int? indexFormat)
+    {
+        if (indexBufferBytes is not { Length: > 0 })
+        {
+            return [];
+        }
+
+        if (indexFormat == 1)
+        {
+            var values = new List<int>(indexBufferBytes.Length / 4);
+            for (var offset = 0; offset + 3 < indexBufferBytes.Length; offset += 4)
+            {
+                values.Add(BitConverter.ToInt32(indexBufferBytes, offset));
+            }
+
+            return values;
+        }
+
+        var defaultValues = new List<int>(indexBufferBytes.Length / 2);
+        for (var offset = 0; offset + 1 < indexBufferBytes.Length; offset += 2)
+        {
+            defaultValues.Add(BitConverter.ToUInt16(indexBufferBytes, offset));
+        }
+
+        return defaultValues;
     }
 
     private static long ParsePathId(string pathId)

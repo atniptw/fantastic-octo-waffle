@@ -9,4 +9,7 @@ public sealed record UnityRenderMesh(
     int? BlendShapeCount,
     int? VertexChannelCount,
     int? VertexDataByteCount,
-    int? IndexBufferElementCount);
+    int? IndexBufferElementCount,
+    int? IndexFormat,
+    string? VertexDataBase64,
+    IReadOnlyList<int>? IndexValues);

@@ -75,6 +75,13 @@ public class SceneExtractorTests
             Assert.Contains(
                 result.Scene.RenderMeshes,
                 mesh => mesh.VertexCount is not null || mesh.VertexDataByteCount is not null || mesh.IndexBufferElementCount is not null);
+
+            if (result.Scene.RenderMeshes.Any(mesh => !string.IsNullOrWhiteSpace(mesh.VertexDataBase64) || mesh.IndexValues is { Count: > 0 }))
+            {
+                Assert.Contains(
+                    result.Scene.RenderMeshes,
+                    mesh => !string.IsNullOrWhiteSpace(mesh.VertexDataBase64) || mesh.IndexValues is { Count: > 0 });
+            }
         }
 
         if (result.Scene.RenderMaterials.Count > 0)
