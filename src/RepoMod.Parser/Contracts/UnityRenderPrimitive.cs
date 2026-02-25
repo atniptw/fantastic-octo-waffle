@@ -8,6 +8,7 @@ public sealed record UnityRenderPrimitive(
     string MeshObjectId,
     int SubMeshIndex,
     string? MaterialObjectId,
+    IReadOnlyList<int>? IndexValues,
     int? FirstByte,
     int? IndexCount,
     int? Topology,

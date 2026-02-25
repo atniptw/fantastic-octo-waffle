@@ -81,6 +81,14 @@ public class SceneExtractorTests
         {
             Assert.Contains(result.Scene.RenderPrimitives, item => item.PrimitiveId.StartsWith("primitive:", StringComparison.Ordinal));
             Assert.Contains(result.Scene.RenderPrimitives, item => item.SubMeshIndex >= 0 && !string.IsNullOrWhiteSpace(item.MeshObjectId));
+
+            if (result.Scene.RenderPrimitives.Any(item => item.IndexValues is { Count: > 0 }))
+            {
+                Assert.Contains(
+                    result.Scene.RenderPrimitives,
+                    item => item.IndexValues is { Count: > 0 }
+                            && (item.IndexCount is null || item.IndexValues.Count <= item.IndexCount.Value));
+            }
         }
 
         if (result.Scene.RenderMeshes.Count > 0)

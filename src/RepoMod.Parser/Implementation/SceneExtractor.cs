@@ -1514,6 +1514,7 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
                     var materialObjectId = assignments
                         .FirstOrDefault(assignment => assignment.SubMeshIndex == subMesh.SubMeshIndex)
                         ?.MaterialObjectId;
+                    var primitiveIndexValues = BuildPrimitiveIndexValues(mesh, subMesh);
 
                     primitives.Add(new UnityRenderPrimitive(
                         BuildRenderPrimitiveId(renderObject.ObjectId, mesh.ObjectId, subMesh.SubMeshIndex, materialObjectId),
@@ -1523,6 +1524,7 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
                         mesh.ObjectId,
                         subMesh.SubMeshIndex,
                         materialObjectId,
+                        primitiveIndexValues,
                         subMesh.FirstByte,
                         subMesh.IndexCount,
                         subMesh.Topology,
@@ -1546,6 +1548,7 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
                         mesh.ObjectId,
                         assignment.SubMeshIndex,
                         assignment.MaterialObjectId,
+                        BuildPrimitiveIndexValues(mesh, null),
                         null,
                         null,
                         null,
@@ -1565,6 +1568,7 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
                 mesh.ObjectId,
                 0,
                 null,
+                BuildPrimitiveIndexValues(mesh, null),
                 null,
                 null,
                 null,
@@ -1603,6 +1607,51 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
         var raw = $"{renderObjectId}|{meshObjectId}|{subMeshIndex.ToString(CultureInfo.InvariantCulture)}|{materialObjectId ?? "none"}";
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(raw)));
         return $"primitive:{hash[..16].ToLowerInvariant()}";
+    }
+
+    private static IReadOnlyList<int>? BuildPrimitiveIndexValues(UnityRenderMesh mesh, UnityRenderSubMesh? subMesh)
+    {
+        if (mesh.IndexValues is not { Count: > 0 })
+        {
+            return null;
+        }
+
+        if (subMesh is null)
+        {
+            return mesh.IndexValues;
+        }
+
+        var bytesPerIndex = mesh.IndexFormat == 1 ? 4 : 2;
+        var startIndex = subMesh.FirstByte is > 0
+            ? subMesh.FirstByte.Value / bytesPerIndex
+            : 0;
+
+        if (startIndex < 0 || startIndex >= mesh.IndexValues.Count)
+        {
+            return null;
+        }
+
+        var requestedCount = subMesh.IndexCount ?? (mesh.IndexValues.Count - startIndex);
+        if (requestedCount <= 0)
+        {
+            return null;
+        }
+
+        var availableCount = mesh.IndexValues.Count - startIndex;
+        var clampedCount = Math.Min(requestedCount, availableCount);
+        if (clampedCount <= 0)
+        {
+            return null;
+        }
+
+        var baseVertex = subMesh.BaseVertex ?? 0;
+        var sliced = new List<int>(clampedCount);
+        for (var index = 0; index < clampedCount; index++)
+        {
+            sliced.Add(mesh.IndexValues[startIndex + index] + baseVertex);
+        }
+
+        return sliced;
     }
 
     private static IReadOnlyList<UnityObjectPointer> ExtractOutboundObjectPointers(SerializedFile serializedFile, ObjectInfo objectInfo)
