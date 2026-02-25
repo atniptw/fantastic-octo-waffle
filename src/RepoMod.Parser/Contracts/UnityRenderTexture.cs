@@ -6,4 +6,8 @@ public sealed record UnityRenderTexture(
     string Name,
     int? Width,
     int? Height,
-    int? TextureFormat);
+    int? TextureFormat,
+    int? ImageDataByteCount,
+    string? StreamPath,
+    long? StreamOffset,
+    int? StreamSize);

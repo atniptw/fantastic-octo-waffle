@@ -557,6 +557,9 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
             ?? ReadNestedIntValue(data, "m_VertexData", "m_VertexCount");
         var subMeshCount = ReadArrayCount(data, "m_SubMeshes");
         var blendShapeCount = ReadNestedArrayCount(data, "m_Shapes", "channels");
+        var vertexChannelCount = ReadNestedArrayCount(data, "m_VertexData", "m_Channels");
+        var vertexDataByteCount = ReadNestedArrayCount(data, "m_VertexData", "m_DataSize");
+        var indexBufferElementCount = ReadArrayCount(data, "m_IndexBuffer");
 
         return new UnityRenderMesh(
             objectId,
@@ -564,7 +567,10 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
             BuildObjectDisplayName(objectInfo.classID, objectInfo.m_PathID),
             vertexCount,
             subMeshCount,
-            blendShapeCount);
+            blendShapeCount,
+            vertexChannelCount,
+            vertexDataByteCount,
+            indexBufferElementCount);
     }
 
     private static UnityRenderMaterial? TryBuildRenderMaterial(string assetId, ObjectInfo objectInfo, SerializedFile serializedFile)
@@ -586,12 +592,16 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
         }
 
         var textureBindings = ExtractTextureBindings(assetId, data);
+        var floatProperties = ExtractFloatProperties(data);
+        var colorProperties = ExtractColorProperties(data);
         return new UnityRenderMaterial(
             objectId,
             assetId,
             BuildObjectDisplayName(objectInfo.classID, objectInfo.m_PathID),
             shaderObjectId,
-            textureBindings);
+            textureBindings,
+            floatProperties,
+            colorProperties);
     }
 
     private static UnityRenderTexture? TryBuildRenderTexture(string assetId, ObjectInfo objectInfo, SerializedFile serializedFile)
@@ -603,13 +613,18 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
 
         var objectId = $"{assetId}:obj:{objectInfo.m_PathID.ToString(CultureInfo.InvariantCulture)}";
         var data = ReadObjectTypeData(serializedFile, objectInfo);
+        var streamInfo = ExtractTextureStreamInfo(data);
         return new UnityRenderTexture(
             objectId,
             assetId,
             BuildObjectDisplayName(objectInfo.classID, objectInfo.m_PathID),
             ReadIntValue(data, "m_Width"),
             ReadIntValue(data, "m_Height"),
-            ReadIntValue(data, "m_TextureFormat"));
+            ReadIntValue(data, "m_TextureFormat"),
+            ReadArrayCount(data, "m_ImageData"),
+            streamInfo.Path,
+            streamInfo.Offset,
+            streamInfo.Size);
     }
 
     private static OrderedDictionary ReadObjectTypeData(SerializedFile serializedFile, ObjectInfo objectInfo)
@@ -675,6 +690,106 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
         return bindings;
     }
 
+    private static IReadOnlyList<UnityRenderFloatProperty> ExtractFloatProperties(OrderedDictionary data)
+    {
+        if (!TryGetDictionaryValue(data, "m_SavedProperties", out var savedProperties)
+            || savedProperties is not OrderedDictionary savedPropertiesDictionary
+            || !TryGetDictionaryValue(savedPropertiesDictionary, "m_Floats", out var floatsValue)
+            || floatsValue is not Array floatsArray)
+        {
+            return [];
+        }
+
+        var properties = new List<UnityRenderFloatProperty>();
+        foreach (var entry in floatsArray)
+        {
+            if (entry is not OrderedDictionary pair)
+            {
+                continue;
+            }
+
+            if (!TryGetDictionaryValue(pair, "first", out var nameValue)
+                || nameValue is not string name
+                || !TryGetDictionaryValue(pair, "second", out var floatValue)
+                || !TryConvertToFloat(floatValue, out var parsedFloat))
+            {
+                continue;
+            }
+
+            properties.Add(new UnityRenderFloatProperty(name, parsedFloat));
+        }
+
+        return properties;
+    }
+
+    private static IReadOnlyList<UnityRenderColorProperty> ExtractColorProperties(OrderedDictionary data)
+    {
+        if (!TryGetDictionaryValue(data, "m_SavedProperties", out var savedProperties)
+            || savedProperties is not OrderedDictionary savedPropertiesDictionary
+            || !TryGetDictionaryValue(savedPropertiesDictionary, "m_Colors", out var colorsValue)
+            || colorsValue is not Array colorsArray)
+        {
+            return [];
+        }
+
+        var properties = new List<UnityRenderColorProperty>();
+        foreach (var entry in colorsArray)
+        {
+            if (entry is not OrderedDictionary pair)
+            {
+                continue;
+            }
+
+            if (!TryGetDictionaryValue(pair, "first", out var nameValue)
+                || nameValue is not string name
+                || !TryGetDictionaryValue(pair, "second", out var colorValue)
+                || colorValue is not OrderedDictionary colorDictionary)
+            {
+                continue;
+            }
+
+            var r = ReadFloatValue(colorDictionary, "r");
+            var g = ReadFloatValue(colorDictionary, "g");
+            var b = ReadFloatValue(colorDictionary, "b");
+            var a = ReadFloatValue(colorDictionary, "a");
+
+            if (r is null || g is null || b is null || a is null)
+            {
+                continue;
+            }
+
+            properties.Add(new UnityRenderColorProperty(name, r.Value, g.Value, b.Value, a.Value));
+        }
+
+        return properties;
+    }
+
+    private static (string? Path, long? Offset, int? Size) ExtractTextureStreamInfo(OrderedDictionary data)
+    {
+        if (TryGetDictionaryValue(data, "m_StreamData", out var streamValue)
+            && streamValue is OrderedDictionary streamDictionary)
+        {
+            var path = ReadStringValue(streamDictionary, "path");
+            var offset = ReadLongValue(streamDictionary, "offset");
+            var size = ReadIntValue(streamDictionary, "size");
+            if (!string.IsNullOrWhiteSpace(path) || offset is not null || size is not null)
+            {
+                return (path, offset, size);
+            }
+        }
+
+        if (TryGetDictionaryValue(data, "m_DataStreamData", out var dataStreamValue)
+            && dataStreamValue is OrderedDictionary dataStreamDictionary)
+        {
+            var path = ReadStringValue(dataStreamDictionary, "path");
+            var offset = ReadLongValue(dataStreamDictionary, "offset");
+            var size = ReadIntValue(dataStreamDictionary, "size");
+            return (path, offset, size);
+        }
+
+        return (null, null, null);
+    }
+
     private static int? ReadIntValue(OrderedDictionary dictionary, string key)
     {
         if (!TryGetDictionaryValue(dictionary, key, out var value))
@@ -705,6 +820,38 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
         }
 
         return array.Length;
+    }
+
+    private static float? ReadFloatValue(OrderedDictionary dictionary, string key)
+    {
+        if (!TryGetDictionaryValue(dictionary, key, out var value)
+            || !TryConvertToFloat(value, out var parsed))
+        {
+            return null;
+        }
+
+        return parsed;
+    }
+
+    private static long? ReadLongValue(OrderedDictionary dictionary, string key)
+    {
+        if (!TryGetDictionaryValue(dictionary, key, out var value)
+            || !TryConvertToLong(value, out var parsed))
+        {
+            return null;
+        }
+
+        return parsed;
+    }
+
+    private static string? ReadStringValue(OrderedDictionary dictionary, string key)
+    {
+        if (!TryGetDictionaryValue(dictionary, key, out var value))
+        {
+            return null;
+        }
+
+        return value as string;
     }
 
     private static int? ReadNestedArrayCount(OrderedDictionary dictionary, string outerKey, string innerKey)
@@ -1062,6 +1209,31 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
                 result = (long)ulongValue;
                 return true;
             case string text when long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed):
+                result = parsed;
+                return true;
+            default:
+                result = default;
+                return false;
+        }
+    }
+
+    private static bool TryConvertToFloat(object? value, out float result)
+    {
+        switch (value)
+        {
+            case float floatValue:
+                result = floatValue;
+                return true;
+            case double doubleValue when doubleValue <= float.MaxValue && doubleValue >= float.MinValue:
+                result = (float)doubleValue;
+                return true;
+            case int intValue:
+                result = intValue;
+                return true;
+            case long longValue when longValue <= float.MaxValue && longValue >= float.MinValue:
+                result = longValue;
+                return true;
+            case string text when float.TryParse(text, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out var parsed):
                 result = parsed;
                 return true;
             default:

@@ -72,16 +72,25 @@ public class SceneExtractorTests
         if (result.Scene.RenderMeshes.Count > 0)
         {
             Assert.Contains(result.Scene.RenderMeshes, mesh => mesh.ObjectId.Contains(":obj:", StringComparison.Ordinal));
+            Assert.Contains(
+                result.Scene.RenderMeshes,
+                mesh => mesh.VertexCount is not null || mesh.VertexDataByteCount is not null || mesh.IndexBufferElementCount is not null);
         }
 
         if (result.Scene.RenderMaterials.Count > 0)
         {
             Assert.Contains(result.Scene.RenderMaterials, material => material.ObjectId.Contains(":obj:", StringComparison.Ordinal));
+            Assert.Contains(
+                result.Scene.RenderMaterials,
+                material => material.TextureBindings.Count > 0 || material.FloatProperties.Count > 0 || material.ColorProperties.Count > 0);
         }
 
         if (result.Scene.RenderTextures.Count > 0)
         {
             Assert.Contains(result.Scene.RenderTextures, texture => texture.ObjectId.Contains(":obj:", StringComparison.Ordinal));
+            Assert.Contains(
+                result.Scene.RenderTextures,
+                texture => texture.Width is not null || texture.Height is not null || texture.ImageDataByteCount is not null || texture.StreamSize is not null);
         }
     }
 

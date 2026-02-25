@@ -6,4 +6,7 @@ public sealed record UnityRenderMesh(
     string Name,
     int? VertexCount,
     int? SubMeshCount,
-    int? BlendShapeCount);
+    int? BlendShapeCount,
+    int? VertexChannelCount,
+    int? VertexDataByteCount,
+    int? IndexBufferElementCount);

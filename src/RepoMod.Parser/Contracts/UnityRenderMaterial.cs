@@ -5,4 +5,6 @@ public sealed record UnityRenderMaterial(
     string AssetId,
     string Name,
     string? ShaderObjectId,
-    IReadOnlyList<UnityRenderTextureBinding> TextureBindings);
+    IReadOnlyList<UnityRenderTextureBinding> TextureBindings,
+    IReadOnlyList<UnityRenderFloatProperty> FloatProperties,
+    IReadOnlyList<UnityRenderColorProperty> ColorProperties);
