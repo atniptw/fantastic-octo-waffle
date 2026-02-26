@@ -71,6 +71,52 @@ public class GlbCompositionPlannerTests
     }
 
     [Fact]
+    public void BuildComposition_GroupsPrimitivesByResolvedAnchor_WithDeterministicOrder()
+    {
+        var planner = new GlbCompositionPlanner();
+        var avatar = CreateAvatarScene();
+
+        var selections = new[]
+        {
+            new GlbCosmeticSelection("b-item", "head", CreateCosmeticScene("primitive:b2", "primitive:b1"), null, Enabled: true),
+            new GlbCosmeticSelection("a-item", "leftarm", CreateCosmeticScene("primitive:a2", "primitive:a1"), null, Enabled: true)
+        };
+
+        var result = planner.BuildComposition(avatar, selections);
+
+        Assert.Equal("scene:avatar", result.AvatarSceneId);
+        Assert.Equal(2, result.Anchors.Count);
+        Assert.Equal(
+            "PlayerAvatar/Armature/Hips/Spine_01/Spine_02/Spine_03/Clavicle_L/Upperarm_L",
+            result.Anchors[0].AnchorPath);
+        Assert.Equal(
+            "PlayerAvatar/Armature/Hips/Spine_01/Spine_02/Spine_03/Neck_01/Head",
+            result.Anchors[1].AnchorPath);
+
+        Assert.Equal(new[] { "primitive:a1", "primitive:a2" }, result.Anchors[0].Primitives.Select(item => item.Primitive.PrimitiveId).ToArray());
+        Assert.Equal(new[] { "primitive:b1", "primitive:b2" }, result.Anchors[1].Primitives.Select(item => item.Primitive.PrimitiveId).ToArray());
+    }
+
+    [Fact]
+    public void BuildComposition_OnlyIncludesEnabledSelections()
+    {
+        var planner = new GlbCompositionPlanner();
+        var avatar = CreateAvatarScene();
+
+        var selections = new[]
+        {
+            new GlbCosmeticSelection("enabled", "head", CreateCosmeticScene("primitive:enabled"), null, Enabled: true),
+            new GlbCosmeticSelection("disabled", "head", CreateCosmeticScene("primitive:disabled"), null, Enabled: false)
+        };
+
+        var result = planner.BuildComposition(avatar, selections);
+
+        var allPrimitiveIds = result.Anchors.SelectMany(item => item.Primitives).Select(item => item.Primitive.PrimitiveId).ToArray();
+        Assert.Contains("primitive:enabled", allPrimitiveIds);
+        Assert.DoesNotContain("primitive:disabled", allPrimitiveIds);
+    }
+
+    [Fact]
     public void BuildPlan_FallsBackToNearestExistingAnchor_WhenSlotAnchorMissing()
     {
         var planner = new GlbCompositionPlanner();
@@ -88,30 +134,32 @@ public class GlbCompositionPlannerTests
         Assert.Contains(plan.Warnings, item => item.Contains("nearest existing", StringComparison.OrdinalIgnoreCase));
     }
 
-    private static ConverterScene CreateCosmeticScene(string primitiveId)
+    private static ConverterScene CreateCosmeticScene(params string[] primitiveIds)
     {
-        var primitive = new ConverterPrimitive(
-            primitiveId,
-            "renderer:1",
-            "node:1",
-            "mesh:1",
-            null,
-            0,
-            0,
-            [0, 1, 2],
-            [0f, 0f, 0f, 1f, 0f, 0f, 0f, 1f, 0f],
-            null,
-            null,
-            null,
-            null,
-            null);
+        var primitives = primitiveIds
+            .Select(id => new ConverterPrimitive(
+                id,
+                "renderer:1",
+                "node:1",
+                "mesh:1",
+                null,
+                0,
+                0,
+                [0, 1, 2],
+                [0f, 0f, 0f, 1f, 0f, 0f, 0f, 1f, 0f],
+                null,
+                null,
+                null,
+                null,
+                null))
+            .ToArray();
 
         return new ConverterScene(
             "scene:cosmetic",
             "container",
             "hhh",
             [],
-            [primitive],
+            primitives,
             []);
     }
 

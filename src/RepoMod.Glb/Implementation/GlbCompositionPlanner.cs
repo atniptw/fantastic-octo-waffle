@@ -70,6 +70,57 @@ public sealed class GlbCompositionPlanner : IGlbCompositionPlanner
         return new GlbCompositionPlan(avatarScene.SceneId, attachments, warnings);
     }
 
+    public GlbCompositionResult BuildComposition(
+        ConverterScene avatarScene,
+        IReadOnlyList<GlbCosmeticSelection> selections,
+        GlbCompositionOptions? options = null)
+    {
+        var plan = BuildPlan(avatarScene, selections, options);
+        var warnings = plan.Warnings.ToList();
+        var selectionById = selections.ToDictionary(item => item.SelectionId, StringComparer.Ordinal);
+
+        var anchorGroups = new List<GlbAnchorComposition>();
+        foreach (var group in plan.Attachments
+                     .OrderBy(item => item.TargetAnchorPath, StringComparer.Ordinal)
+                     .GroupBy(item => item.TargetAnchorPath, StringComparer.Ordinal))
+        {
+            var composedPrimitives = new List<GlbComposedPrimitive>();
+            foreach (var attachment in group.OrderBy(item => item.SelectionId, StringComparer.Ordinal))
+            {
+                if (!selectionById.TryGetValue(attachment.SelectionId, out var selection))
+                {
+                    warnings.Add($"Attachment references missing selection '{attachment.SelectionId}'.");
+                    continue;
+                }
+
+                var primitiveById = selection.Scene.Primitives.ToDictionary(item => item.PrimitiveId, StringComparer.Ordinal);
+                foreach (var primitiveId in attachment.PrimitiveIds.OrderBy(item => item, StringComparer.Ordinal))
+                {
+                    if (!primitiveById.TryGetValue(primitiveId, out var primitive))
+                    {
+                        warnings.Add($"Selection '{selection.SelectionId}' missing referenced primitive '{primitiveId}'.");
+                        continue;
+                    }
+
+                    composedPrimitives.Add(new GlbComposedPrimitive(
+                        selection.SelectionId,
+                        attachment.RequestedSlot,
+                        attachment.ResolvedSlot,
+                        attachment.TargetAnchorPath,
+                        primitive));
+                }
+            }
+
+            anchorGroups.Add(new GlbAnchorComposition(group.Key, composedPrimitives));
+        }
+
+        return new GlbCompositionResult(
+            avatarScene.SceneId,
+            anchorGroups,
+            plan.Attachments,
+            warnings);
+    }
+
     private static string ResolveAnchorPath(
         GlbCosmeticSelection selection,
         string resolvedSlot,

@@ -9,4 +9,9 @@ public interface IGlbCompositionPlanner
         ConverterScene avatarScene,
         IReadOnlyList<GlbCosmeticSelection> selections,
         GlbCompositionOptions? options = null);
+
+    GlbCompositionResult BuildComposition(
+        ConverterScene avatarScene,
+        IReadOnlyList<GlbCosmeticSelection> selections,
+        GlbCompositionOptions? options = null);
 }
