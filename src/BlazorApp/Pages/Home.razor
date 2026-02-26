@@ -2,8 +2,16 @@
 @implements IAsyncDisposable
 
 @using System.IO.Compression
+@using RepoMod.Glb.Abstractions
+@using RepoMod.Glb.Contracts
+@using RepoMod.Parser.Abstractions
+@using RepoMod.Parser.Contracts
+@using RepoMod.Parser.Implementation
 @inject HttpClient Http
 @inject IJSRuntime JS
+@inject ISceneExtractor SceneExtractor
+@inject IGlbCompositionPlanner GlbCompositionPlanner
+@inject IGlbSerializer GlbSerializer
 
 <PageTitle>Repo Mod Composer</PageTitle>
 
@@ -58,6 +66,7 @@
 			<div class="panel preview-panel">
 				<h2>Preview</h2>
 				<div class="preview-placeholder">three.js preview canvas will render here</div>
+				<p class="status">@composeStatus</p>
 			</div>
 
 			<div class="panel">
@@ -88,22 +97,51 @@
 	private readonly List<string> diagnostics = [];
 
 	private IJSObjectReference? assetStoreModule;
+	private ConverterScene? avatarConverterScene;
 	private string avatarStatus = "Loading bundled avatar package...";
 	private string uploadStatus = string.Empty;
+	private string composeStatus = "No composed output yet.";
 
 	protected override async Task OnInitializedAsync()
 	{
 		try
 		{
 			var bytes = await Http.GetByteArrayAsync(BundledAvatarPath);
-			avatarStatus = bytes.Length > 0
-				? $"Loaded ({bytes.Length:n0} bytes)"
-				: "Bundled avatar package is empty.";
+			if (bytes.Length == 0)
+			{
+				avatarStatus = "Bundled avatar package is empty.";
+				AddDiagnostic(avatarStatus);
+			}
+			else
+			{
+				var avatarResult = ParseSceneFromBytes(bytes, ".unitypackage", isAvatarScene: true);
+				if (!avatarResult.Success || avatarResult.Scene is null)
+				{
+					avatarStatus = $"Bundled avatar parse failed: {avatarResult.Error ?? "Unknown error"}";
+					AddDiagnostic(avatarStatus);
+				}
+				else
+				{
+					var projection = ConverterSceneMapper.MapWithDiagnostics(avatarResult.Scene);
+					avatarConverterScene = projection.Scene;
+					avatarStatus = $"Loaded ({bytes.Length:n0} bytes, {projection.Scene.Primitives.Count} primitives)";
+
+					foreach (var warning in avatarResult.Scene.Warnings)
+					{
+						AddDiagnostic($"Avatar: {warning}");
+					}
+
+					foreach (var diagnostic in projection.Diagnostics)
+					{
+						AddDiagnostic($"Avatar [{diagnostic.Severity}] {diagnostic.Code}: {diagnostic.Message}");
+					}
+				}
+			}
 		}
 		catch (Exception ex)
 		{
 			avatarStatus = $"Failed to load bundled avatar: {ex.Message}";
-			diagnostics.Add(avatarStatus);
+			AddDiagnostic(avatarStatus);
 		}
 
 		await LoadPersistedAssetsAsync();
@@ -165,13 +203,13 @@
 				? $"Imported {extractedCount} .hhh file(s) from {file.Name}."
 				: $"No .hhh files found in {file.Name}.";
 
-			ComposePreview();
+			await ComposePreviewAsync();
 			await PersistAssetsAsync();
 		}
 		catch (Exception ex)
 		{
 			uploadStatus = $"Failed to process zip: {ex.Message}";
-			diagnostics.Add(uploadStatus);
+			AddDiagnostic(uploadStatus);
 		}
 	}
 
@@ -192,7 +230,7 @@
 
 		var current = modAssets[index];
 		modAssets[index] = current with { Enabled = enabled };
-		ComposePreview();
+		await ComposePreviewAsync();
 		await PersistAssetsAsync();
 	}
 
@@ -218,11 +256,11 @@
 				item.Enabled)));
 
 			uploadStatus = $"Restored {stored.Count} asset(s) from IndexedDB.";
-			ComposePreview();
+			await ComposePreviewAsync();
 		}
 		catch (JSException ex)
 		{
-			diagnostics.Add($"IndexedDB restore skipped: {ex.Message}");
+			AddDiagnostic($"IndexedDB restore skipped: {ex.Message}");
 		}
 	}
 
@@ -243,7 +281,7 @@
 		}
 		catch (JSException ex)
 		{
-			diagnostics.Add($"IndexedDB save failed: {ex.Message}");
+			AddDiagnostic($"IndexedDB save failed: {ex.Message}");
 		}
 	}
 
@@ -253,13 +291,133 @@
 		return assetStoreModule;
 	}
 
-	private void ComposePreview()
+	private async Task ComposePreviewAsync()
 	{
-		var selectedCount = modAssets.Count(item => item.Enabled);
-		diagnostics.Add($"Compose requested at {DateTimeOffset.Now:T} with {selectedCount} selected asset(s).");
-		if (diagnostics.Count > 12)
+		if (avatarConverterScene is null)
 		{
-			diagnostics.RemoveRange(0, diagnostics.Count - 12);
+			composeStatus = "Compose skipped: avatar scene is not available.";
+			AddDiagnostic(composeStatus);
+			return;
+		}
+
+		var selectedCount = modAssets.Count(item => item.Enabled);
+		if (selectedCount == 0)
+		{
+			composeStatus = "Compose skipped: no enabled assets.";
+			return;
+		}
+
+		var selections = new List<GlbCosmeticSelection>();
+		foreach (var asset in modAssets.Where(item => item.Enabled).OrderBy(item => item.AssetId, StringComparer.Ordinal))
+		{
+			byte[] assetBytes;
+			try
+			{
+				assetBytes = Convert.FromBase64String(asset.ContentBase64);
+			}
+			catch (FormatException ex)
+			{
+				AddDiagnostic($"Asset '{asset.AssetName}' has invalid content encoding: {ex.Message}");
+				continue;
+			}
+
+			var sceneResult = ParseSceneFromBytes(assetBytes, ".hhh", isAvatarScene: false);
+			if (!sceneResult.Success || sceneResult.Scene is null)
+			{
+				AddDiagnostic($"Asset '{asset.AssetName}' parse failed: {sceneResult.Error ?? "Unknown error"}");
+				continue;
+			}
+
+			foreach (var warning in sceneResult.Scene.Warnings)
+			{
+				AddDiagnostic($"Asset '{asset.AssetName}' warning: {warning}");
+			}
+
+			var projection = ConverterSceneMapper.MapWithDiagnostics(sceneResult.Scene);
+			foreach (var diagnostic in projection.Diagnostics)
+			{
+				AddDiagnostic($"Asset '{asset.AssetName}' [{diagnostic.Severity}] {diagnostic.Code}: {diagnostic.Message}");
+			}
+
+			var slotTag = sceneResult.Scene.Assets
+				.FirstOrDefault(item => item.IsCosmeticCandidate)?.SlotTag;
+			var candidatePaths = sceneResult.Scene.AttachmentHints
+				.SelectMany(item => item.CandidateNodePaths)
+				.Where(path => !string.IsNullOrWhiteSpace(path))
+				.Distinct(StringComparer.OrdinalIgnoreCase)
+				.ToArray();
+
+			selections.Add(new GlbCosmeticSelection(
+				asset.AssetId,
+				slotTag,
+				projection.Scene,
+				candidatePaths,
+				true));
+		}
+
+		if (selections.Count == 0)
+		{
+			composeStatus = $"Compose skipped: no valid parsed scenes from {selectedCount} selected asset(s).";
+			return;
+		}
+
+		var composition = GlbCompositionPlanner.BuildComposition(avatarConverterScene, selections);
+		var buildResult = GlbSerializer.Build(composition);
+
+		foreach (var warning in composition.Warnings)
+		{
+			AddDiagnostic($"Compose warning: {warning}");
+		}
+
+		foreach (var diagnostic in buildResult.Diagnostics)
+		{
+			AddDiagnostic($"GLB [{diagnostic.Severity}] {diagnostic.Code}: {diagnostic.Message}");
+		}
+
+		composeStatus = $"Composed {selections.Count} asset(s) into GLB ({buildResult.GlbBytes.Length:n0} bytes) at {DateTimeOffset.Now:T}.";
+		await Task.CompletedTask;
+	}
+
+	private ParseSceneResult ParseSceneFromBytes(byte[] bytes, string extension, bool isAvatarScene)
+	{
+		if (bytes.Length == 0)
+		{
+			return ParseSceneResult.Failed("Input payload is empty.");
+		}
+
+		var tempPath = Path.Combine(Path.GetTempPath(), $"repomod-{Guid.NewGuid():N}{extension}");
+		try
+		{
+			File.WriteAllBytes(tempPath, bytes);
+			return isAvatarScene
+				? SceneExtractor.ParseUnityPackage(tempPath)
+				: SceneExtractor.ParseCosmeticBundle(tempPath);
+		}
+		catch (Exception ex)
+		{
+			return ParseSceneResult.Failed(ex.Message);
+		}
+		finally
+		{
+			try
+			{
+				if (File.Exists(tempPath))
+				{
+					File.Delete(tempPath);
+				}
+			}
+			catch
+			{
+			}
+		}
+	}
+
+	private void AddDiagnostic(string message)
+	{
+		diagnostics.Add(message);
+		if (diagnostics.Count > 24)
+		{
+			diagnostics.RemoveRange(0, diagnostics.Count - 24);
 		}
 	}
 
