@@ -65,7 +65,7 @@
 		<section class="right-pane">
 			<div class="panel preview-panel">
 				<h2>Preview</h2>
-				<div class="preview-placeholder">three.js preview canvas will render here</div>
+				<div id="@PreviewContainerId" class="preview-placeholder"></div>
 				<p class="status">@composeStatus</p>
 			</div>
 
@@ -92,12 +92,17 @@
 @code {
 	private const string BundledAvatarPath = "assets/avatar/MoreHead-Asset-Pack_v1.3.unitypackage";
 	private const string AssetStoreModulePath = "./js/assetStore.js";
+	private const string PreviewModulePath = "./js/previewRenderer.js";
+	private const string PreviewContainerId = "preview-canvas-host";
 
 	private readonly List<UploadedAssetEntry> modAssets = [];
 	private readonly List<string> diagnostics = [];
 
 	private IJSObjectReference? assetStoreModule;
+	private IJSObjectReference? previewModule;
 	private ConverterScene? avatarConverterScene;
+	private string? latestGlbBase64;
+	private bool previewReady;
 	private string avatarStatus = "Loading bundled avatar package...";
 	private string uploadStatus = string.Empty;
 	private string composeStatus = "No composed output yet.";
@@ -145,6 +150,33 @@
 		}
 
 		await LoadPersistedAssetsAsync();
+	}
+
+	protected override async Task OnAfterRenderAsync(bool firstRender)
+	{
+		if (!firstRender)
+		{
+			return;
+		}
+
+		try
+		{
+			var module = await GetPreviewModuleAsync();
+			previewReady = true;
+
+			if (!string.IsNullOrWhiteSpace(latestGlbBase64))
+			{
+				await module.InvokeVoidAsync("renderGlb", PreviewContainerId, latestGlbBase64);
+			}
+			else
+			{
+				await module.InvokeVoidAsync("clearPreview", PreviewContainerId, "three.js preview canvas will render here");
+			}
+		}
+		catch (JSException ex)
+		{
+			AddDiagnostic($"Preview init failed: {ex.Message}");
+		}
 	}
 
 	private async Task HandleZipUploadAsync(InputFileChangeEventArgs args)
@@ -291,12 +323,19 @@
 		return assetStoreModule;
 	}
 
+	private async Task<IJSObjectReference> GetPreviewModuleAsync()
+	{
+		previewModule ??= await JS.InvokeAsync<IJSObjectReference>("import", PreviewModulePath);
+		return previewModule;
+	}
+
 	private async Task ComposePreviewAsync()
 	{
 		if (avatarConverterScene is null)
 		{
 			composeStatus = "Compose skipped: avatar scene is not available.";
 			AddDiagnostic(composeStatus);
+			await ClearPreviewAsync(composeStatus);
 			return;
 		}
 
@@ -304,6 +343,7 @@
 		if (selectedCount == 0)
 		{
 			composeStatus = "Compose skipped: no enabled assets.";
+			await ClearPreviewAsync(composeStatus);
 			return;
 		}
 
@@ -358,6 +398,7 @@
 		if (selections.Count == 0)
 		{
 			composeStatus = $"Compose skipped: no valid parsed scenes from {selectedCount} selected asset(s).";
+			await ClearPreviewAsync(composeStatus);
 			return;
 		}
 
@@ -374,8 +415,39 @@
 			AddDiagnostic($"GLB [{diagnostic.Severity}] {diagnostic.Code}: {diagnostic.Message}");
 		}
 
+		latestGlbBase64 = Convert.ToBase64String(buildResult.GlbBytes);
 		composeStatus = $"Composed {selections.Count} asset(s) into GLB ({buildResult.GlbBytes.Length:n0} bytes) at {DateTimeOffset.Now:T}.";
-		await Task.CompletedTask;
+		if (previewReady)
+		{
+			try
+			{
+				var module = await GetPreviewModuleAsync();
+				await module.InvokeVoidAsync("renderGlb", PreviewContainerId, latestGlbBase64);
+			}
+			catch (JSException ex)
+			{
+				AddDiagnostic($"Preview render failed: {ex.Message}");
+			}
+		}
+	}
+
+	private async Task ClearPreviewAsync(string message)
+	{
+		latestGlbBase64 = null;
+		if (!previewReady)
+		{
+			return;
+		}
+
+		try
+		{
+			var module = await GetPreviewModuleAsync();
+			await module.InvokeVoidAsync("clearPreview", PreviewContainerId, message);
+		}
+		catch (JSException ex)
+		{
+			AddDiagnostic($"Preview clear failed: {ex.Message}");
+		}
 	}
 
 	private ParseSceneResult ParseSceneFromBytes(byte[] bytes, string extension, bool isAvatarScene)
@@ -441,6 +513,19 @@
 
 	public async ValueTask DisposeAsync()
 	{
+		if (previewModule is not null)
+		{
+			try
+			{
+				await previewModule.InvokeVoidAsync("disposePreview", PreviewContainerId);
+			}
+			catch
+			{
+			}
+
+			await previewModule.DisposeAsync();
+		}
+
 		if (assetStoreModule is not null)
 		{
 			await assetStoreModule.DisposeAsync();

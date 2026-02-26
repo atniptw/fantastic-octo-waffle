@@ -78,6 +78,18 @@
     min-height: 220px;
     border: 1px dashed var(--bs-border-color);
     border-radius: 0.5rem;
+    overflow: hidden;
+    position: relative;
+}
+
+.preview-placeholder canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.preview-empty {
+    min-height: 220px;
     display: grid;
     place-items: center;
     color: var(--bs-secondary-color);
