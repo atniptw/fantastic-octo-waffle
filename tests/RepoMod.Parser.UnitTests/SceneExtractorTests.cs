@@ -108,6 +108,22 @@ public class SceneExtractorTests
                             && item.Normals.Count % 3 == 0);
             }
 
+            if (result.Scene.RenderPrimitives.Any(item => item.Tangents is { Count: > 0 }))
+            {
+                Assert.Contains(
+                    result.Scene.RenderPrimitives,
+                    item => item.Tangents is { Count: > 0 }
+                            && item.Tangents.Count % 4 == 0);
+            }
+
+            if (result.Scene.RenderPrimitives.Any(item => item.Colors is { Count: > 0 }))
+            {
+                Assert.Contains(
+                    result.Scene.RenderPrimitives,
+                    item => item.Colors is { Count: > 0 }
+                            && item.Colors.Count % 4 == 0);
+            }
+
             if (result.Scene.RenderPrimitives.Any(item => item.Uv0 is { Count: > 0 }))
             {
                 Assert.Contains(
@@ -138,6 +154,14 @@ public class SceneExtractorTests
                     mesh => (mesh.Positions is { Count: > 0 } && mesh.Positions.Count % 3 == 0)
                             || (mesh.Normals is { Count: > 0 } && mesh.Normals.Count % 3 == 0)
                             || (mesh.Uv0 is { Count: > 0 } && mesh.Uv0.Count % 2 == 0));
+            }
+
+            if (result.Scene.RenderMeshes.Any(mesh => mesh.Tangents is { Count: > 0 } || mesh.Colors is { Count: > 0 }))
+            {
+                Assert.Contains(
+                    result.Scene.RenderMeshes,
+                    mesh => (mesh.Tangents is { Count: > 0 } && mesh.Tangents.Count % 4 == 0)
+                            || (mesh.Colors is { Count: > 0 } && mesh.Colors.Count % 4 == 0));
             }
 
             if (result.Scene.RenderMeshes.Any(mesh => mesh.SubMeshes.Count > 0))
