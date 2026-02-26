@@ -1,0 +1,92 @@
+.home-page {
+    padding: 1rem;
+    display: grid;
+    gap: 1rem;
+}
+
+.home-header h1 {
+    margin: 0;
+    font-size: 1.6rem;
+}
+
+.home-header p {
+    margin: 0.35rem 0 0;
+    color: var(--bs-secondary-color);
+}
+
+.layout-grid {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: minmax(260px, 1fr) minmax(360px, 2fr);
+}
+
+.left-pane,
+.right-pane {
+    display: grid;
+    gap: 1rem;
+    align-content: start;
+}
+
+.panel {
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.5rem;
+    background: var(--bs-body-bg);
+    padding: 0.9rem;
+}
+
+.panel h2 {
+    margin: 0 0 0.65rem;
+    font-size: 1.05rem;
+}
+
+.status {
+    margin-top: 0.65rem;
+}
+
+.asset-list,
+.diagnostics-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 0.5rem;
+}
+
+.asset-list li {
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.375rem;
+    padding: 0.45rem 0.6rem;
+}
+
+.asset-list label {
+    display: flex;
+    gap: 0.45rem;
+    align-items: center;
+}
+
+.meta {
+    font-size: 0.85rem;
+    color: var(--bs-secondary-color);
+    margin-top: 0.3rem;
+}
+
+.preview-panel {
+    min-height: 280px;
+}
+
+.preview-placeholder {
+    min-height: 220px;
+    border: 1px dashed var(--bs-border-color);
+    border-radius: 0.5rem;
+    display: grid;
+    place-items: center;
+    color: var(--bs-secondary-color);
+    text-align: center;
+    padding: 1rem;
+}
+
+@media (max-width: 960px) {
+    .layout-grid {
+        grid-template-columns: 1fr;
+    }
+}

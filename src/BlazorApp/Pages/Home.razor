@@ -1,7 +1,291 @@
 @page "/"
+@implements IAsyncDisposable
 
-<PageTitle>Home</PageTitle>
+@using System.IO.Compression
+@inject HttpClient Http
+@inject IJSRuntime JS
 
-<h1>Hello, world!</h1>
+<PageTitle>Repo Mod Composer</PageTitle>
 
-Welcome to your new app.
+<section class="home-page">
+	<header class="home-header">
+		<h1>Repo Mod Composer</h1>
+		<p>Upload mod zip files, toggle assets, and preview composed output.</p>
+	</header>
+
+	<div class="layout-grid">
+		<section class="left-pane">
+			<div class="panel">
+				<h2>Base Avatar</h2>
+				<p><strong>Source:</strong> @BundledAvatarPath</p>
+				<p><strong>Status:</strong> @avatarStatus</p>
+			</div>
+
+			<div class="panel">
+				<h2>Upload Mods (.zip)</h2>
+				<InputFile OnChange="HandleZipUploadAsync" accept=".zip" />
+				@if (!string.IsNullOrWhiteSpace(uploadStatus))
+				{
+					<p class="status">@uploadStatus</p>
+				}
+			</div>
+
+			<div class="panel">
+				<h2>Extracted Assets</h2>
+				@if (modAssets.Count == 0)
+				{
+					<p>No .hhh assets uploaded yet.</p>
+				}
+				else
+				{
+					<ul class="asset-list">
+						@foreach (var asset in modAssets.OrderBy(item => item.AssetName, StringComparer.OrdinalIgnoreCase))
+						{
+							<li>
+								<label>
+									<input type="checkbox" checked="@asset.Enabled" @onchange="async args => await ToggleAssetAsync(asset.AssetId, args)" />
+									<span>@asset.AssetName</span>
+								</label>
+								<div class="meta">@asset.ModSourceName • @asset.ByteCount bytes • @asset.ImportedAt.LocalDateTime</div>
+							</li>
+						}
+					</ul>
+				}
+			</div>
+		</section>
+
+		<section class="right-pane">
+			<div class="panel preview-panel">
+				<h2>Preview</h2>
+				<div class="preview-placeholder">three.js preview canvas will render here</div>
+			</div>
+
+			<div class="panel">
+				<h2>Diagnostics</h2>
+				@if (diagnostics.Count == 0)
+				{
+					<p>No diagnostics.</p>
+				}
+				else
+				{
+					<ul class="diagnostics-list">
+						@foreach (var item in diagnostics)
+						{
+							<li>@item</li>
+						}
+					</ul>
+				}
+			</div>
+		</section>
+	</div>
+</section>
+
+@code {
+	private const string BundledAvatarPath = "assets/avatar/MoreHead-Asset-Pack_v1.3.unitypackage";
+	private const string AssetStoreModulePath = "./js/assetStore.js";
+
+	private readonly List<UploadedAssetEntry> modAssets = [];
+	private readonly List<string> diagnostics = [];
+
+	private IJSObjectReference? assetStoreModule;
+	private string avatarStatus = "Loading bundled avatar package...";
+	private string uploadStatus = string.Empty;
+
+	protected override async Task OnInitializedAsync()
+	{
+		try
+		{
+			var bytes = await Http.GetByteArrayAsync(BundledAvatarPath);
+			avatarStatus = bytes.Length > 0
+				? $"Loaded ({bytes.Length:n0} bytes)"
+				: "Bundled avatar package is empty.";
+		}
+		catch (Exception ex)
+		{
+			avatarStatus = $"Failed to load bundled avatar: {ex.Message}";
+			diagnostics.Add(avatarStatus);
+		}
+
+		await LoadPersistedAssetsAsync();
+	}
+
+	private async Task HandleZipUploadAsync(InputFileChangeEventArgs args)
+	{
+		var file = args.File;
+		if (file is null)
+		{
+			return;
+		}
+
+		uploadStatus = $"Processing {file.Name}...";
+
+		try
+		{
+			await using var uploadStream = file.OpenReadStream(maxAllowedSize: 128 * 1024 * 1024);
+			using var memory = new MemoryStream();
+			await uploadStream.CopyToAsync(memory);
+			memory.Position = 0;
+
+			using var archive = new ZipArchive(memory, ZipArchiveMode.Read, leaveOpen: false);
+			var extractedCount = 0;
+			foreach (var entry in archive.Entries)
+			{
+				if (!entry.FullName.EndsWith(".hhh", StringComparison.OrdinalIgnoreCase))
+				{
+					continue;
+				}
+
+				if (modAssets.Any(item => string.Equals(item.AssetName, entry.FullName, StringComparison.OrdinalIgnoreCase)
+										  && string.Equals(item.ModSourceName, file.Name, StringComparison.OrdinalIgnoreCase)))
+				{
+					continue;
+				}
+
+				await using var entryStream = entry.Open();
+				using var entryMemory = new MemoryStream();
+				await entryStream.CopyToAsync(entryMemory);
+				var contentBytes = entryMemory.ToArray();
+				if (contentBytes.Length == 0)
+				{
+					continue;
+				}
+
+				modAssets.Add(new UploadedAssetEntry(
+					$"{file.Name}:{entry.FullName}",
+					file.Name,
+					entry.FullName,
+					Convert.ToBase64String(contentBytes),
+					contentBytes.Length,
+					DateTimeOffset.UtcNow,
+					true));
+				extractedCount++;
+			}
+
+			uploadStatus = extractedCount > 0
+				? $"Imported {extractedCount} .hhh file(s) from {file.Name}."
+				: $"No .hhh files found in {file.Name}.";
+
+			ComposePreview();
+			await PersistAssetsAsync();
+		}
+		catch (Exception ex)
+		{
+			uploadStatus = $"Failed to process zip: {ex.Message}";
+			diagnostics.Add(uploadStatus);
+		}
+	}
+
+	private async Task ToggleAssetAsync(string assetId, ChangeEventArgs args)
+	{
+		var enabled = args.Value switch
+		{
+			bool boolValue => boolValue,
+			string text => string.Equals(text, "true", StringComparison.OrdinalIgnoreCase) || text == "on",
+			_ => false
+		};
+
+		var index = modAssets.FindIndex(item => item.AssetId == assetId);
+		if (index < 0)
+		{
+			return;
+		}
+
+		var current = modAssets[index];
+		modAssets[index] = current with { Enabled = enabled };
+		ComposePreview();
+		await PersistAssetsAsync();
+	}
+
+	private async Task LoadPersistedAssetsAsync()
+	{
+		try
+		{
+			var module = await GetAssetStoreModuleAsync();
+			var stored = await module.InvokeAsync<List<StoredAssetEntry>>("loadAssets");
+			if (stored is null || stored.Count == 0)
+			{
+				return;
+			}
+
+			modAssets.Clear();
+			modAssets.AddRange(stored.Select(item => new UploadedAssetEntry(
+				item.AssetId,
+				item.ModSourceName,
+				item.AssetName,
+				item.ContentBase64,
+				item.ByteCount,
+				item.ImportedAt,
+				item.Enabled)));
+
+			uploadStatus = $"Restored {stored.Count} asset(s) from IndexedDB.";
+			ComposePreview();
+		}
+		catch (JSException ex)
+		{
+			diagnostics.Add($"IndexedDB restore skipped: {ex.Message}");
+		}
+	}
+
+	private async Task PersistAssetsAsync()
+	{
+		try
+		{
+			var module = await GetAssetStoreModuleAsync();
+			var stored = modAssets.Select(item => new StoredAssetEntry(
+				item.AssetId,
+				item.ModSourceName,
+				item.AssetName,
+				item.ContentBase64,
+				item.ByteCount,
+				item.ImportedAt,
+				item.Enabled));
+			await module.InvokeVoidAsync("saveAssets", stored);
+		}
+		catch (JSException ex)
+		{
+			diagnostics.Add($"IndexedDB save failed: {ex.Message}");
+		}
+	}
+
+	private async Task<IJSObjectReference> GetAssetStoreModuleAsync()
+	{
+		assetStoreModule ??= await JS.InvokeAsync<IJSObjectReference>("import", AssetStoreModulePath);
+		return assetStoreModule;
+	}
+
+	private void ComposePreview()
+	{
+		var selectedCount = modAssets.Count(item => item.Enabled);
+		diagnostics.Add($"Compose requested at {DateTimeOffset.Now:T} with {selectedCount} selected asset(s).");
+		if (diagnostics.Count > 12)
+		{
+			diagnostics.RemoveRange(0, diagnostics.Count - 12);
+		}
+	}
+
+	private sealed record UploadedAssetEntry(
+		string AssetId,
+		string ModSourceName,
+		string AssetName,
+		string ContentBase64,
+		int ByteCount,
+		DateTimeOffset ImportedAt,
+		bool Enabled);
+
+	private sealed record StoredAssetEntry(
+		string AssetId,
+		string ModSourceName,
+		string AssetName,
+		string ContentBase64,
+		int ByteCount,
+		DateTimeOffset ImportedAt,
+		bool Enabled);
+
+	public async ValueTask DisposeAsync()
+	{
+		if (assetStoreModule is not null)
+		{
+			await assetStoreModule.DisposeAsync();
+		}
+	}
+}
