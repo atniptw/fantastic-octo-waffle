@@ -4,6 +4,13 @@ namespace RepoMod.Parser.Implementation;
 
 public static class ConverterSceneMapper
 {
+    public static ConverterSceneProjection MapWithDiagnostics(ParsedModScene scene)
+    {
+        var mappedScene = Map(scene);
+        var diagnostics = ConverterSceneValidator.Validate(mappedScene);
+        return new ConverterSceneProjection(mappedScene, diagnostics);
+    }
+
     public static ConverterScene Map(ParsedModScene scene)
     {
         var nodes = scene.RenderObjects

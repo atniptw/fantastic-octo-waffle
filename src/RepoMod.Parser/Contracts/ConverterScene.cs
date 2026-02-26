@@ -32,3 +32,13 @@ public sealed record ConverterPrimitive(
     IReadOnlyList<float>? Colors,
     IReadOnlyList<float>? Uv0,
     IReadOnlyList<float>? Uv1);
+
+public sealed record ConverterDiagnostic(
+    string Severity,
+    string Code,
+    string Message,
+    string? PrimitiveId);
+
+public sealed record ConverterSceneProjection(
+    ConverterScene Scene,
+    IReadOnlyList<ConverterDiagnostic> Diagnostics);

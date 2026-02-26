@@ -120,4 +120,74 @@ public class ConverterSceneMapperTests
 
         Assert.Single(mapped.Warnings);
     }
+
+    [Fact]
+    public void MapWithDiagnostics_ReportsConverterReadinessIssues()
+    {
+        var scene = new ParsedModScene(
+            "scene:diag",
+            new ContainerDescriptor("container:diag", "/tmp/b.unitypackage", "unitypackage", "b.unitypackage"),
+            [],
+            [],
+            [],
+            [
+                new UnityRenderPrimitive(
+                    "primitive:diag",
+                    "asset:1",
+                    "renderer:1",
+                    "node:1",
+                    "mesh:1",
+                    0,
+                    null,
+                    [0, 1, 2],
+                    [0f, 0f, 0f, 1f, 0f, 0f],
+                    null,
+                    null,
+                    null,
+                    [0f, 0f, 1f],
+                    null,
+                    null,
+                    null,
+                    3,
+                    null,
+                    null,
+                    null),
+                new UnityRenderPrimitive(
+                    "primitive:missing",
+                    "asset:1",
+                    "renderer:1",
+                    "node:1",
+                    "mesh:1",
+                    1,
+                    null,
+                    [],
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    0,
+                    null,
+                    null,
+                    null)
+            ],
+            [],
+            [],
+            [],
+            [],
+            [],
+            new ParsedSceneGraph([], [], []),
+            []);
+
+        var projection = ConverterSceneMapper.MapWithDiagnostics(scene);
+
+        Assert.NotEmpty(projection.Diagnostics);
+        Assert.Contains(projection.Diagnostics, item => item.Code == "UNSUPPORTED_TOPOLOGY");
+        Assert.Contains(projection.Diagnostics, item => item.Code == "INDEX_OUT_OF_RANGE");
+        Assert.Contains(projection.Diagnostics, item => item.Code == "INVALID_UV0_COMPONENTS");
+        Assert.Contains(projection.Diagnostics, item => item.Code == "MISSING_INDICES");
+    }
 }
