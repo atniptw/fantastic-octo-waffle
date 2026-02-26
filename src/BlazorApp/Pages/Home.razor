@@ -122,8 +122,18 @@
 				var avatarResult = ParseSceneFromBytes(bytes, ".unitypackage", isAvatarScene: true);
 				if (!avatarResult.Success || avatarResult.Scene is null)
 				{
-					avatarStatus = $"Bundled avatar parse failed: {avatarResult.Error ?? "Unknown error"}";
-					AddDiagnostic(avatarStatus);
+					var avatarError = avatarResult.Error ?? "Unknown error";
+					if (IsPlatformScanLimitation(avatarError))
+					{
+						avatarConverterScene = BuildFallbackAvatarScene();
+						avatarStatus = "Bundled avatar loaded in fallback mode (browser parser limitation).";
+						AddDiagnostic($"Bundled avatar parse fallback: {avatarError}");
+					}
+					else
+					{
+						avatarStatus = $"Bundled avatar parse failed: {avatarError}";
+						AddDiagnostic(avatarStatus);
+					}
 				}
 				else
 				{
@@ -482,6 +492,24 @@
 			{
 			}
 		}
+	}
+
+	private static bool IsPlatformScanLimitation(string message)
+	{
+		return message.Contains("PlatformNotSupported", StringComparison.OrdinalIgnoreCase)
+			|| message.Contains("SystemFormatsTar", StringComparison.OrdinalIgnoreCase)
+			|| message.Contains("Failed to scan unitypackage", StringComparison.OrdinalIgnoreCase);
+	}
+
+	private static ConverterScene BuildFallbackAvatarScene()
+	{
+		return new ConverterScene(
+			"avatar:fallback",
+			"avatar:fallback-container",
+			"fallback",
+			[],
+			[],
+			["Using fallback avatar scene in browser mode."]);
 	}
 
 	private void AddDiagnostic(string message)
