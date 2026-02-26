@@ -190,4 +190,97 @@ public class ConverterSceneMapperTests
         Assert.Contains(projection.Diagnostics, item => item.Code == "INVALID_UV0_COMPONENTS");
         Assert.Contains(projection.Diagnostics, item => item.Code == "MISSING_INDICES");
     }
+
+    [Fact]
+    public void MapWithDiagnostics_DoesNotFlagTriangleTopology()
+    {
+        var scene = new ParsedModScene(
+            "scene:triangles",
+            new ContainerDescriptor("container:triangles", "/tmp/c.unitypackage", "unitypackage", "c.unitypackage"),
+            [],
+            [],
+            [],
+            [
+                new UnityRenderPrimitive(
+                    "primitive:triangles",
+                    "asset:1",
+                    "renderer:1",
+                    "node:1",
+                    "mesh:1",
+                    0,
+                    null,
+                    [0, 1, 2],
+                    [0f, 0f, 0f, 1f, 0f, 0f, 0f, 1f, 0f],
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    0,
+                    null,
+                    null,
+                    null)
+            ],
+            [],
+            [],
+            [],
+            [],
+            [],
+            new ParsedSceneGraph([], [], []),
+            []);
+
+        var projection = ConverterSceneMapper.MapWithDiagnostics(scene);
+
+        Assert.DoesNotContain(projection.Diagnostics, item => item.Code == "UNSUPPORTED_TOPOLOGY");
+    }
+
+    [Fact]
+    public void MapWithDiagnostics_ReportsAttributeShapeMismatches()
+    {
+        var scene = new ParsedModScene(
+            "scene:attr",
+            new ContainerDescriptor("container:attr", "/tmp/d.unitypackage", "unitypackage", "d.unitypackage"),
+            [],
+            [],
+            [],
+            [
+                new UnityRenderPrimitive(
+                    "primitive:attr",
+                    "asset:1",
+                    "renderer:1",
+                    "node:1",
+                    "mesh:1",
+                    0,
+                    null,
+                    [0, 1, 2],
+                    [0f, 0f, 0f, 1f, 0f, 0f, 0f, 1f, 0f],
+                    [0f, 1f, 0f, 0f, 1f, 0f],
+                    [1f, 0f, 0f, 1f, 1f, 0f, 0f],
+                    [1f, 0f, 0f, 1f, 0f, 1f, 0f, 1f],
+                    [0f, 0f, 1f, 0f, 0.5f, 0.5f],
+                    [0f, 0f, 1f, 0f],
+                    null,
+                    null,
+                    0,
+                    null,
+                    null,
+                    null)
+            ],
+            [],
+            [],
+            [],
+            [],
+            [],
+            new ParsedSceneGraph([], [], []),
+            []);
+
+        var projection = ConverterSceneMapper.MapWithDiagnostics(scene);
+
+        Assert.Contains(projection.Diagnostics, item => item.Code == "MISMATCHED_NORMAL_VERTEX_COUNT");
+        Assert.Contains(projection.Diagnostics, item => item.Code == "INVALID_TANGENT_COMPONENTS");
+        Assert.Contains(projection.Diagnostics, item => item.Code == "MISMATCHED_COLOR_VERTEX_COUNT");
+        Assert.Contains(projection.Diagnostics, item => item.Code == "MISMATCHED_UV1_VERTEX_COUNT");
+    }
 }
