@@ -131,6 +131,14 @@ public class SceneExtractorTests
                     item => item.Uv0 is { Count: > 0 }
                             && item.Uv0.Count % 2 == 0);
             }
+
+            if (result.Scene.RenderPrimitives.Any(item => item.Uv1 is { Count: > 0 }))
+            {
+                Assert.Contains(
+                    result.Scene.RenderPrimitives,
+                    item => item.Uv1 is { Count: > 0 }
+                            && item.Uv1.Count % 2 == 0);
+            }
         }
 
         if (result.Scene.RenderMeshes.Count > 0)
@@ -154,6 +162,14 @@ public class SceneExtractorTests
                     mesh => (mesh.Positions is { Count: > 0 } && mesh.Positions.Count % 3 == 0)
                             || (mesh.Normals is { Count: > 0 } && mesh.Normals.Count % 3 == 0)
                             || (mesh.Uv0 is { Count: > 0 } && mesh.Uv0.Count % 2 == 0));
+            }
+
+            if (result.Scene.RenderMeshes.Any(mesh => mesh.Uv1 is { Count: > 0 }))
+            {
+                Assert.Contains(
+                    result.Scene.RenderMeshes,
+                    mesh => mesh.Uv1 is { Count: > 0 }
+                            && mesh.Uv1.Count % 2 == 0);
             }
 
             if (result.Scene.RenderMeshes.Any(mesh => mesh.Tangents is { Count: > 0 } || mesh.Colors is { Count: > 0 }))

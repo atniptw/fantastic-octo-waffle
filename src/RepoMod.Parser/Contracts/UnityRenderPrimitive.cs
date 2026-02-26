@@ -14,6 +14,7 @@ public sealed record UnityRenderPrimitive(
     IReadOnlyList<float>? Tangents,
     IReadOnlyList<float>? Colors,
     IReadOnlyList<float>? Uv0,
+    IReadOnlyList<float>? Uv1,
     int? FirstByte,
     int? IndexCount,
     int? Topology,

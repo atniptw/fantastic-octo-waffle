@@ -18,4 +18,5 @@ public sealed record UnityRenderMesh(
     IReadOnlyList<float>? Tangents,
     IReadOnlyList<float>? Colors,
     IReadOnlyList<float>? Uv0,
+    IReadOnlyList<float>? Uv1,
     IReadOnlyList<UnityRenderSubMesh> SubMeshes);

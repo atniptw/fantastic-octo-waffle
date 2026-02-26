@@ -589,6 +589,7 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
                 decodedChannels.Tangents,
                 decodedChannels.Colors,
             decodedChannels.Uv0,
+            decodedChannels.Uv1,
             subMeshes);
     }
 
@@ -975,7 +976,7 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
         return defaultValues;
     }
 
-    private static (IReadOnlyList<float>? Positions, IReadOnlyList<float>? Normals, IReadOnlyList<float>? Tangents, IReadOnlyList<float>? Colors, IReadOnlyList<float>? Uv0) DecodeVertexChannels(
+    private static (IReadOnlyList<float>? Positions, IReadOnlyList<float>? Normals, IReadOnlyList<float>? Tangents, IReadOnlyList<float>? Colors, IReadOnlyList<float>? Uv0, IReadOnlyList<float>? Uv1) DecodeVertexChannels(
         OrderedDictionary meshData,
         byte[]? vertexDataBytes,
         int? vertexCount)
@@ -988,19 +989,19 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
             || channelsValue is not Array channelsArray
             || channelsArray.Length == 0)
         {
-            return (null, null, null, null, null);
+            return (null, null, null, null, null, null);
         }
 
         var channelInfos = ParseVertexChannels(channelsArray);
         if (channelInfos.Count == 0)
         {
-            return (null, null, null, null, null);
+            return (null, null, null, null, null, null);
         }
 
         var streamLayouts = BuildStreamLayouts(channelInfos);
         if (streamLayouts.Count == 0)
         {
-            return (null, null, null, null, null);
+            return (null, null, null, null, null, null);
         }
 
         var streamBaseOffsets = BuildStreamBaseOffsets(streamLayouts, vertexCount.Value, vertexDataBytes.Length);
@@ -1010,13 +1011,15 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
         var tangents = DecodeFloatChannel(vertexDataBytes, vertexCount.Value, channelInfos, streamLayouts, streamBaseOffsets, channelIndex: 2, expectedDimension: 4);
         var colors = DecodeFloatChannel(vertexDataBytes, vertexCount.Value, channelInfos, streamLayouts, streamBaseOffsets, channelIndex: 3, expectedDimension: 4);
         var uv0 = DecodeFloatChannel(vertexDataBytes, vertexCount.Value, channelInfos, streamLayouts, streamBaseOffsets, channelIndex: 4, expectedDimension: 2);
+        var uv1 = DecodeFloatChannel(vertexDataBytes, vertexCount.Value, channelInfos, streamLayouts, streamBaseOffsets, channelIndex: 5, expectedDimension: 2);
 
         return (
             positions.Count > 0 ? positions : null,
             normals.Count > 0 ? normals : null,
             tangents.Count > 0 ? tangents : null,
             colors.Count > 0 ? colors : null,
-            uv0.Count > 0 ? uv0 : null);
+                uv0.Count > 0 ? uv0 : null,
+                uv1.Count > 0 ? uv1 : null);
     }
 
     private static Dictionary<int, VertexChannelInfo> ParseVertexChannels(Array channelsArray)
@@ -1536,6 +1539,7 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
                         subMeshGeometry.Tangents,
                         subMeshGeometry.Colors,
                         subMeshGeometry.Uv0,
+                        subMeshGeometry.Uv1,
                         subMesh.FirstByte,
                         subMesh.IndexCount,
                         subMesh.Topology,
@@ -1566,6 +1570,7 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
                         assignmentGeometry.Tangents,
                         assignmentGeometry.Colors,
                         assignmentGeometry.Uv0,
+                        assignmentGeometry.Uv1,
                         null,
                         null,
                         null,
@@ -1592,6 +1597,7 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
                 fallbackGeometry.Tangents,
                 fallbackGeometry.Colors,
                 fallbackGeometry.Uv0,
+                fallbackGeometry.Uv1,
                 null,
                 null,
                 null,
@@ -1637,13 +1643,13 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
         var sourceIndexValues = BuildPrimitiveIndexValues(mesh, subMesh);
         if (sourceIndexValues is not { Count: > 0 })
         {
-            return new PrimitiveGeometry(null, null, null, null, null, null);
+            return new PrimitiveGeometry(null, null, null, null, null, null, null);
         }
 
         var availableVertexCount = ResolveAvailableVertexCount(mesh);
         if (availableVertexCount <= 0)
         {
-            return new PrimitiveGeometry(sourceIndexValues, null, null, null, null, null);
+            return new PrimitiveGeometry(sourceIndexValues, null, null, null, null, null, null);
         }
 
         var indexMap = new Dictionary<int, int>();
@@ -1653,12 +1659,13 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
         List<float>? localTangents = mesh.Tangents is { Count: > 0 } ? [] : null;
         List<float>? localColors = mesh.Colors is { Count: > 0 } ? [] : null;
         List<float>? localUv0 = mesh.Uv0 is { Count: > 0 } ? [] : null;
+        List<float>? localUv1 = mesh.Uv1 is { Count: > 0 } ? [] : null;
 
         foreach (var sourceIndex in sourceIndexValues)
         {
             if (sourceIndex < 0 || sourceIndex >= availableVertexCount)
             {
-                return new PrimitiveGeometry(sourceIndexValues, null, null, null, null, null);
+                return new PrimitiveGeometry(sourceIndexValues, null, null, null, null, null, null);
             }
 
             if (!indexMap.TryGetValue(sourceIndex, out var localIndex))
@@ -1671,6 +1678,7 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
                 AppendVertexComponents(localTangents, mesh.Tangents, sourceIndex, componentsPerVertex: 4);
                 AppendVertexComponents(localColors, mesh.Colors, sourceIndex, componentsPerVertex: 4);
                 AppendVertexComponents(localUv0, mesh.Uv0, sourceIndex, componentsPerVertex: 2);
+                AppendVertexComponents(localUv1, mesh.Uv1, sourceIndex, componentsPerVertex: 2);
             }
 
             localIndices.Add(localIndex);
@@ -1682,7 +1690,8 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
             localNormals,
             localTangents,
             localColors,
-            localUv0);
+            localUv0,
+            localUv1);
     }
 
     private static IReadOnlyList<int>? BuildPrimitiveIndexValues(UnityRenderMesh mesh, UnityRenderSubMesh? subMesh)
@@ -1732,7 +1741,7 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
 
     private static int ResolveAvailableVertexCount(UnityRenderMesh mesh)
     {
-        var counts = new List<int>(5);
+        var counts = new List<int>(6);
         if (mesh.Positions is { Count: > 0 })
         {
             counts.Add(mesh.Positions.Count / 3);
@@ -1756,6 +1765,11 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
         if (mesh.Uv0 is { Count: > 0 })
         {
             counts.Add(mesh.Uv0.Count / 2);
+        }
+
+        if (mesh.Uv1 is { Count: > 0 })
+        {
+            counts.Add(mesh.Uv1.Count / 2);
         }
 
         if (counts.Count == 0)
@@ -1795,7 +1809,8 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
         IReadOnlyList<float>? Normals,
         IReadOnlyList<float>? Tangents,
         IReadOnlyList<float>? Colors,
-        IReadOnlyList<float>? Uv0);
+        IReadOnlyList<float>? Uv0,
+        IReadOnlyList<float>? Uv1);
 
     private static IReadOnlyList<UnityObjectPointer> ExtractOutboundObjectPointers(SerializedFile serializedFile, ObjectInfo objectInfo)
     {
