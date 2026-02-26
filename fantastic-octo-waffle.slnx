@@ -1,10 +1,12 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/BlazorApp/BlazorApp.csproj" />
+    <Project Path="src/RepoMod.Glb/RepoMod.Glb.csproj" />
     <Project Path="src/RepoMod.Parser/RepoMod.Parser.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/BlazorApp.UnitTests/BlazorApp.UnitTests.csproj" />
+    <Project Path="tests/RepoMod.Glb.UnitTests/RepoMod.Glb.UnitTests.csproj" />
     <Project Path="tests/RepoMod.Parser.UnitTests/RepoMod.Parser.UnitTests.csproj" />
   </Folder>
 </Solution>
