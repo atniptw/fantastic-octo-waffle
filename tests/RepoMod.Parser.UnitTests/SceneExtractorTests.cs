@@ -217,11 +217,7 @@ public class SceneExtractorTests
 
         Assert.True(result.Success, result.Error);
         Assert.NotNull(result.Scene);
-        Assert.Empty(result.Scene.RenderObjects);
-        Assert.Empty(result.Scene.RenderPrimitives);
-        Assert.Empty(result.Scene.RenderMeshes);
-        Assert.Empty(result.Scene.RenderMaterials);
-        Assert.Empty(result.Scene.RenderTextures);
+        Assert.NotEmpty(result.Scene.ObjectRefs);
         Assert.Equal("hhh", result.Scene.Container.SourceType);
         var asset = Assert.Single(result.Scene.Assets);
         Assert.True(asset.IsCosmeticCandidate);
@@ -249,11 +245,7 @@ public class SceneExtractorTests
 
         Assert.True(result.Success, result.Error);
         Assert.NotNull(result.Scene);
-        Assert.Empty(result.Scene.RenderObjects);
-        Assert.Empty(result.Scene.RenderPrimitives);
-        Assert.Empty(result.Scene.RenderMeshes);
-        Assert.Empty(result.Scene.RenderMaterials);
-        Assert.Empty(result.Scene.RenderTextures);
+        Assert.NotEmpty(result.Scene.ObjectRefs);
 
         var asset = Assert.Single(result.Scene.Assets);
         Assert.Equal("neck", asset.SlotTag);

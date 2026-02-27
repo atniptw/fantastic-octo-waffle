@@ -1,4 +1,3 @@
-using System.Formats.Tar;
 using System.IO.Compression;
 using System.Text;
 using AssetStudio;
@@ -61,12 +60,9 @@ public sealed class ArchiveScanner : IArchiveScanner
 
             using var packageStream = File.OpenRead(unityPackagePath);
             using var gzipStream = new GZipStream(packageStream, CompressionMode.Decompress, leaveOpen: false);
-            using var tarReader = new TarReader(gzipStream, leaveOpen: false);
-
-            TarEntry? entry;
-            while ((entry = tarReader.GetNextEntry()) is not null)
+            foreach (var entry in UnityPackageTarReader.ReadEntries(gzipStream))
             {
-                if (entry.EntryType is TarEntryType.Directory || entry.DataStream is null || string.IsNullOrWhiteSpace(entry.Name))
+                if (entry.IsDirectory || string.IsNullOrWhiteSpace(entry.Name))
                 {
                     continue;
                 }
@@ -89,10 +85,13 @@ public sealed class ArchiveScanner : IArchiveScanner
                 switch (memberName)
                 {
                     case "pathname":
-                        item.Pathname = ReadUtf8(entry.DataStream);
+                        using (var stream = new MemoryStream(entry.Data, writable: false))
+                        {
+                            item.Pathname = ReadUtf8(stream);
+                        }
                         break;
                     case "asset":
-                        item.AssetBytes = ReadAllBytes(entry.DataStream);
+                        item.AssetBytes = entry.Data;
                         break;
                 }
             }

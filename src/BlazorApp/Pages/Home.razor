@@ -31,10 +31,10 @@
 
 			<div class="panel">
 				<h2>Upload Mods (.zip)</h2>
-				<InputFile OnChange="HandleZipUploadAsync" accept=".zip" />
+				<InputFile id="mod-zip-input" data-testid="mod-zip-input" OnChange="HandleZipUploadAsync" accept=".zip" />
 				@if (!string.IsNullOrWhiteSpace(uploadStatus))
 				{
-					<p class="status">@uploadStatus</p>
+					<p class="status" data-testid="upload-status">@uploadStatus</p>
 				}
 			</div>
 
@@ -46,12 +46,12 @@
 				}
 				else
 				{
-					<ul class="asset-list">
+					<ul class="asset-list" data-testid="asset-list">
 						@foreach (var asset in modAssets.OrderBy(item => item.AssetName, StringComparer.OrdinalIgnoreCase))
 						{
-							<li>
+							<li data-testid="asset-item">
 								<label>
-									<input type="checkbox" checked="@asset.Enabled" @onchange="async args => await ToggleAssetAsync(asset.AssetId, args)" />
+									<input type="checkbox" checked="@asset.Enabled" @onchange="async _ => await ToggleAssetAsync(asset.AssetId)" />
 									<span>@asset.AssetName</span>
 								</label>
 								<div class="meta">@asset.ModSourceName • @asset.ByteCount bytes • @asset.ImportedAt.LocalDateTime</div>
@@ -65,8 +65,8 @@
 		<section class="right-pane">
 			<div class="panel preview-panel">
 				<h2>Preview</h2>
-				<div id="@PreviewContainerId" class="preview-placeholder"></div>
-				<p class="status">@composeStatus</p>
+				<div id="@PreviewContainerId" data-testid="preview-host" class="preview-placeholder"></div>
+				<p class="status" data-testid="compose-status">@composeStatus</p>
 			</div>
 
 			<div class="panel">
@@ -77,7 +77,7 @@
 				}
 				else
 				{
-					<ul class="diagnostics-list">
+					<ul class="diagnostics-list" data-testid="diagnostics-list">
 						@foreach (var item in diagnostics)
 						{
 							<li>@item</li>
@@ -100,6 +100,7 @@
 
 	private IJSObjectReference? assetStoreModule;
 	private IJSObjectReference? previewModule;
+	private ParsedModScene? avatarParsedScene;
 	private ConverterScene? avatarConverterScene;
 	private string? latestGlbBase64;
 	private bool previewReady;
@@ -122,21 +123,12 @@
 				var avatarResult = ParseSceneFromBytes(bytes, ".unitypackage", isAvatarScene: true);
 				if (!avatarResult.Success || avatarResult.Scene is null)
 				{
-					var avatarError = avatarResult.Error ?? "Unknown error";
-					if (IsPlatformScanLimitation(avatarError))
-					{
-						avatarConverterScene = BuildFallbackAvatarScene();
-						avatarStatus = "Bundled avatar loaded in fallback mode (browser parser limitation).";
-						AddDiagnostic($"Bundled avatar parse fallback: {avatarError}");
-					}
-					else
-					{
-						avatarStatus = $"Bundled avatar parse failed: {avatarError}";
-						AddDiagnostic(avatarStatus);
-					}
+					avatarStatus = $"Bundled avatar parse failed: {avatarResult.Error ?? "Unknown error"}";
+					AddDiagnostic(avatarStatus);
 				}
 				else
 				{
+					avatarParsedScene = avatarResult.Scene;
 					var projection = ConverterSceneMapper.MapWithDiagnostics(avatarResult.Scene);
 					avatarConverterScene = projection.Scene;
 					avatarStatus = $"Loaded ({bytes.Length:n0} bytes, {projection.Scene.Primitives.Count} primitives)";
@@ -255,15 +247,8 @@
 		}
 	}
 
-	private async Task ToggleAssetAsync(string assetId, ChangeEventArgs args)
+	private async Task ToggleAssetAsync(string assetId)
 	{
-		var enabled = args.Value switch
-		{
-			bool boolValue => boolValue,
-			string text => string.Equals(text, "true", StringComparison.OrdinalIgnoreCase) || text == "on",
-			_ => false
-		};
-
 		var index = modAssets.FindIndex(item => item.AssetId == assetId);
 		if (index < 0)
 		{
@@ -271,7 +256,7 @@
 		}
 
 		var current = modAssets[index];
-		modAssets[index] = current with { Enabled = enabled };
+		modAssets[index] = current with { Enabled = !current.Enabled };
 		await ComposePreviewAsync();
 		await PersistAssetsAsync();
 	}
@@ -389,8 +374,27 @@
 				AddDiagnostic($"Asset '{asset.AssetName}' [{diagnostic.Severity}] {diagnostic.Code}: {diagnostic.Message}");
 			}
 
+			ConverterScene selectionScene = projection.Scene;
+			if (projection.Scene.Primitives.Count == 0)
+			{
+				var avatarFallback = TryBuildAvatarFallbackProjection(asset.AssetName);
+				if (avatarFallback is null)
+				{
+					AddDiagnostic($"Asset '{asset.AssetName}' has no render primitives and was skipped.");
+					continue;
+				}
+
+				selectionScene = avatarFallback.Scene;
+				AddDiagnostic($"Asset '{asset.AssetName}' used avatar fallback primitives ({selectionScene.Primitives.Count}).");
+				foreach (var diagnostic in avatarFallback.Diagnostics)
+				{
+					AddDiagnostic($"Asset '{asset.AssetName}' fallback [{diagnostic.Severity}] {diagnostic.Code}: {diagnostic.Message}");
+				}
+			}
+
 			var slotTag = sceneResult.Scene.Assets
 				.FirstOrDefault(item => item.IsCosmeticCandidate)?.SlotTag;
+			slotTag = ResolveSlotTag(slotTag, asset.AssetName);
 			var candidatePaths = sceneResult.Scene.AttachmentHints
 				.SelectMany(item => item.CandidateNodePaths)
 				.Where(path => !string.IsNullOrWhiteSpace(path))
@@ -400,7 +404,7 @@
 			selections.Add(new GlbCosmeticSelection(
 				asset.AssetId,
 				slotTag,
-				projection.Scene,
+				selectionScene,
 				candidatePaths,
 				true));
 		}
@@ -494,24 +498,6 @@
 		}
 	}
 
-	private static bool IsPlatformScanLimitation(string message)
-	{
-		return message.Contains("PlatformNotSupported", StringComparison.OrdinalIgnoreCase)
-			|| message.Contains("SystemFormatsTar", StringComparison.OrdinalIgnoreCase)
-			|| message.Contains("Failed to scan unitypackage", StringComparison.OrdinalIgnoreCase);
-	}
-
-	private static ConverterScene BuildFallbackAvatarScene()
-	{
-		return new ConverterScene(
-			"avatar:fallback",
-			"avatar:fallback-container",
-			"fallback",
-			[],
-			[],
-			["Using fallback avatar scene in browser mode."]);
-	}
-
 	private void AddDiagnostic(string message)
 	{
 		diagnostics.Add(message);
@@ -519,6 +505,127 @@
 		{
 			diagnostics.RemoveRange(0, diagnostics.Count - 24);
 		}
+	}
+
+	private static string ResolveSlotTag(string? parserSlotTag, string assetPath)
+	{
+		if (!string.IsNullOrWhiteSpace(parserSlotTag)
+			&& !string.Equals(parserSlotTag, "unknown", StringComparison.OrdinalIgnoreCase))
+		{
+			return parserSlotTag;
+		}
+
+		var normalized = assetPath.Replace('\\', '/').ToLowerInvariant();
+		var fileName = Path.GetFileNameWithoutExtension(normalized);
+
+		if (fileName.EndsWith("_head", StringComparison.Ordinal)
+			|| normalized.Contains("/head/", StringComparison.Ordinal))
+		{
+			return "head";
+		}
+
+		if (fileName.EndsWith("_body", StringComparison.Ordinal)
+			|| normalized.Contains("/body/", StringComparison.Ordinal))
+		{
+			return "body";
+		}
+
+		if (fileName.EndsWith("_hip", StringComparison.Ordinal)
+			|| normalized.Contains("/hip/", StringComparison.Ordinal))
+		{
+			return "hip";
+		}
+
+		return "head";
+	}
+
+	private ConverterSceneProjection? TryBuildAvatarFallbackProjection(string assetPath)
+	{
+		if (avatarParsedScene is null)
+		{
+			return null;
+		}
+
+		var token = DeriveAssetToken(assetPath);
+		if (string.IsNullOrWhiteSpace(token) || token.Length < 3)
+		{
+			return null;
+		}
+
+		var matchedAssets = avatarParsedScene.Assets
+			.Where(item => item.Pathname.Contains(token, StringComparison.OrdinalIgnoreCase)
+				|| item.FileName.Contains(token, StringComparison.OrdinalIgnoreCase))
+			.ToArray();
+		if (matchedAssets.Length == 0)
+		{
+			return null;
+		}
+
+		var matchedAssetIds = matchedAssets
+			.Select(item => item.AssetId)
+			.ToHashSet(StringComparer.Ordinal);
+
+		var matchedPrimitives = avatarParsedScene.RenderPrimitives
+			.Where(item => matchedAssetIds.Contains(item.AssetId))
+			.ToArray();
+		if (matchedPrimitives.Length == 0)
+		{
+			return null;
+		}
+
+		var meshIds = matchedPrimitives
+			.Select(item => item.MeshObjectId)
+			.Where(id => !string.IsNullOrWhiteSpace(id))
+			.ToHashSet(StringComparer.Ordinal);
+
+		var materialIds = matchedPrimitives
+			.Select(item => item.MaterialObjectId)
+			.Where(id => !string.IsNullOrWhiteSpace(id))
+			.Select(id => id!)
+			.ToHashSet(StringComparer.Ordinal);
+
+		var renderObjectIds = matchedPrimitives
+			.Select(item => item.RenderObjectId)
+			.Where(id => !string.IsNullOrWhiteSpace(id))
+			.ToHashSet(StringComparer.Ordinal);
+
+		var selectedRenderObjects = avatarParsedScene.RenderObjects
+			.Where(item => renderObjectIds.Contains(item.ObjectId))
+			.ToArray();
+
+		var fallbackScene = new ParsedModScene(
+			$"{avatarParsedScene.SceneId}:selection:{token}",
+			avatarParsedScene.Container,
+			matchedAssets,
+			avatarParsedScene.ObjectRefs,
+			selectedRenderObjects,
+			matchedPrimitives,
+			avatarParsedScene.RenderMeshes.Where(item => meshIds.Contains(item.ObjectId)).ToArray(),
+			avatarParsedScene.RenderMaterials.Where(item => materialIds.Contains(item.ObjectId)).ToArray(),
+			avatarParsedScene.RenderTextures,
+			avatarParsedScene.AttachmentHints,
+			avatarParsedScene.AvatarAssetIds,
+			avatarParsedScene.Graph,
+			avatarParsedScene.Warnings);
+
+		return ConverterSceneMapper.MapWithDiagnostics(fallbackScene);
+	}
+
+	private static string DeriveAssetToken(string assetPath)
+	{
+		var fileName = Path.GetFileNameWithoutExtension(assetPath);
+		if (string.IsNullOrWhiteSpace(fileName))
+		{
+			return string.Empty;
+		}
+
+		var separatorIndex = fileName.LastIndexOf('_');
+		if (separatorIndex > 0)
+		{
+			return fileName[..separatorIndex];
+		}
+
+		return fileName;
 	}
 
 	private sealed record UploadedAssetEntry(

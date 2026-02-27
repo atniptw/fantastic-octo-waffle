@@ -1,4 +1,3 @@
-using System.Formats.Tar;
 using System.Collections;
 using System.Collections.Specialized;
 using System.Globalization;
@@ -201,22 +200,104 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
             warnings.Add("No explicit external GUID references were detected in cosmetic bundle bytes.");
         }
 
+        var extracted = BuildObjectRefsFromBundle(
+            bundlePath,
+            assetId,
+            containerId,
+            warnings);
+        var objectRefs = refs.Concat(extracted.ObjectRefs).ToArray();
+        var renderPrimitives = BuildRenderPrimitives(extracted.RenderObjects, extracted.RenderMeshes);
+
         var scene = new ParsedModScene(
             BuildSceneId(containerId),
             container,
             assets,
-            refs,
-                [],
-                [],
-                [],
-                [],
-                [],
+            objectRefs,
+            extracted.RenderObjects,
+            renderPrimitives,
+            extracted.RenderMeshes,
+            extracted.RenderMaterials,
+            extracted.RenderTextures,
             [hint],
             [],
-            BuildGraph(container, assets, refs, [hint], warnings),
+            BuildGraph(container, assets, objectRefs, [hint], warnings),
             warnings);
 
         return ParseSceneResult.Succeeded(scene);
+    }
+
+    private static (
+        IReadOnlyList<UnityObjectRef> ObjectRefs,
+        IReadOnlyList<UnityRenderObject> RenderObjects,
+        IReadOnlyList<UnityRenderMesh> RenderMeshes,
+        IReadOnlyList<UnityRenderMaterial> RenderMaterials,
+        IReadOnlyList<UnityRenderTexture> RenderTextures) BuildObjectRefsFromBundle(
+        string bundlePath,
+        string assetId,
+        string containerId,
+        List<string> warnings)
+    {
+        var objectRefs = new List<UnityObjectRef>();
+        var renderObjects = new List<UnityRenderObject>();
+        var renderMeshes = new List<UnityRenderMesh>();
+        var renderMaterials = new List<UnityRenderMaterial>();
+        var renderTextures = new List<UnityRenderTexture>();
+
+        try
+        {
+            var assetsManager = new AssetsManager();
+            assetsManager.LoadFilesAndFolders(bundlePath);
+
+            foreach (var serializedFile in assetsManager.AssetsFileList)
+            {
+                foreach (var objectInfo in serializedFile.m_Objects)
+                {
+                    var pathIdText = objectInfo.m_PathID.ToString(CultureInfo.InvariantCulture);
+                    var objectName = BuildObjectDisplayName(objectInfo.classID, objectInfo.m_PathID);
+                    var outboundRefs = ExtractOutboundObjectPointers(serializedFile, objectInfo);
+                    objectRefs.Add(new UnityObjectRef(
+                        $"{assetId}:obj:{pathIdText}",
+                        assetId,
+                        containerId,
+                        null,
+                        serializedFile.fileName,
+                        pathIdText,
+                        objectInfo.classID,
+                        objectName,
+                        outboundRefs));
+
+                    var renderObject = TryBuildRenderObject(assetId, objectInfo, serializedFile);
+                    if (renderObject is not null)
+                    {
+                        renderObjects.Add(renderObject);
+                    }
+
+                    var renderMesh = TryBuildRenderMesh(assetId, objectInfo, serializedFile);
+                    if (renderMesh is not null)
+                    {
+                        renderMeshes.Add(renderMesh);
+                    }
+
+                    var renderMaterial = TryBuildRenderMaterial(assetId, objectInfo, serializedFile);
+                    if (renderMaterial is not null)
+                    {
+                        renderMaterials.Add(renderMaterial);
+                    }
+
+                    var renderTexture = TryBuildRenderTexture(assetId, objectInfo, serializedFile);
+                    if (renderTexture is not null)
+                    {
+                        renderTextures.Add(renderTexture);
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            warnings.Add($"Bundle object-level read failed for '{Path.GetFileName(bundlePath)}': {ex.Message}");
+        }
+
+        return (objectRefs, renderObjects, renderMeshes, renderMaterials, renderTextures);
     }
 
     private static List<UnityPackageItem> ReadUnityPackageItems(string unityPackagePath)
@@ -225,12 +306,9 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
 
         using var packageStream = File.OpenRead(unityPackagePath);
         using var gzipStream = new GZipStream(packageStream, CompressionMode.Decompress, leaveOpen: false);
-        using var tarReader = new TarReader(gzipStream, leaveOpen: false);
-
-        TarEntry? entry;
-        while ((entry = tarReader.GetNextEntry()) is not null)
+        foreach (var entry in UnityPackageTarReader.ReadEntries(gzipStream))
         {
-            if (entry.EntryType is TarEntryType.Directory || entry.DataStream is null || string.IsNullOrWhiteSpace(entry.Name))
+            if (entry.IsDirectory || string.IsNullOrWhiteSpace(entry.Name))
             {
                 continue;
             }
@@ -253,13 +331,19 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
             switch (memberName)
             {
                 case "pathname":
-                    item.Pathname = ReadUtf8(entry.DataStream);
+                    using (var stream = new MemoryStream(entry.Data, writable: false))
+                    {
+                        item.Pathname = ReadUtf8(stream);
+                    }
                     break;
                 case "asset":
-                    item.AssetBytes = ReadAllBytes(entry.DataStream);
+                    item.AssetBytes = entry.Data;
                     break;
                 case "asset.meta":
-                    item.MetaText = ReadUtf8(entry.DataStream);
+                    using (var stream = new MemoryStream(entry.Data, writable: false))
+                    {
+                        item.MetaText = ReadUtf8(stream);
+                    }
                     break;
             }
         }
@@ -433,6 +517,11 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
         {
             using var stream = new MemoryStream(assetBytes, writable: false);
             using var fileReader = new FileReader(fallbackName, stream);
+            if (fileReader.FileType == FileType.BundleFile)
+            {
+                return BuildObjectRefsFromBundleBytes(assetBytes, fallbackName, assetId, containerId, warnings);
+            }
+
             if (fileReader.FileType != FileType.AssetsFile)
             {
                 return (
@@ -546,6 +635,58 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
                 [],
                 []);
         }
+    }
+
+    private static (
+        IReadOnlyList<UnityObjectRef> ObjectRefs,
+        IReadOnlyList<UnityRenderObject> RenderObjects,
+        IReadOnlyList<UnityRenderMesh> RenderMeshes,
+        IReadOnlyList<UnityRenderMaterial> RenderMaterials,
+        IReadOnlyList<UnityRenderTexture> RenderTextures) BuildObjectRefsFromBundleBytes(
+        byte[] bundleBytes,
+        string fallbackName,
+        string assetId,
+        string containerId,
+        List<string> warnings)
+    {
+        var tempPath = Path.Combine(Path.GetTempPath(), $"repomod-bundle-{Guid.NewGuid():N}-{SanitizeFileName(fallbackName)}");
+        try
+        {
+            File.WriteAllBytes(tempPath, bundleBytes);
+            return BuildObjectRefsFromBundle(tempPath, assetId, containerId, warnings);
+        }
+        catch (Exception ex)
+        {
+            warnings.Add($"Bundle object-level temp extraction failed for '{fallbackName}': {ex.Message}");
+            return ([], [], [], [], []);
+        }
+        finally
+        {
+            try
+            {
+                if (File.Exists(tempPath))
+                {
+                    File.Delete(tempPath);
+                }
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    private static string SanitizeFileName(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "bundle.bin";
+        }
+
+        var invalid = Path.GetInvalidFileNameChars();
+        var chars = value
+            .Select(ch => invalid.Contains(ch) ? '_' : ch)
+            .ToArray();
+        return new string(chars);
     }
 
     private static UnityRenderMesh? TryBuildRenderMesh(string assetId, ObjectInfo objectInfo, SerializedFile serializedFile)
@@ -1481,7 +1622,7 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
         IReadOnlyList<UnityRenderObject> renderObjects,
         IReadOnlyList<UnityRenderMesh> renderMeshes)
     {
-        if (renderObjects.Count == 0 || renderMeshes.Count == 0)
+        if (renderMeshes.Count == 0)
         {
             return [];
         }
@@ -1498,6 +1639,7 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
             .ToDictionary(group => group.Key, group => group.First().MeshObjectId!, StringComparer.Ordinal);
 
         var primitives = new List<UnityRenderPrimitive>();
+        var referencedMeshIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (var renderObject in renderObjects)
         {
             if (renderObject.Kind is not ("meshrenderer" or "skinnedmeshrenderer"))
@@ -1511,6 +1653,8 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
             {
                 continue;
             }
+
+            referencedMeshIds.Add(mesh.ObjectId);
 
             var assignments = renderObject.MaterialAssignments.Count > 0
                 ? renderObject.MaterialAssignments
@@ -1588,6 +1732,68 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
                 renderObject.AssetId,
                 renderObject.ObjectId,
                 renderObject.ParentObjectId,
+                mesh.ObjectId,
+                0,
+                null,
+                fallbackGeometry.IndexValues,
+                fallbackGeometry.Positions,
+                fallbackGeometry.Normals,
+                fallbackGeometry.Tangents,
+                fallbackGeometry.Colors,
+                fallbackGeometry.Uv0,
+                fallbackGeometry.Uv1,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null));
+        }
+
+        foreach (var mesh in renderMeshes)
+        {
+            if (referencedMeshIds.Contains(mesh.ObjectId))
+            {
+                continue;
+            }
+
+            if (mesh.SubMeshes.Count > 0)
+            {
+                foreach (var subMesh in mesh.SubMeshes)
+                {
+                    var subMeshGeometry = BuildPrimitiveGeometry(mesh, subMesh);
+                    primitives.Add(new UnityRenderPrimitive(
+                        BuildRenderPrimitiveId(mesh.ObjectId, mesh.ObjectId, subMesh.SubMeshIndex, null),
+                        mesh.AssetId,
+                        mesh.ObjectId,
+                        null,
+                        mesh.ObjectId,
+                        subMesh.SubMeshIndex,
+                        null,
+                        subMeshGeometry.IndexValues,
+                        subMeshGeometry.Positions,
+                        subMeshGeometry.Normals,
+                        subMeshGeometry.Tangents,
+                        subMeshGeometry.Colors,
+                        subMeshGeometry.Uv0,
+                        subMeshGeometry.Uv1,
+                        subMesh.FirstByte,
+                        subMesh.IndexCount,
+                        subMesh.Topology,
+                        subMesh.BaseVertex,
+                        subMesh.FirstVertex,
+                        subMesh.VertexCount));
+                }
+
+                continue;
+            }
+
+            var fallbackGeometry = BuildPrimitiveGeometry(mesh, null);
+            primitives.Add(new UnityRenderPrimitive(
+                BuildRenderPrimitiveId(mesh.ObjectId, mesh.ObjectId, 0, null),
+                mesh.AssetId,
+                mesh.ObjectId,
+                null,
                 mesh.ObjectId,
                 0,
                 null,
