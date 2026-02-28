@@ -3,6 +3,7 @@ using System.Text;
 
 namespace RepoMod.Parser.UnitTests;
 
+[Collection("NonParallel")]
 public class AssetStudioFileReaderTests
 {
     [Fact]

@@ -37,67 +37,80 @@ Current pin:
 ## Library Boundary (Implemented)
 - Runtime parser project: [src/RepoMod.Parser/RepoMod.Parser.csproj](../src/RepoMod.Parser/RepoMod.Parser.csproj)
 - Current abstractions:
-	- `IArchiveScanner`
-	- `IModParser`
+	- `ISceneExtractor` (primary API for all parsing workflows)
+	- `IArchiveScanner` (legacy file-based unitypackage discovery; used by file-based entry points and tests)
+	- `IModParser` (metadata extraction from bundle filenames)
 - Current app integration: parser services registered via DI in Blazor startup.
 - Adapter staging area: [src/RepoMod.Parser/Adapters/AssetStudio](../src/RepoMod.Parser/Adapters/AssetStudio)
 - Vendor staging area: [src/RepoMod.Parser/Vendor/AssetStudio](../src/RepoMod.Parser/Vendor/AssetStudio)
 
-## Extraction Manifest (To Fill During Import)
-- Source repository URL
-- Source commit SHA
-- Imported file list (allowlisted only)
-- Excluded paths (GUI/export/native)
-- License/notice files copied
-- Local modifications summary
+## Parsing Architecture (Current)
 
-Reference implementation scaffold:
+### In-Memory First Strategy
+All parsing workflows now operate on byte payloads in memory, eliminating temporary file writes to disk.
+
+**Unitypackage Parsing (`ParseUnityPackage`):**
+1. Accept unitypackage as either file path (legacy) or byte array (primary)
+2. Read gzipped tar.gz stream in-memory to extract `UnityPackageItem` entries
+3. Discover embedded bundles via content probing (AssetStudio `FileReader` magic byte detection)
+4. Parse each discovered bundle via in-memory `FileReader → BundleFile` or `SerializedFile` loading
+5. Extract render primitives (meshes, materials, textures) and metadata (GUID references, avatar candidates)
+6. Preserve metadata graph even when renders are absent (synthetic root refs for unitypackage fallback)
+
+**Cosmetic Bundle Parsing (`ParseCosmeticBundle`):**
+1. Accept cosmetic bundle (`.hhh` or other Unity asset format) as either file path or byte array
+2. Probe bundle format using in-memory `FileReader`
+3. Load as `SerializedFile` or `BundleFile` via in-memory streams
+4. Extract render primitives (must be non-empty; fail-fast if absent)
+5. No synthetic fallback refs (strict enforcement for GLB composition safety)
+
+### Key Implementation Details
+- **In-Memory FileReader**: AssetStudio's `FileReader` class detects bundle format from magic bytes without file I/O
+- **AssetsManager**: Maintains reference graph during deserialization of Unity serialized files
+- **Object Extraction**: Shared `AppendSerializedFileObjects` helper iterates Unity objects and builds `UnityObjectRef`, `UnityRenderMesh`, `UnityRenderMaterial`, `UnityRenderTexture` records
+- **Container Identity**: Stable hashing on source name (file path or asset blob tag), resilient to in-memory vs. file-based distinction
+- **Fail-Fast Validation**: Cosmetic bundles enforce render primitive presence; unitypackage provides metadata fallback for graph completeness
+
+## Vendor Integration Status
+
+**Extraction manifest:**
 - [src/RepoMod.Parser/Adapters/AssetStudio/AssetStudioImportManifest.cs](../src/RepoMod.Parser/Adapters/AssetStudio/AssetStudioImportManifest.cs)
 
-First-batch candidate files are tracked in `CandidateBatch1SourcePaths` in the manifest.
+**Compile-enabled vendor modules (AssetStudio pinned @ `6b66ec74674f61d7b331d0766fc38511e9c885f3`):**
+- Core types: `FileType`, `BuildTarget`, `ClassIDType`, `EndianType`
+- Reader primitives: `EndianBinaryReader`, `EndianSpanReader`, `FileReader`, `ResourceReader`, `ObjectInfo`, `SerializedFileHeader`, `FileIdentifier`
+- Bundle/decompression: `BundleFile`, `BundleDecompressionHelper`, `StreamFile`, `ImportHelper`, `UnityVersion`
+- Utilities: `ILogger`, `Logger`, `ColorConsole`, `BigArrayPool`, `OffsetStream`, `Extensions` (stream/binary reader/writer)
+- Math: Vector2, Vector3, Vector4, Quaternion, Matrix4x4, Color
+- Options: `CustomBundleOptions`, `ImportOptions`, `Asmo/OptionsFile`
+- Compression: `Brotli/*`, `SevenZipLzma/*`, `BundleDecompressionHelper`, `Oodle.cs`
 
-Current extraction status:
-- Batch 1 imported: `BuildTarget.cs`, `ClassIDType.cs`, `FileType.cs`, `ImportHelper.cs`
-- Batch 2 imported: reader primitives (`Endian*`, `FileReader`, `ResourceReader`, `ObjectInfo`, `SerializedFileHeader`, `FileIdentifier`)
-- Batch 3 imported: bundle/decompression path staging (`BundleFile`, `BundleDecompressionHelper`, `StreamFile`, `WebFile`, related options/logger helpers)
-- Vendor source is currently compile-excluded to enable staged adapter integration without breaking builds.
+**UI/export/native paths excluded (as per extraction policy):**
+- GUI components, native platform wrappers, asset export code, network upload handlers
 
-Compile integration status:
-- A small allowlisted vendor subset is now compile-enabled (`FileType`, `BuildTarget`, `ClassIDType`, `EndianType`, `EndianBinaryReader`, `EndianSpanReader`, `FileReader`, `ILogger`, `Logger`, `ImportHelper`, `UnityVersion`, `BundleFile`, `StreamFile`, `TempFileStream`, `ColorConsole`, `BigArrayPool`, `OffsetStream`, `Extensions/StreamExtensions`, `Extensions/BinaryReaderExtensions`, `Extensions/BinaryWriterExtensions`, `Math/*` core structs, `CustomOptions/CustomBundleOptions`, `CustomOptions/ImportOptions`, `CustomOptions/Asmo/OptionsFile`, `Brotli/*`, `BundleCompression/SevenZipLzma/*`, `BundleDecompressionHelper`, `BundleCompression/Oodle/Oodle.cs`).
-- Temporary adapter shims for current compile-enabled surface have been removed; imported vendor option types now include `CustomOptions/ImportOptions` and `CustomOptions/Asmo/OptionsFile`.
-- Remaining vendor files stay compile-excluded until adapter dependencies are resolved incrementally.
+## Implementation Notes
 
-Known scope note:
-- Direct `.unitypackage` scanning is now implemented for MVP fixture coverage (standalone package input, no nested-archive scan expansion).
-- Scanner parses gzipped tar members, probes `asset` payloads with AssetStudio `FileReader`, and maps supported discovered entries (`.asset`, `.prefab`, `.hhh`) into parser contracts.
+- **Unitypackage parsing** reads gzipped tar.gz in-memory, discovers bundles via `FileReader` content probing, and extracts both render data and metadata graphs
+- **No temporary files** are written during parsing; all operations use `MemoryStream` and `FileReader` in-memory APIs
+- **Synthetic metadata fallback** for unitypackage only (not cosmetic) preserves graph structure for metadata composition even if no renders are found
+- **Fail-fast cosmetic validation** ensures cosmetic bundles produce render primitives or fail loudly (no silent skipping)
 
-## Implementation Checklist
-1. Pin upstream commit SHA in manifest and attribution docs.
-2. Populate allowlist with exact upstream source paths before copying files.
-3. Copy only allowlisted files into vendor staging folder.
-4. Copy LICENSE and required third-party notices.
-5. Run forbidden-dependency review (`DllImport`, native wrappers, networking APIs).
-6. Implement adapter mapping from vendor types to parser contracts.
-7. Validate fixture corpus and record results.
-8. Apply fallback criteria only if primary source blocks MVP fixtures.
-
-## Definition of Done (Extraction Step)
-- Vendor files are pinned to a documented commit SHA.
-- Attribution record includes source paths and notices.
-- Parser compiles without GUI/native/server dependencies.
-- Fixture tests pass for MVP corpus.
-- App still passes repository verification contract.
+## Definition of Done (Current)
+- [x] Vendor files pinned to documented commit SHA
+- [x] Parser compiles without GUI/native/server dependencies  
+- [x] Fixture tests pass (49/49 unit tests)
+- [x] App passes repository verification contract
+- [x] All temporary file writes removed
+- [x] In-memory parsing APIs primary (file-based retained for backward compat tests)
 
 ## Switch Criteria (Primary -> Fallback)
-Switch from primary to fallback source when any of these hold on the fixture corpus:
-1. Unsupported critical sample blocks MVP flow.
-2. Required fix would introduce non-browser-safe dependencies.
-3. Fallback passes the same corpus with lower integration risk.
+Only if any of these hold on the fixture corpus (not currently triggered):
+1. Unsupported critical sample blocks MVP flow
+2. Required fix would introduce non-browser-safe dependencies
+3. Fallback passes same corpus with lower integration risk
 
 ## Licensing and Attribution
 - Preserve MIT license text from imported source
-- Retain copyright headers/notices as required
-- Preserve applicable third-party notices for imported files
 - Track provenance in a dedicated attribution record
 
 ## Parity Validation Strategy

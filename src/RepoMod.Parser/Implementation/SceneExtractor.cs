@@ -6,6 +6,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using AssetStudio;
+using AssetStudio.CustomOptions;
 using RepoMod.Parser.Abstractions;
 using RepoMod.Parser.Contracts;
 
@@ -17,6 +18,19 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
     private static readonly Regex ReferenceGuidRegex = new(@"guid:\s*([0-9a-fA-F]{32})", RegexOptions.Compiled);
     private static readonly Regex GenericGuidRegex = new(@"\b[0-9a-fA-F]{32}\b", RegexOptions.Compiled);
     private static readonly StringComparer PathComparer = StringComparer.OrdinalIgnoreCase;
+    private static readonly HashSet<string> UnityPackageExtensions = new(StringComparer.Ordinal)
+    {
+        ".asset",
+        ".prefab",
+        ".hhh",
+        ".mat",
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".tga",
+        ".dds",
+        ".shader"
+    };
 
     public ParseSceneResult ParseUnityPackage(string unityPackagePath)
     {
@@ -36,12 +50,48 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
             return ParseSceneResult.Failed(scanResult.Error ?? "Unitypackage scan failed.");
         }
 
+        var packageItems = ReadUnityPackageItems(unityPackagePath);
+        return ParseUnityPackageCore(unityPackagePath, packageItems, scanResult.Bundles, scanResult.Warnings);
+    }
+
+    /// <summary>
+    /// Parse a Unity unitypackage from in-memory bytes (primary workflow).
+    /// This is the preferred entry point for browser-safe parsing.
+    /// </summary>
+    /// <remarks>
+    /// Flow: byte[] -> read tar.gz entries -> discover bundles via FileReader magic byte probing ->
+    /// extract render primitives (meshes, materials, textures) and metadata (GUID refs, avatar candidates) ->
+    /// preserve metadata graph even if renders absent (synthetic root refs for fallback).
+    /// No temporary files are written.
+    /// </remarks>
+    public ParseSceneResult ParseUnityPackage(byte[] unityPackageBytes, string sourceName)
+    {
+        if (unityPackageBytes is not { Length: > 0 })
+        {
+            return ParseSceneResult.Failed("Unitypackage payload is empty.");
+        }
+
+        var packageItems = ReadUnityPackageItems(unityPackageBytes);
+        var discovery = DiscoverUnityPackageBundles(packageItems);
+        return ParseUnityPackageCore(sourceName, packageItems, discovery.Bundles, discovery.Warnings);
+    }
+
+    private ParseSceneResult ParseUnityPackageCore(
+        string sourceName,
+        IReadOnlyList<UnityPackageItem> packageItems,
+        IReadOnlyList<DiscoveredBundle> discoveredBundles,
+        IReadOnlyList<string> initialWarnings)
+    {
+        if (string.IsNullOrWhiteSpace(sourceName))
+        {
+            return ParseSceneResult.Failed("Unitypackage source name is required.");
+        }
+
         try
         {
-            var containerId = BuildContainerId("unitypackage", unityPackagePath);
-            var container = new ContainerDescriptor(containerId, Path.GetFullPath(unityPackagePath), "unitypackage", Path.GetFileName(unityPackagePath));
+            var containerId = BuildContainerId("unitypackage", sourceName);
+            var container = new ContainerDescriptor(containerId, sourceName, "unitypackage", Path.GetFileName(sourceName));
 
-            var packageItems = ReadUnityPackageItems(unityPackagePath);
             var byPath = packageItems
                 .Where(item => !string.IsNullOrWhiteSpace(item.Pathname))
                 .ToDictionary(item => item.Pathname!, item => item, PathComparer);
@@ -53,9 +103,9 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
             var renderMaterials = new List<UnityRenderMaterial>();
             var renderTextures = new List<UnityRenderTexture>();
             var avatarAssetIds = new List<string>();
-            var warnings = new List<string>(scanResult.Warnings);
+            var warnings = new List<string>(initialWarnings);
 
-            foreach (var discovered in scanResult.Bundles)
+            foreach (var discovered in discoveredBundles)
             {
                 byPath.TryGetValue(discovered.FullPath, out var packageItem);
                 var packageGuid = packageItem?.Guid;
@@ -87,7 +137,8 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
                     packageGuid,
                     discovered.FileName,
                     packageItem?.AssetBytes,
-                    warnings);
+                    warnings,
+                    includeFallbackRoot: true);
 
                 refs.AddRange(extracted.ObjectRefs);
                 renderObjects.AddRange(extracted.RenderObjects);
@@ -143,12 +194,45 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
             return ParseSceneResult.Failed($"Bundle not found: {bundlePath}");
         }
 
-        var fileInfo = new FileInfo(bundlePath);
-        var containerId = BuildContainerId("hhh", bundlePath);
-        var container = new ContainerDescriptor(containerId, fileInfo.FullName, "hhh", fileInfo.Name);
-        var slotTag = modParser.ExtractMetadata(fileInfo.Name).SlotTag;
-        var assetId = BuildAssetId(containerId, null, fileInfo.Name);
-        var bundleBytes = File.ReadAllBytes(fileInfo.FullName);
+        try
+        {
+            var bundleBytes = File.ReadAllBytes(bundlePath);
+            return ParseCosmeticBundle(bundleBytes, bundlePath);
+        }
+        catch (Exception ex)
+        {
+            return ParseSceneResult.Failed($"Failed to read cosmetic bundle bytes: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Parse a cosmetic bundle (e.g., .hhh file) from in-memory bytes (primary workflow).
+    /// Enforces fail-fast validation: render primitives must be non-empty or parse fails.
+    /// </summary>
+    /// <remarks>
+    /// Flow: byte[] -> probe format via FileReader -> load SerializedFile or BundleFile in-memory ->
+    /// extract render primitives (meshes, materials, textures) -> FAIL if no primitives found.
+    /// Unlike unitypackage, cosmetic bundles do not provide synthetic metadata fallback (strict safety).
+    /// No temporary files are written.
+    /// </remarks>
+    public ParseSceneResult ParseCosmeticBundle(byte[] bundleBytes, string sourceName)
+    {
+        if (bundleBytes is not { Length: > 0 })
+        {
+            return ParseSceneResult.Failed("Bundle payload is empty.");
+        }
+
+        if (string.IsNullOrWhiteSpace(sourceName))
+        {
+            return ParseSceneResult.Failed("Bundle source name is required.");
+        }
+
+        var fileName = Path.GetFileName(sourceName);
+        var extension = Path.GetExtension(fileName).ToLowerInvariant();
+        var containerId = BuildContainerId("hhh", sourceName);
+        var container = new ContainerDescriptor(containerId, sourceName, "hhh", fileName);
+        var slotTag = modParser.ExtractMetadata(fileName).SlotTag;
+        var assetId = BuildAssetId(containerId, null, fileName);
         var externalReferenceGuids = ExtractExternalGuids(bundleBytes);
 
         var assets = new[]
@@ -156,11 +240,11 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
             new ParsedAssetRecord(
                 assetId,
                 containerId,
-                fileInfo.FullName,
-                fileInfo.Name,
-                fileInfo.Extension.ToLowerInvariant(),
+                sourceName,
+                fileName,
+                extension,
                 "cosmetic-bundle",
-                fileInfo.Length,
+                bundleBytes.LongLength,
                 null,
                 null,
                 [],
@@ -179,7 +263,7 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
                 null,
                 null,
                 null,
-                fileInfo.Name,
+                fileName,
                 [])
         };
 
@@ -200,13 +284,21 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
             warnings.Add("No explicit external GUID references were detected in cosmetic bundle bytes.");
         }
 
-        var extracted = BuildObjectRefsFromBundle(
-            bundlePath,
+        var extracted = BuildObjectRefsFromSerializedAsset(
             assetId,
             containerId,
-            warnings);
+            null,
+            fileName,
+            bundleBytes,
+            warnings,
+            includeFallbackRoot: false);
         var objectRefs = refs.Concat(extracted.ObjectRefs).ToArray();
         var renderPrimitives = BuildRenderPrimitives(extracted.RenderObjects, extracted.RenderMeshes);
+
+        if (renderPrimitives.Count == 0)
+        {
+            return ParseSceneResult.Failed("Cosmetic bundle did not produce render primitives required for GLB conversion.");
+        }
 
         var scene = new ParsedModScene(
             BuildSceneId(containerId),
@@ -250,46 +342,7 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
 
             foreach (var serializedFile in assetsManager.AssetsFileList)
             {
-                foreach (var objectInfo in serializedFile.m_Objects)
-                {
-                    var pathIdText = objectInfo.m_PathID.ToString(CultureInfo.InvariantCulture);
-                    var objectName = BuildObjectDisplayName(objectInfo.classID, objectInfo.m_PathID);
-                    var outboundRefs = ExtractOutboundObjectPointers(serializedFile, objectInfo);
-                    objectRefs.Add(new UnityObjectRef(
-                        $"{assetId}:obj:{pathIdText}",
-                        assetId,
-                        containerId,
-                        null,
-                        serializedFile.fileName,
-                        pathIdText,
-                        objectInfo.classID,
-                        objectName,
-                        outboundRefs));
-
-                    var renderObject = TryBuildRenderObject(assetId, objectInfo, serializedFile);
-                    if (renderObject is not null)
-                    {
-                        renderObjects.Add(renderObject);
-                    }
-
-                    var renderMesh = TryBuildRenderMesh(assetId, objectInfo, serializedFile);
-                    if (renderMesh is not null)
-                    {
-                        renderMeshes.Add(renderMesh);
-                    }
-
-                    var renderMaterial = TryBuildRenderMaterial(assetId, objectInfo, serializedFile);
-                    if (renderMaterial is not null)
-                    {
-                        renderMaterials.Add(renderMaterial);
-                    }
-
-                    var renderTexture = TryBuildRenderTexture(assetId, objectInfo, serializedFile);
-                    if (renderTexture is not null)
-                    {
-                        renderTextures.Add(renderTexture);
-                    }
-                }
+                AppendSerializedFileObjects(serializedFile, assetId, containerId, null, objectRefs, renderObjects, renderMeshes, renderMaterials, renderTextures);
             }
         }
         catch (Exception ex)
@@ -300,12 +353,117 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
         return (objectRefs, renderObjects, renderMeshes, renderMaterials, renderTextures);
     }
 
+    private static void AppendSerializedFileObjects(
+        SerializedFile serializedFile,
+        string assetId,
+        string containerId,
+        string? packageGuid,
+        List<UnityObjectRef> objectRefs,
+        List<UnityRenderObject> renderObjects,
+        List<UnityRenderMesh> renderMeshes,
+        List<UnityRenderMaterial> renderMaterials,
+        List<UnityRenderTexture> renderTextures)
+    {
+        foreach (var objectInfo in serializedFile.m_Objects)
+        {
+            var pathIdText = objectInfo.m_PathID.ToString(CultureInfo.InvariantCulture);
+            var objectName = BuildObjectDisplayName(objectInfo.classID, objectInfo.m_PathID);
+            var outboundRefs = ExtractOutboundObjectPointers(serializedFile, objectInfo);
+            objectRefs.Add(new UnityObjectRef(
+                $"{assetId}:obj:{pathIdText}",
+                assetId,
+                containerId,
+                packageGuid,
+                serializedFile.fileName,
+                pathIdText,
+                objectInfo.classID,
+                objectName,
+                outboundRefs));
+
+            var renderObject = TryBuildRenderObject(assetId, objectInfo, serializedFile);
+            if (renderObject is not null)
+            {
+                renderObjects.Add(renderObject);
+            }
+
+            var renderMesh = TryBuildRenderMesh(assetId, objectInfo, serializedFile);
+            if (renderMesh is not null)
+            {
+                renderMeshes.Add(renderMesh);
+            }
+
+            var renderMaterial = TryBuildRenderMaterial(assetId, objectInfo, serializedFile);
+            if (renderMaterial is not null)
+            {
+                renderMaterials.Add(renderMaterial);
+            }
+
+            var renderTexture = TryBuildRenderTexture(assetId, objectInfo, serializedFile);
+            if (renderTexture is not null)
+            {
+                renderTextures.Add(renderTexture);
+            }
+        }
+    }
+
+    private static (IReadOnlyList<DiscoveredBundle> Bundles, IReadOnlyList<string> Warnings) DiscoverUnityPackageBundles(
+        IReadOnlyList<UnityPackageItem> packageItems)
+    {
+        var warnings = new List<string>();
+        var bundles = new List<DiscoveredBundle>();
+
+        foreach (var item in packageItems)
+        {
+            if (string.IsNullOrWhiteSpace(item.Pathname) || item.AssetBytes is null || item.AssetBytes.Length == 0)
+            {
+                continue;
+            }
+
+            try
+            {
+                var fileName = Path.GetFileName(item.Pathname);
+                var extension = Path.GetExtension(fileName).ToLowerInvariant();
+                if (!UnityPackageExtensions.Contains(extension))
+                {
+                    continue;
+                }
+
+                using var assetStream = new MemoryStream(item.AssetBytes, writable: false);
+                using var fileReader = new FileReader(item.Pathname, assetStream);
+
+                if (fileReader.FileType is FileType.GZipFile or FileType.BrotliFile or FileType.ZipFile)
+                {
+                    warnings.Add($"Skipping compressed nested asset '{item.Pathname}' detected as {fileReader.FileType}.");
+                    continue;
+                }
+
+                bundles.Add(new DiscoveredBundle(item.Pathname, fileName, item.AssetBytes.LongLength, extension));
+            }
+            catch (Exception ex)
+            {
+                warnings.Add($"Failed to probe unitypackage asset '{item.Pathname}': {ex.Message}");
+            }
+        }
+
+        return (bundles, warnings);
+    }
+
     private static List<UnityPackageItem> ReadUnityPackageItems(string unityPackagePath)
     {
-        var itemsByGuid = new Dictionary<string, UnityPackageItem>(StringComparer.Ordinal);
-
         using var packageStream = File.OpenRead(unityPackagePath);
-        using var gzipStream = new GZipStream(packageStream, CompressionMode.Decompress, leaveOpen: false);
+        return ReadUnityPackageItems(packageStream);
+    }
+
+    private static List<UnityPackageItem> ReadUnityPackageItems(byte[] unityPackageBytes)
+    {
+        using var packageStream = new MemoryStream(unityPackageBytes, writable: false);
+        return ReadUnityPackageItems(packageStream);
+    }
+
+    private static List<UnityPackageItem> ReadUnityPackageItems(Stream packageStream)
+    {
+        var itemsByGuid = new Dictionary<string, UnityPackageItem>(StringComparer.Ordinal);
+        using var gzipStream = new GZipStream(packageStream, CompressionMode.Decompress, leaveOpen: true);
         foreach (var entry in UnityPackageTarReader.ReadEntries(gzipStream))
         {
             if (entry.IsDirectory || string.IsNullOrWhiteSpace(entry.Name))
@@ -364,8 +522,17 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
 
     private static string BuildContainerId(string sourceType, string sourcePath)
     {
-        var fullPath = Path.GetFullPath(sourcePath);
-        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{sourceType}:{fullPath}")));
+        string sourceIdentity;
+        try
+        {
+            sourceIdentity = File.Exists(sourcePath) ? Path.GetFullPath(sourcePath) : sourcePath;
+        }
+        catch
+        {
+            sourceIdentity = sourcePath;
+        }
+
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{sourceType}:{sourceIdentity}")));
         return $"{sourceType}:{hash[..16].ToLowerInvariant()}";
     }
 
@@ -381,6 +548,18 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
 
     private static string BuildSceneId(string containerId)
         => $"{containerId}:scene";
+
+    private static UnityObjectRef CreateFallbackObjectRef(string assetId, string containerId, string? packageGuid, string displayName)
+        => new(
+            BuildObjectId(assetId, packageGuid),
+            assetId,
+            containerId,
+            packageGuid,
+            null,
+            null,
+            null,
+            displayName,
+            []);
 
     private static bool IsAvatarPath(string path)
         => path.Contains("PlayerAvatar", StringComparison.OrdinalIgnoreCase)
@@ -490,27 +669,15 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
         string? packageGuid,
         string fallbackName,
         byte[]? assetBytes,
-        List<string> warnings)
+        List<string> warnings,
+        bool includeFallbackRoot)
     {
         if (assetBytes is not { Length: > 0 })
         {
-            return (
-                [
-                    new UnityObjectRef(
-                        BuildObjectId(assetId, packageGuid),
-                        assetId,
-                        containerId,
-                        packageGuid,
-                        null,
-                        null,
-                        null,
-                        fallbackName,
-                        [])
-                ],
-                [],
-                [],
-                [],
-                []);
+            warnings.Add($"Object-level read skipped for '{fallbackName}': asset payload is empty.");
+            return includeFallbackRoot
+                ? ([CreateFallbackObjectRef(assetId, containerId, packageGuid, fallbackName)], [], [], [], [])
+                : ([], [], [], [], []);
         }
 
         try
@@ -524,116 +691,37 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
 
             if (fileReader.FileType != FileType.AssetsFile)
             {
-                return (
-                    [
-                        new UnityObjectRef(
-                            BuildObjectId(assetId, packageGuid),
-                            assetId,
-                            containerId,
-                            packageGuid,
-                            null,
-                            null,
-                            null,
-                            fallbackName,
-                            [])
-                    ],
-                        [],
-                        [],
-                        [],
-                        []);
+                warnings.Add($"Object-level read skipped for '{fallbackName}': unsupported file type {fileReader.FileType}.");
+                return includeFallbackRoot
+                    ? ([CreateFallbackObjectRef(assetId, containerId, packageGuid, fallbackName)], [], [], [], [])
+                    : ([], [], [], [], []);
             }
 
             var assetsManager = new AssetsManager();
             var serializedFile = new SerializedFile(fileReader, assetsManager);
             if (serializedFile.m_Objects.Count == 0)
             {
-                return (
-                    [
-                        new UnityObjectRef(
-                            BuildObjectId(assetId, packageGuid),
-                            assetId,
-                            containerId,
-                            packageGuid,
-                            null,
-                            null,
-                            null,
-                            fallbackName,
-                            [])
-                    ],
-                        [],
-                        [],
-                        [],
-                        []);
+                warnings.Add($"Object-level read returned no Unity objects for '{fallbackName}'.");
+                return includeFallbackRoot
+                    ? ([CreateFallbackObjectRef(assetId, containerId, packageGuid, fallbackName)], [], [], [], [])
+                    : ([], [], [], [], []);
             }
 
             var objectRefs = new List<UnityObjectRef>(serializedFile.m_Objects.Count);
             var renderObjects = new List<UnityRenderObject>();
-                    var renderMeshes = new List<UnityRenderMesh>();
-                    var renderMaterials = new List<UnityRenderMaterial>();
-                    var renderTextures = new List<UnityRenderTexture>();
-            foreach (var objectInfo in serializedFile.m_Objects)
-            {
-                var pathIdText = objectInfo.m_PathID.ToString(CultureInfo.InvariantCulture);
-                var objectName = BuildObjectDisplayName(objectInfo.classID, objectInfo.m_PathID);
-                var outboundRefs = ExtractOutboundObjectPointers(serializedFile, objectInfo);
-                objectRefs.Add(new UnityObjectRef(
-                    $"{assetId}:obj:{pathIdText}",
-                    assetId,
-                    containerId,
-                    packageGuid,
-                    serializedFile.fileName,
-                    pathIdText,
-                    objectInfo.classID,
-                    objectName,
-                    outboundRefs));
-
-                var renderObject = TryBuildRenderObject(assetId, objectInfo, serializedFile);
-                if (renderObject is not null)
-                {
-                    renderObjects.Add(renderObject);
-                }
-
-                var renderMesh = TryBuildRenderMesh(assetId, objectInfo, serializedFile);
-                if (renderMesh is not null)
-                {
-                    renderMeshes.Add(renderMesh);
-                }
-
-                var renderMaterial = TryBuildRenderMaterial(assetId, objectInfo, serializedFile);
-                if (renderMaterial is not null)
-                {
-                    renderMaterials.Add(renderMaterial);
-                }
-
-                var renderTexture = TryBuildRenderTexture(assetId, objectInfo, serializedFile);
-                if (renderTexture is not null)
-                {
-                    renderTextures.Add(renderTexture);
-                }
-            }
+            var renderMeshes = new List<UnityRenderMesh>();
+            var renderMaterials = new List<UnityRenderMaterial>();
+            var renderTextures = new List<UnityRenderTexture>();
+            AppendSerializedFileObjects(serializedFile, assetId, containerId, packageGuid, objectRefs, renderObjects, renderMeshes, renderMaterials, renderTextures);
 
             return (objectRefs, renderObjects, renderMeshes, renderMaterials, renderTextures);
         }
         catch (Exception ex)
         {
             warnings.Add($"Object-level read failed for '{fallbackName}': {ex.Message}");
-            return (
-                [
-                    new UnityObjectRef(
-                        BuildObjectId(assetId, packageGuid),
-                        assetId,
-                        containerId,
-                        packageGuid,
-                        null,
-                        null,
-                        null,
-                        fallbackName,
-                        [])
-                ],
-                [],
-                [],
-                [],
-                []);
+            return includeFallbackRoot
+                ? ([CreateFallbackObjectRef(assetId, containerId, packageGuid, fallbackName)], [], [], [], [])
+                : ([], [], [], [], []);
         }
     }
 
@@ -649,44 +737,71 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
         string containerId,
         List<string> warnings)
     {
-        var tempPath = Path.Combine(Path.GetTempPath(), $"repomod-bundle-{Guid.NewGuid():N}-{SanitizeFileName(fallbackName)}");
+        var objectRefs = new List<UnityObjectRef>();
+        var renderObjects = new List<UnityRenderObject>();
+        var renderMeshes = new List<UnityRenderMesh>();
+        var renderMaterials = new List<UnityRenderMaterial>();
+        var renderTextures = new List<UnityRenderTexture>();
+
+        if (bundleBytes.Length == 0)
+        {
+            warnings.Add($"Bundle object-level read skipped for '{fallbackName}': bundle payload is empty.");
+            return (objectRefs, renderObjects, renderMeshes, renderMaterials, renderTextures);
+        }
+
         try
         {
-            File.WriteAllBytes(tempPath, bundleBytes);
-            return BuildObjectRefsFromBundle(tempPath, assetId, containerId, warnings);
+            // In-memory parsing: bundleBytes -> MemoryStream -> FileReader.
+            // FileReader detects format from magic bytes (UnityFS, UnityWeb, UnityRaw, UnityArchive, or serialized asset).
+            // No temporary files written to disk.
+            using var bundleStream = new MemoryStream(bundleBytes, writable: false);
+            using var bundleReader = new FileReader(fallbackName, bundleStream);
+            var assetsManager = new AssetsManager();
+
+            if (bundleReader.FileType == FileType.AssetsFile)
+            {
+                var serializedFile = new SerializedFile(bundleReader, assetsManager);
+                AppendSerializedFileObjects(serializedFile, assetId, containerId, null, objectRefs, renderObjects, renderMeshes, renderMaterials, renderTextures);
+                return (objectRefs, renderObjects, renderMeshes, renderMaterials, renderTextures);
+            }
+
+            if (bundleReader.FileType != FileType.BundleFile)
+            {
+                warnings.Add($"Bundle object-level read skipped for '{fallbackName}': unsupported bundle payload type {bundleReader.FileType}.");
+                return (objectRefs, renderObjects, renderMeshes, renderMaterials, renderTextures);
+            }
+
+            // Payload is a Unity asset bundle archive. Iterate internal file list and deserialize each.
+            // Each internal archived file is checked for AssetsFile format; other types are skipped.
+            var importOptions = new ImportOptions();
+            var bundleFile = new BundleFile(bundleReader, importOptions.BundleOptions);
+            foreach (var file in bundleFile.fileList)
+            {
+                if (file.stream is null)
+                {
+                    continue;
+                }
+
+                file.stream.Position = 0;
+                var parentDirectory = Path.GetDirectoryName(bundleReader.FullPath) ?? string.Empty;
+                var virtualPath = Path.Combine(parentDirectory, file.fileName);
+                var subReader = new FileReader(virtualPath, file.stream);
+                if (subReader.FileType != FileType.AssetsFile)
+                {
+                    continue;
+                }
+
+                var serializedFile = new SerializedFile(subReader, assetsManager);
+                AppendSerializedFileObjects(serializedFile, assetId, containerId, null, objectRefs, renderObjects, renderMeshes, renderMaterials, renderTextures);
+            }
+
+            return (objectRefs, renderObjects, renderMeshes, renderMaterials, renderTextures);
         }
         catch (Exception ex)
         {
-            warnings.Add($"Bundle object-level temp extraction failed for '{fallbackName}': {ex.Message}");
-            return ([], [], [], [], []);
+            warnings.Add($"Bundle object-level read failed for '{fallbackName}': {ex.Message}");
+            return (objectRefs, renderObjects, renderMeshes, renderMaterials, renderTextures);
         }
-        finally
-        {
-            try
-            {
-                if (File.Exists(tempPath))
-                {
-                    File.Delete(tempPath);
-                }
-            }
-            catch
-            {
-            }
-        }
-    }
-
-    private static string SanitizeFileName(string value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return "bundle.bin";
-        }
-
-        var invalid = Path.GetInvalidFileNameChars();
-        var chars = value
-            .Select(ch => invalid.Contains(ch) ? '_' : ch)
-            .ToArray();
-        return new string(chars);
     }
 
     private static UnityRenderMesh? TryBuildRenderMesh(string assetId, ObjectInfo objectInfo, SerializedFile serializedFile)

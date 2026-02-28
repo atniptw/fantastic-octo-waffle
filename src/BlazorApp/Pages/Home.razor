@@ -120,7 +120,7 @@
 			}
 			else
 			{
-				var avatarResult = ParseSceneFromBytes(bytes, ".unitypackage", isAvatarScene: true);
+				var avatarResult = ParseSceneFromBytes(bytes, BundledAvatarPath, isAvatarScene: true);
 				if (!avatarResult.Success || avatarResult.Scene is null)
 				{
 					avatarStatus = $"Bundled avatar parse failed: {avatarResult.Error ?? "Unknown error"}";
@@ -356,7 +356,7 @@
 				continue;
 			}
 
-			var sceneResult = ParseSceneFromBytes(assetBytes, ".hhh", isAvatarScene: false);
+			var sceneResult = ParseSceneFromBytes(assetBytes, asset.AssetName, isAvatarScene: false);
 			if (!sceneResult.Success || sceneResult.Scene is null)
 			{
 				AddDiagnostic($"Asset '{asset.AssetName}' parse failed: {sceneResult.Error ?? "Unknown error"}");
@@ -374,22 +374,10 @@
 				AddDiagnostic($"Asset '{asset.AssetName}' [{diagnostic.Severity}] {diagnostic.Code}: {diagnostic.Message}");
 			}
 
-			ConverterScene selectionScene = projection.Scene;
 			if (projection.Scene.Primitives.Count == 0)
 			{
-				var avatarFallback = TryBuildAvatarFallbackProjection(asset.AssetName);
-				if (avatarFallback is null)
-				{
-					AddDiagnostic($"Asset '{asset.AssetName}' has no render primitives and was skipped.");
-					continue;
-				}
-
-				selectionScene = avatarFallback.Scene;
-				AddDiagnostic($"Asset '{asset.AssetName}' used avatar fallback primitives ({selectionScene.Primitives.Count}).");
-				foreach (var diagnostic in avatarFallback.Diagnostics)
-				{
-					AddDiagnostic($"Asset '{asset.AssetName}' fallback [{diagnostic.Severity}] {diagnostic.Code}: {diagnostic.Message}");
-				}
+				AddDiagnostic($"Asset '{asset.AssetName}' has no render primitives and was skipped.");
+				continue;
 			}
 
 			var slotTag = sceneResult.Scene.Assets
@@ -404,7 +392,7 @@
 			selections.Add(new GlbCosmeticSelection(
 				asset.AssetId,
 				slotTag,
-				selectionScene,
+				projection.Scene,
 				candidatePaths,
 				true));
 		}
@@ -464,37 +452,22 @@
 		}
 	}
 
-	private ParseSceneResult ParseSceneFromBytes(byte[] bytes, string extension, bool isAvatarScene)
+	private ParseSceneResult ParseSceneFromBytes(byte[] bytes, string sourceName, bool isAvatarScene)
 	{
 		if (bytes.Length == 0)
 		{
 			return ParseSceneResult.Failed("Input payload is empty.");
 		}
 
-		var tempPath = Path.Combine(Path.GetTempPath(), $"repomod-{Guid.NewGuid():N}{extension}");
 		try
 		{
-			File.WriteAllBytes(tempPath, bytes);
 			return isAvatarScene
-				? SceneExtractor.ParseUnityPackage(tempPath)
-				: SceneExtractor.ParseCosmeticBundle(tempPath);
+				? SceneExtractor.ParseUnityPackage(bytes, sourceName)
+				: SceneExtractor.ParseCosmeticBundle(bytes, sourceName);
 		}
 		catch (Exception ex)
 		{
 			return ParseSceneResult.Failed(ex.Message);
-		}
-		finally
-		{
-			try
-			{
-				if (File.Exists(tempPath))
-				{
-					File.Delete(tempPath);
-				}
-			}
-			catch
-			{
-			}
 		}
 	}
 
@@ -537,95 +510,6 @@
 		}
 
 		return "head";
-	}
-
-	private ConverterSceneProjection? TryBuildAvatarFallbackProjection(string assetPath)
-	{
-		if (avatarParsedScene is null)
-		{
-			return null;
-		}
-
-		var token = DeriveAssetToken(assetPath);
-		if (string.IsNullOrWhiteSpace(token) || token.Length < 3)
-		{
-			return null;
-		}
-
-		var matchedAssets = avatarParsedScene.Assets
-			.Where(item => item.Pathname.Contains(token, StringComparison.OrdinalIgnoreCase)
-				|| item.FileName.Contains(token, StringComparison.OrdinalIgnoreCase))
-			.ToArray();
-		if (matchedAssets.Length == 0)
-		{
-			return null;
-		}
-
-		var matchedAssetIds = matchedAssets
-			.Select(item => item.AssetId)
-			.ToHashSet(StringComparer.Ordinal);
-
-		var matchedPrimitives = avatarParsedScene.RenderPrimitives
-			.Where(item => matchedAssetIds.Contains(item.AssetId))
-			.ToArray();
-		if (matchedPrimitives.Length == 0)
-		{
-			return null;
-		}
-
-		var meshIds = matchedPrimitives
-			.Select(item => item.MeshObjectId)
-			.Where(id => !string.IsNullOrWhiteSpace(id))
-			.ToHashSet(StringComparer.Ordinal);
-
-		var materialIds = matchedPrimitives
-			.Select(item => item.MaterialObjectId)
-			.Where(id => !string.IsNullOrWhiteSpace(id))
-			.Select(id => id!)
-			.ToHashSet(StringComparer.Ordinal);
-
-		var renderObjectIds = matchedPrimitives
-			.Select(item => item.RenderObjectId)
-			.Where(id => !string.IsNullOrWhiteSpace(id))
-			.ToHashSet(StringComparer.Ordinal);
-
-		var selectedRenderObjects = avatarParsedScene.RenderObjects
-			.Where(item => renderObjectIds.Contains(item.ObjectId))
-			.ToArray();
-
-		var fallbackScene = new ParsedModScene(
-			$"{avatarParsedScene.SceneId}:selection:{token}",
-			avatarParsedScene.Container,
-			matchedAssets,
-			avatarParsedScene.ObjectRefs,
-			selectedRenderObjects,
-			matchedPrimitives,
-			avatarParsedScene.RenderMeshes.Where(item => meshIds.Contains(item.ObjectId)).ToArray(),
-			avatarParsedScene.RenderMaterials.Where(item => materialIds.Contains(item.ObjectId)).ToArray(),
-			avatarParsedScene.RenderTextures,
-			avatarParsedScene.AttachmentHints,
-			avatarParsedScene.AvatarAssetIds,
-			avatarParsedScene.Graph,
-			avatarParsedScene.Warnings);
-
-		return ConverterSceneMapper.MapWithDiagnostics(fallbackScene);
-	}
-
-	private static string DeriveAssetToken(string assetPath)
-	{
-		var fileName = Path.GetFileNameWithoutExtension(assetPath);
-		if (string.IsNullOrWhiteSpace(fileName))
-		{
-			return string.Empty;
-		}
-
-		var separatorIndex = fileName.LastIndexOf('_');
-		if (separatorIndex > 0)
-		{
-			return fileName[..separatorIndex];
-		}
-
-		return fileName;
 	}
 
 	private sealed record UploadedAssetEntry(
