@@ -212,6 +212,7 @@ public class SceneExtractorTests
         }
     }
 
+
     [Fact]
     public void ParseCosmeticBundle_ProducesAttachmentHints()
     {

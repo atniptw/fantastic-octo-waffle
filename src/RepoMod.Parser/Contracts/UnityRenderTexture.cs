@@ -10,4 +10,5 @@ public sealed record UnityRenderTexture(
     int? ImageDataByteCount,
     string? StreamPath,
     long? StreamOffset,
-    int? StreamSize);
+    int? StreamSize,
+    string? ImageDataBase64);

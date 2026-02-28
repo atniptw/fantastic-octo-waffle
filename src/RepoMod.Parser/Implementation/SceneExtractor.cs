@@ -2039,17 +2039,114 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
         var objectId = $"{assetId}:obj:{objectInfo.m_PathID.ToString(CultureInfo.InvariantCulture)}";
         var data = ReadObjectTypeData(serializedFile, objectInfo);
         var streamInfo = ExtractTextureStreamInfo(data);
+        var width = ReadIntValue(data, "m_Width") ?? 0;
+        var height = ReadIntValue(data, "m_Height") ?? 0;
+        var textureFormat = ReadIntValue(data, "m_TextureFormat") ?? 0;
+
+        // Try to extract and convert texture image bytes to PNG
+        var imageDataBase64 = TryExtractTextureImageBytes(
+            serializedFile,
+            data,
+            width,
+            height,
+            textureFormat,
+            streamInfo);
+
         return new UnityRenderTexture(
             objectId,
             assetId,
             BuildObjectDisplayName(objectInfo.classID, objectInfo.m_PathID),
-            ReadIntValue(data, "m_Width"),
-            ReadIntValue(data, "m_Height"),
-            ReadIntValue(data, "m_TextureFormat"),
+            width,
+            height,
+            textureFormat,
             ReadArrayCount(data, "m_ImageData"),
             streamInfo.Path,
             streamInfo.Offset,
-            streamInfo.Size);
+            streamInfo.Size,
+            imageDataBase64);
+    }
+
+    private static string? TryExtractTextureImageBytes(
+        SerializedFile serializedFile,
+        OrderedDictionary data,
+        int width,
+        int height,
+        int textureFormat,
+        (string? Path, long? Offset, int? Size) streamInfo)
+    {
+        if (width <= 0 || height <= 0)
+        {
+            return null;
+        }
+
+        try
+        {
+            byte[]? textureBytes = null;
+
+            // Try to get image data from stream or embedded data
+            if (!string.IsNullOrWhiteSpace(streamInfo.Path) && streamInfo.Offset.HasValue && streamInfo.Size.HasValue)
+            {
+                // External stream file (e.g., .resS)
+                textureBytes = TryReadExternalStreamFile(serializedFile, streamInfo.Path, streamInfo.Offset.Value, streamInfo.Size.Value);
+            }
+            else if (TryGetDictionaryValue(data, "m_ImageData", out var imageDataValue) && imageDataValue is byte[] embeddedBytes)
+            {
+                // Embedded image data directly in the serialized file
+                textureBytes = embeddedBytes;
+            }
+
+            if (textureBytes?.Length == 0)
+            {
+                return null;
+            }
+
+            if (textureBytes == null)
+            {
+                return null;
+            }
+
+            // Convert texture bytes to PNG base64
+            if (TextureUtilities.TryConvertTextureToPngBase64(textureBytes, textureFormat, width, height, out var pngBase64))
+            {
+                return pngBase64;
+            }
+
+            return null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static byte[]? TryReadExternalStreamFile(SerializedFile serializedFile, string streamPath, long offset, int size)
+    {
+        try
+        {
+            // Try to find and read the external resource file
+            var resourceFileName = Path.GetFileName(streamPath);
+            var assetsFileDirectory = Path.GetDirectoryName(serializedFile.fullName);
+            var resourceFilePath = Path.Combine(assetsFileDirectory, resourceFileName);
+
+            if (!File.Exists(resourceFilePath))
+            {
+                var findFiles = Directory.GetFiles(assetsFileDirectory, resourceFileName, SearchOption.AllDirectories);
+                if (findFiles.Length == 0)
+                {
+                    return null;
+                }
+                resourceFilePath = findFiles[0];
+            }
+
+            using var fileStream = File.OpenRead(resourceFilePath);
+            using var reader = new BinaryReader(fileStream);
+            reader.BaseStream.Position = offset;
+            return reader.ReadBytes(size);
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static OrderedDictionary ReadObjectTypeData(SerializedFile serializedFile, ObjectInfo objectInfo)
