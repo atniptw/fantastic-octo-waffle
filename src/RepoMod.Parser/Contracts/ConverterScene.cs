@@ -6,6 +6,8 @@ public sealed record ConverterScene(
     string SourceType,
     IReadOnlyList<ConverterNode> Nodes,
     IReadOnlyList<ConverterPrimitive> Primitives,
+    IReadOnlyList<UnityRenderMaterial> RenderMaterials,
+    IReadOnlyList<UnityRenderTexture> RenderTextures,
     IReadOnlyList<string> Warnings);
 
 public sealed record ConverterNode(

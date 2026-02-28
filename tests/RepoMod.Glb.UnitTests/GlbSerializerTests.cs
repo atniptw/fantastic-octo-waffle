@@ -92,6 +92,8 @@ public class GlbSerializerTests
                     false,
                     ["primitive:1"])
             ],
+                    [],
+                    [],
             []);
     }
 }

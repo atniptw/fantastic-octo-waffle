@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Linq;
 using System.Text.Json;
 using RepoMod.Glb.Abstractions;
 using RepoMod.Glb.Contracts;
@@ -21,12 +22,19 @@ public sealed class GlbSerializer : IGlbSerializer
         var materials = new List<object>();
         var materialIndexById = new Dictionary<string, int>(StringComparer.Ordinal);
 
+        var images = new List<object>();
+        var textures = new List<object>();
+        var textureIndexById = new Dictionary<string, int>(StringComparer.Ordinal);
+
         var accessors = new List<object>();
         var bufferViews = new List<object>();
         var meshes = new List<object>();
         var nodes = new List<object>();
 
         var rootNodeChildren = new List<int>();
+
+        BuildTextures(composition.RenderTextures, images, textures, textureIndexById);
+        BuildMaterials(composition.RenderMaterials, materials, materialIndexById, textureIndexById);
 
         foreach (var anchor in composition.Anchors.OrderBy(item => item.AnchorPath, StringComparer.Ordinal))
         {
@@ -96,7 +104,7 @@ public sealed class GlbSerializer : IGlbSerializer
 
                 var indicesAccessor = AddIndexAccessor(binaryBuffer, bufferViews, accessors, primitive.Indices);
 
-                var materialIndex = ResolveMaterialIndex(primitive.MaterialObjectId, materials, materialIndexById);
+                    var materialIndex = ResolveMaterialIndex(primitive.MaterialObjectId, materials, materialIndexById);
                 var mesh = new
                 {
                     primitives = new object[]
@@ -142,6 +150,8 @@ public sealed class GlbSerializer : IGlbSerializer
             nodes,
             meshes,
             materials,
+            images = images.Count > 0 ? images : null,
+            textures = textures.Count > 0 ? textures : null,
             accessors,
             bufferViews,
             buffers = new object[] { new { byteLength = binaryBuffer.Count } }
@@ -330,6 +340,158 @@ public sealed class GlbSerializer : IGlbSerializer
         materials.Add(material);
         materialIndexById[key] = index;
         return index;
+    }
+
+    private static void BuildTextures(
+        IReadOnlyList<UnityRenderTexture> renderTextures,
+        ICollection<object> images,
+        ICollection<object> textures,
+        IDictionary<string, int> textureIndexById)
+    {
+        foreach (var texture in renderTextures.OrderBy(item => item.ObjectId, StringComparer.Ordinal))
+        {
+            if (string.IsNullOrWhiteSpace(texture.ImageDataBase64))
+            {
+                continue;
+            }
+
+            if (textureIndexById.ContainsKey(texture.ObjectId))
+            {
+                continue;
+            }
+
+            var imageIndex = images.Count;
+            images.Add(new
+            {
+                uri = $"data:image/png;base64,{texture.ImageDataBase64}"
+            });
+
+            var textureIndex = textures.Count;
+            textures.Add(new
+            {
+                source = imageIndex
+            });
+
+            textureIndexById[texture.ObjectId] = textureIndex;
+        }
+    }
+
+    private static void BuildMaterials(
+        IReadOnlyList<UnityRenderMaterial> renderMaterials,
+        ICollection<object> materials,
+        IDictionary<string, int> materialIndexById,
+        IReadOnlyDictionary<string, int> textureIndexById)
+    {
+        foreach (var material in renderMaterials.OrderBy(item => item.ObjectId, StringComparer.Ordinal))
+        {
+            if (materialIndexById.ContainsKey(material.ObjectId))
+            {
+                continue;
+            }
+
+            var baseColorFactor = ResolveBaseColorFactor(material);
+            var baseColorTextureIndex = ResolveTextureIndex(material, textureIndexById, "_MainTex", "_BaseMap", "BaseColor", "Albedo", "albedo");
+            var normalTextureIndex = ResolveTextureIndex(material, textureIndexById, "_BumpMap", "_NormalMap", "NormalMap", "normalMap");
+            var emissiveTextureIndex = ResolveTextureIndex(material, textureIndexById, "_EmissionMap", "_EmissiveMap", "Emissive", "emission");
+
+            var pbrMetallicRoughness = new Dictionary<string, object>
+            {
+                ["baseColorFactor"] = baseColorFactor,
+                ["metallicFactor"] = ResolveFloatProperty(material, "_Metallic", 0f),
+                ["roughnessFactor"] = ResolveRoughness(material)
+            };
+
+            if (baseColorTextureIndex is not null)
+            {
+                pbrMetallicRoughness["baseColorTexture"] = new { index = baseColorTextureIndex.Value };
+            }
+
+            var materialObject = new Dictionary<string, object>
+            {
+                ["name"] = material.ObjectId,
+                ["pbrMetallicRoughness"] = pbrMetallicRoughness,
+                ["alphaMode"] = "OPAQUE"
+            };
+
+            if (normalTextureIndex is not null)
+            {
+                materialObject["normalTexture"] = new { index = normalTextureIndex.Value };
+            }
+
+            if (emissiveTextureIndex is not null)
+            {
+                materialObject["emissiveTexture"] = new { index = emissiveTextureIndex.Value };
+                materialObject["emissiveFactor"] = ResolveEmissiveFactor(material);
+            }
+
+            materialIndexById[material.ObjectId] = materials.Count;
+            materials.Add(materialObject);
+        }
+    }
+
+    private static int? ResolveTextureIndex(
+        UnityRenderMaterial material,
+        IReadOnlyDictionary<string, int> textureIndexById,
+        params string[] slotNames)
+    {
+        foreach (var slotName in slotNames)
+        {
+            var binding = material.TextureBindings
+                .FirstOrDefault(item => string.Equals(item.SlotName, slotName, StringComparison.OrdinalIgnoreCase));
+            if (binding is null)
+            {
+                continue;
+            }
+
+            if (textureIndexById.TryGetValue(binding.TextureObjectId, out var index))
+            {
+                return index;
+            }
+        }
+
+        return null;
+    }
+
+    private static float[] ResolveBaseColorFactor(UnityRenderMaterial material)
+    {
+        var color = material.ColorProperties
+            .FirstOrDefault(item => string.Equals(item.Name, "_Color", StringComparison.OrdinalIgnoreCase)
+                                    || string.Equals(item.Name, "BaseColor", StringComparison.OrdinalIgnoreCase)
+                                    || string.Equals(item.Name, "Color", StringComparison.OrdinalIgnoreCase));
+
+        if (color is null)
+        {
+            return new[] { 1f, 1f, 1f, 1f };
+        }
+
+        return new[] { color.R, color.G, color.B, color.A };
+    }
+
+    private static float ResolveFloatProperty(UnityRenderMaterial material, string name, float fallback)
+    {
+        var property = material.FloatProperties
+            .FirstOrDefault(item => string.Equals(item.Name, name, StringComparison.OrdinalIgnoreCase));
+        return property is null ? fallback : property.Value;
+    }
+
+    private static float ResolveRoughness(UnityRenderMaterial material)
+    {
+        var glossiness = ResolveFloatProperty(material, "_Glossiness", 1f);
+        return 1f - glossiness;
+    }
+
+    private static float[] ResolveEmissiveFactor(UnityRenderMaterial material)
+    {
+        var color = material.ColorProperties
+            .FirstOrDefault(item => string.Equals(item.Name, "_EmissionColor", StringComparison.OrdinalIgnoreCase)
+                                    || string.Equals(item.Name, "EmissiveColor", StringComparison.OrdinalIgnoreCase));
+
+        if (color is null)
+        {
+            return new[] { 1f, 1f, 1f };
+        }
+
+        return new[] { color.R, color.G, color.B };
     }
 
     private static byte[] PackGlb(byte[] jsonBytes, byte[] binaryBytes)

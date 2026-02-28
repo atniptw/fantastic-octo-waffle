@@ -160,6 +160,8 @@ public class GlbCompositionPlannerTests
             "hhh",
             [],
             primitives,
+            [],
+            [],
             []);
     }
 
@@ -184,6 +186,8 @@ public class GlbCompositionPlannerTests
                 new ConverterNode("n11", "Thigh_R", "n2", [], null, null, null),
                 new ConverterNode("n12", "Upperarm_L", "n8", [], null, null, null)
             ],
+            [],
+            [],
             [],
             []);
     }

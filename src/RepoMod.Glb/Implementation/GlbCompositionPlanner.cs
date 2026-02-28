@@ -114,10 +114,38 @@ public sealed class GlbCompositionPlanner : IGlbCompositionPlanner
             anchorGroups.Add(new GlbAnchorComposition(group.Key, composedPrimitives));
         }
 
+        var materialMap = new Dictionary<string, UnityRenderMaterial>(StringComparer.Ordinal);
+        var textureMap = new Dictionary<string, UnityRenderTexture>(StringComparer.Ordinal);
+
+        foreach (var material in avatarScene.RenderMaterials)
+        {
+            materialMap.TryAdd(material.ObjectId, material);
+        }
+
+        foreach (var texture in avatarScene.RenderTextures)
+        {
+            textureMap.TryAdd(texture.ObjectId, texture);
+        }
+
+        foreach (var selection in selections)
+        {
+            foreach (var material in selection.Scene.RenderMaterials)
+            {
+                materialMap.TryAdd(material.ObjectId, material);
+            }
+
+            foreach (var texture in selection.Scene.RenderTextures)
+            {
+                textureMap.TryAdd(texture.ObjectId, texture);
+            }
+        }
+
         return new GlbCompositionResult(
             avatarScene.SceneId,
             anchorGroups,
             plan.Attachments,
+            materialMap.Values.ToArray(),
+            textureMap.Values.ToArray(),
             warnings);
     }
 

@@ -51,6 +51,8 @@ public static class ConverterSceneMapper
             scene.Container.SourceType,
             nodes,
             primitives,
+            scene.RenderMaterials,
+            scene.RenderTextures,
             scene.Warnings);
     }
 }

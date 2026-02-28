@@ -158,7 +158,7 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
                 warnings.Add("No avatar candidate assets were detected in unitypackage output.");
             }
 
-            var resolvedRenderObjects = ResolveGuidMeshPointers(renderObjects, assets, renderMeshes, warnings);
+            var resolvedRenderObjects = ResolveGuidMeshPointers(renderObjects, assets, renderMeshes, renderMaterials, warnings);
             var renderPrimitives = BuildRenderPrimitives(resolvedRenderObjects, renderMeshes);
 
             var scene = new ParsedModScene(
@@ -721,6 +721,29 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
                     return (mergedObjectRefs, prefabRenderObjects, [], [], []);
                 }
 
+                if (TryBuildRenderMaterialFromYaml(assetBytes, assetId, containerId, packageGuid, fallbackName, out var yamlMaterial, out var yamlMaterialObjectRef))
+                {
+                    var yamlObjectRefs = new List<UnityObjectRef>();
+                    if (includeFallbackRoot)
+                    {
+                        yamlObjectRefs.Add(CreateFallbackObjectRef(assetId, containerId, packageGuid, fallbackName));
+                    }
+
+                    if (yamlMaterialObjectRef is not null)
+                    {
+                        yamlObjectRefs.Add(yamlMaterialObjectRef);
+                    }
+
+                    return (yamlObjectRefs, [], [], [yamlMaterial], []);
+                }
+
+                if (fileReader.FileType == FileType.ResourceFile)
+                {
+                    return includeFallbackRoot
+                        ? ([CreateFallbackObjectRef(assetId, containerId, packageGuid, fallbackName)], [], [], [], [])
+                        : ([], [], [], [], []);
+                }
+
                 warnings.Add($"Object-level read skipped for '{fallbackName}': unsupported file type {fileReader.FileType}.");
                 return includeFallbackRoot
                     ? ([CreateFallbackObjectRef(assetId, containerId, packageGuid, fallbackName)], [], [], [], [])
@@ -759,9 +782,10 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
         IReadOnlyList<UnityRenderObject> renderObjects,
         IReadOnlyList<ParsedAssetRecord> assets,
         IReadOnlyList<UnityRenderMesh> renderMeshes,
+        IReadOnlyList<UnityRenderMaterial> renderMaterials,
         ICollection<string> warnings)
     {
-        if (renderObjects.Count == 0 || renderMeshes.Count == 0)
+        if (renderObjects.Count == 0)
         {
             return renderObjects;
         }
@@ -779,17 +803,43 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
             }
         }
 
-        var assetIdByGuid = assets
-            .Where(asset => !string.IsNullOrWhiteSpace(asset.PackageGuid))
-            .GroupBy(asset => asset.PackageGuid!, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(group => group.Key, group => group.First().AssetId, StringComparer.OrdinalIgnoreCase);
+        var materialObjectIdByAssetId = renderMaterials
+            .GroupBy(material => material.AssetId, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First().ObjectId, StringComparer.Ordinal);
+        var materialObjectIdByAssetAndFileId = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var material in renderMaterials)
+        {
+            var fileId = TryExtractFileIdFromObjectId(material.ObjectId);
+            if (!string.IsNullOrWhiteSpace(fileId))
+            {
+                materialObjectIdByAssetAndFileId[$"{material.AssetId}|{fileId}"] = material.ObjectId;
+            }
+        }
+
+        var assetIdsByGuid = BuildAssetIdsByGuid(assets);
+
+        var emittedWarnings = new HashSet<string>(StringComparer.Ordinal);
 
         var resolved = new List<UnityRenderObject>(renderObjects.Count);
         foreach (var renderObject in renderObjects)
         {
-            var resolvedMeshObjectId = ResolveGuidReference(renderObject.MeshObjectId, assetIdByGuid, meshObjectIdByAssetId, meshObjectIdByAssetAndFileId, warnings);
+            var resolvedMeshObjectId = ResolveGuidReference(
+                renderObject.MeshObjectId,
+                assetIdsByGuid,
+                meshObjectIdByAssetId,
+                meshObjectIdByAssetAndFileId,
+                "mesh object",
+                warnings,
+                emittedWarnings);
             var resolvedMaterialObjectIds = renderObject.MaterialObjectIds
-                .Select(materialObjectId => ResolveGuidReference(materialObjectId, assetIdByGuid, meshObjectIdByAssetId, meshObjectIdByAssetAndFileId, warnings) ?? materialObjectId)
+                .Select(materialObjectId => ResolveGuidReference(
+                    materialObjectId,
+                    assetIdsByGuid,
+                    materialObjectIdByAssetId,
+                    materialObjectIdByAssetAndFileId,
+                    "material object",
+                    warnings,
+                    emittedWarnings) ?? materialObjectId)
                 .ToArray();
             var resolvedAssignments = BuildMaterialAssignments(resolvedMaterialObjectIds);
 
@@ -806,10 +856,12 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
 
     private static string? ResolveGuidReference(
         string? pointer,
-        IReadOnlyDictionary<string, string> assetIdByGuid,
-        IReadOnlyDictionary<string, string> meshObjectIdByAssetId,
-        IReadOnlyDictionary<string, string> meshObjectIdByAssetAndFileId,
-        ICollection<string> warnings)
+        IReadOnlyDictionary<string, IReadOnlyList<string>> assetIdsByGuid,
+        IReadOnlyDictionary<string, string> objectIdByAssetId,
+        IReadOnlyDictionary<string, string> objectIdByAssetAndFileId,
+        string objectKind,
+        ICollection<string> warnings,
+        ISet<string> emittedWarnings)
     {
         if (string.IsNullOrWhiteSpace(pointer) || !pointer.StartsWith("guid:", StringComparison.OrdinalIgnoreCase))
         {
@@ -817,11 +869,11 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
         }
 
         var guid = pointer[5..].Trim();
-        string? meshFileId = null;
+        string? objectFileId = null;
         var separatorIndex = guid.IndexOf("#file:", StringComparison.OrdinalIgnoreCase);
         if (separatorIndex >= 0)
         {
-            meshFileId = guid[(separatorIndex + 6)..].Trim();
+            objectFileId = guid[(separatorIndex + 6)..].Trim();
             guid = guid[..separatorIndex].Trim();
         }
 
@@ -830,25 +882,79 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
             return null;
         }
 
-        if (!assetIdByGuid.TryGetValue(guid, out var assetId))
+        if (!assetIdsByGuid.TryGetValue(guid, out var candidateAssetIds) || candidateAssetIds.Count == 0)
         {
-            warnings.Add($"Unable to resolve GUID reference '{guid}' to a parsed asset.");
+            AddWarningOnce(warnings, emittedWarnings, $"Unable to resolve GUID reference '{guid}' to a parsed asset.");
             return null;
         }
 
-        if (!string.IsNullOrWhiteSpace(meshFileId)
-            && meshObjectIdByAssetAndFileId.TryGetValue($"{assetId}|{meshFileId}", out var meshObjectIdByFile))
+        if (!string.IsNullOrWhiteSpace(objectFileId))
         {
-            return meshObjectIdByFile;
+            foreach (var candidateAssetId in candidateAssetIds)
+            {
+                if (objectIdByAssetAndFileId.TryGetValue($"{candidateAssetId}|{objectFileId}", out var objectIdByFile))
+                {
+                    return objectIdByFile;
+                }
+            }
         }
 
-        if (!meshObjectIdByAssetId.TryGetValue(assetId, out var meshObjectId))
+        foreach (var candidateAssetId in candidateAssetIds)
         {
-            warnings.Add($"Unable to resolve GUID reference '{guid}' because parsed asset '{assetId}' has no mesh object.");
-            return null;
+            if (objectIdByAssetId.TryGetValue(candidateAssetId, out var objectId))
+            {
+                return objectId;
+            }
         }
 
-        return meshObjectId;
+        AddWarningOnce(
+            warnings,
+            emittedWarnings,
+            $"Unable to resolve GUID reference '{guid}' because parsed asset '{candidateAssetIds[0]}' has no {objectKind}.");
+        return null;
+    }
+
+    private static IReadOnlyDictionary<string, IReadOnlyList<string>> BuildAssetIdsByGuid(IReadOnlyList<ParsedAssetRecord> assets)
+    {
+        var map = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var asset in assets)
+        {
+            AddGuidAsset(map, asset.PackageGuid, asset.AssetId);
+            AddGuidAsset(map, asset.MetaGuid, asset.AssetId);
+        }
+
+        var result = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (guid, assetIds) in map)
+        {
+            result[guid] = assetIds.ToArray();
+        }
+
+        return result;
+    }
+
+    private static void AddGuidAsset(IDictionary<string, HashSet<string>> map, string? guid, string assetId)
+    {
+        if (string.IsNullOrWhiteSpace(guid))
+        {
+            return;
+        }
+
+        var normalizedGuid = guid.Trim().ToLowerInvariant();
+        if (!map.TryGetValue(normalizedGuid, out var assetIds))
+        {
+            assetIds = new HashSet<string>(StringComparer.Ordinal);
+            map[normalizedGuid] = assetIds;
+        }
+
+        assetIds.Add(assetId);
+    }
+
+    private static void AddWarningOnce(ICollection<string> warnings, ISet<string> emittedWarnings, string warning)
+    {
+        if (emittedWarnings.Add(warning))
+        {
+            warnings.Add(warning);
+        }
     }
 
     private static string? TryExtractFileIdFromObjectId(string objectId)
@@ -1154,6 +1260,83 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
         }
 
         return sections;
+    }
+
+    private static bool TryBuildRenderMaterialFromYaml(
+        byte[] assetBytes,
+        string assetId,
+        string containerId,
+        string? packageGuid,
+        string fallbackName,
+        out UnityRenderMaterial? renderMaterial,
+        out UnityObjectRef? objectRef)
+    {
+        renderMaterial = null;
+        objectRef = null;
+
+        string text;
+        try
+        {
+            text = Encoding.UTF8.GetString(assetBytes);
+        }
+        catch
+        {
+            return false;
+        }
+
+        if (!text.StartsWith("%YAML", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var sections = ParseYamlObjectSections(text);
+        if (sections.Count == 0)
+        {
+            return false;
+        }
+
+        var materialSection = sections.FirstOrDefault(section => section.ClassId == 21);
+        if (materialSection is null)
+        {
+            return false;
+        }
+
+        var objectId = BuildYamlObjectIdForFile(assetId, materialSection.FileId);
+        var name = TryReadYamlPropertyValue(materialSection.Content, "m_Name") ?? fallbackName;
+        var shaderObjectId = ParseYamlShaderPointer(materialSection.Content);
+
+        renderMaterial = new UnityRenderMaterial(
+            objectId,
+            assetId,
+            name,
+            shaderObjectId,
+            [],
+            [],
+            []);
+
+        objectRef = new UnityObjectRef(
+            objectId,
+            assetId,
+            containerId,
+            packageGuid,
+            null,
+            materialSection.FileId.ToString(CultureInfo.InvariantCulture),
+            21,
+            name,
+            []);
+
+        return true;
+    }
+
+    private static string? ParseYamlShaderPointer(string content)
+    {
+        var guidMatch = Regex.Match(content, "m_Shader\\s*:\\s*\\{[^}]*guid\\s*:\\s*([0-9a-fA-F]{32})");
+        if (guidMatch.Success)
+        {
+            return $"guid:{guidMatch.Groups[1].Value}";
+        }
+
+        return null;
     }
 
     private static long ParseYamlPointerFileId(string content, string fieldName)
