@@ -192,7 +192,7 @@ export async function renderGlb(hostId, glbBase64) {
                 const fovInRadians = (state.camera.fov * Math.PI) / 180;
                 const distance = maxSize / Math.tan(fovInRadians / 2);
 
-                state.camera.position.set(center.x + distance * 0.75, center.y + distance * 0.45, center.z + distance * 0.95);
+                state.camera.position.set(center.x + distance * 0.6, center.y + distance * 0.35, center.z + distance * 0.75);
                 state.camera.near = Math.max(distance / 200, 0.01);
                 state.camera.far = distance * 20;
                 state.camera.lookAt(center);

@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Collections;
 using System.Collections.Specialized;
 using System.Globalization;
@@ -157,14 +158,15 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
                 warnings.Add("No avatar candidate assets were detected in unitypackage output.");
             }
 
-            var renderPrimitives = BuildRenderPrimitives(renderObjects, renderMeshes);
+            var resolvedRenderObjects = ResolveGuidMeshPointers(renderObjects, assets, renderMeshes, warnings);
+            var renderPrimitives = BuildRenderPrimitives(resolvedRenderObjects, renderMeshes);
 
             var scene = new ParsedModScene(
                 BuildSceneId(containerId),
                 container,
                 assets,
                 refs,
-                renderObjects,
+                resolvedRenderObjects,
                 renderPrimitives,
                 renderMeshes,
                 renderMaterials,
@@ -691,6 +693,34 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
 
             if (fileReader.FileType != FileType.AssetsFile)
             {
+                if (TryBuildRenderMeshFromYaml(assetBytes, assetId, containerId, packageGuid, fallbackName, warnings, out var yamlMesh, out var yamlObjectRef))
+                {
+                    var yamlObjectRefs = new List<UnityObjectRef>();
+                    if (includeFallbackRoot)
+                    {
+                        yamlObjectRefs.Add(CreateFallbackObjectRef(assetId, containerId, packageGuid, fallbackName));
+                    }
+
+                    if (yamlObjectRef is not null)
+                    {
+                        yamlObjectRefs.Add(yamlObjectRef);
+                    }
+
+                    return (yamlObjectRefs, [], [yamlMesh], [], []);
+                }
+
+                if (TryBuildRenderObjectsFromPrefabYaml(assetBytes, assetId, containerId, packageGuid, fallbackName, out var prefabRenderObjects, out var prefabObjectRefs))
+                {
+                    var mergedObjectRefs = new List<UnityObjectRef>();
+                    if (includeFallbackRoot)
+                    {
+                        mergedObjectRefs.Add(CreateFallbackObjectRef(assetId, containerId, packageGuid, fallbackName));
+                    }
+
+                    mergedObjectRefs.AddRange(prefabObjectRefs);
+                    return (mergedObjectRefs, prefabRenderObjects, [], [], []);
+                }
+
                 warnings.Add($"Object-level read skipped for '{fallbackName}': unsupported file type {fileReader.FileType}.");
                 return includeFallbackRoot
                     ? ([CreateFallbackObjectRef(assetId, containerId, packageGuid, fallbackName)], [], [], [], [])
@@ -724,6 +754,1096 @@ public sealed class SceneExtractor(IArchiveScanner archiveScanner, IModParser mo
                 : ([], [], [], [], []);
         }
     }
+
+    private static IReadOnlyList<UnityRenderObject> ResolveGuidMeshPointers(
+        IReadOnlyList<UnityRenderObject> renderObjects,
+        IReadOnlyList<ParsedAssetRecord> assets,
+        IReadOnlyList<UnityRenderMesh> renderMeshes,
+        ICollection<string> warnings)
+    {
+        if (renderObjects.Count == 0 || renderMeshes.Count == 0)
+        {
+            return renderObjects;
+        }
+
+        var meshObjectIdByAssetId = renderMeshes
+            .GroupBy(mesh => mesh.AssetId, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First().ObjectId, StringComparer.Ordinal);
+        var meshObjectIdByAssetAndFileId = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var mesh in renderMeshes)
+        {
+            var fileId = TryExtractFileIdFromObjectId(mesh.ObjectId);
+            if (!string.IsNullOrWhiteSpace(fileId))
+            {
+                meshObjectIdByAssetAndFileId[$"{mesh.AssetId}|{fileId}"] = mesh.ObjectId;
+            }
+        }
+
+        var assetIdByGuid = assets
+            .Where(asset => !string.IsNullOrWhiteSpace(asset.PackageGuid))
+            .GroupBy(asset => asset.PackageGuid!, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First().AssetId, StringComparer.OrdinalIgnoreCase);
+
+        var resolved = new List<UnityRenderObject>(renderObjects.Count);
+        foreach (var renderObject in renderObjects)
+        {
+            var resolvedMeshObjectId = ResolveGuidReference(renderObject.MeshObjectId, assetIdByGuid, meshObjectIdByAssetId, meshObjectIdByAssetAndFileId, warnings);
+            var resolvedMaterialObjectIds = renderObject.MaterialObjectIds
+                .Select(materialObjectId => ResolveGuidReference(materialObjectId, assetIdByGuid, meshObjectIdByAssetId, meshObjectIdByAssetAndFileId, warnings) ?? materialObjectId)
+                .ToArray();
+            var resolvedAssignments = BuildMaterialAssignments(resolvedMaterialObjectIds);
+
+            resolved.Add(renderObject with
+            {
+                MeshObjectId = resolvedMeshObjectId,
+                MaterialObjectIds = resolvedMaterialObjectIds,
+                MaterialAssignments = resolvedAssignments
+            });
+        }
+
+        return resolved;
+    }
+
+    private static string? ResolveGuidReference(
+        string? pointer,
+        IReadOnlyDictionary<string, string> assetIdByGuid,
+        IReadOnlyDictionary<string, string> meshObjectIdByAssetId,
+        IReadOnlyDictionary<string, string> meshObjectIdByAssetAndFileId,
+        ICollection<string> warnings)
+    {
+        if (string.IsNullOrWhiteSpace(pointer) || !pointer.StartsWith("guid:", StringComparison.OrdinalIgnoreCase))
+        {
+            return pointer;
+        }
+
+        var guid = pointer[5..].Trim();
+        string? meshFileId = null;
+        var separatorIndex = guid.IndexOf("#file:", StringComparison.OrdinalIgnoreCase);
+        if (separatorIndex >= 0)
+        {
+            meshFileId = guid[(separatorIndex + 6)..].Trim();
+            guid = guid[..separatorIndex].Trim();
+        }
+
+        if (guid.Length == 0)
+        {
+            return null;
+        }
+
+        if (!assetIdByGuid.TryGetValue(guid, out var assetId))
+        {
+            warnings.Add($"Unable to resolve GUID reference '{guid}' to a parsed asset.");
+            return null;
+        }
+
+        if (!string.IsNullOrWhiteSpace(meshFileId)
+            && meshObjectIdByAssetAndFileId.TryGetValue($"{assetId}|{meshFileId}", out var meshObjectIdByFile))
+        {
+            return meshObjectIdByFile;
+        }
+
+        if (!meshObjectIdByAssetId.TryGetValue(assetId, out var meshObjectId))
+        {
+            warnings.Add($"Unable to resolve GUID reference '{guid}' because parsed asset '{assetId}' has no mesh object.");
+            return null;
+        }
+
+        return meshObjectId;
+    }
+
+    private static string? TryExtractFileIdFromObjectId(string objectId)
+    {
+        var marker = ":obj:";
+        var markerIndex = objectId.LastIndexOf(marker, StringComparison.Ordinal);
+        if (markerIndex < 0)
+        {
+            return null;
+        }
+
+        var suffix = objectId[(markerIndex + marker.Length)..];
+        return suffix.All(char.IsDigit) ? suffix : null;
+    }
+
+    private static bool TryBuildRenderObjectsFromPrefabYaml(
+        byte[] assetBytes,
+        string assetId,
+        string containerId,
+        string? packageGuid,
+        string fallbackName,
+        out IReadOnlyList<UnityRenderObject> renderObjects,
+        out IReadOnlyList<UnityObjectRef> objectRefs)
+    {
+        renderObjects = [];
+        objectRefs = [];
+
+        string text;
+        try
+        {
+            text = Encoding.UTF8.GetString(assetBytes);
+        }
+        catch
+        {
+            return false;
+        }
+
+        if (!text.StartsWith("%YAML", StringComparison.Ordinal)
+            || !text.Contains("\nGameObject:", StringComparison.Ordinal)
+            || !text.Contains("\nTransform:", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var sections = ParseYamlObjectSections(text);
+        if (sections.Count == 0)
+        {
+            return false;
+        }
+
+        var gameObjectNames = new Dictionary<long, string>();
+        var transformByGameObjectId = new Dictionary<long, YamlTransformInfo>();
+        var gameObjectIdByTransformId = new Dictionary<long, long>();
+        var meshFilterByGameObjectId = new Dictionary<long, string?>();
+        var rendererByGameObjectId = new Dictionary<long, YamlRendererInfo>();
+
+        foreach (var section in sections)
+        {
+            switch (section.ClassId)
+            {
+                case 1:
+                {
+                    var name = TryReadYamlPropertyValue(section.Content, "m_Name") ?? $"GameObject_{section.FileId.ToString(CultureInfo.InvariantCulture)}";
+                    gameObjectNames[section.FileId] = name;
+                    break;
+                }
+                case 4:
+                {
+                    var gameObjectId = ParseYamlPointerFileId(section.Content, "m_GameObject");
+                    if (gameObjectId <= 0)
+                    {
+                        break;
+                    }
+
+                    var parentTransformId = ParseYamlPointerFileId(section.Content, "m_Father");
+                    var childTransformIds = ParseYamlPointerListFileIds(section.Content, "m_Children");
+                    var localPosition = ParseYamlVector3(section.Content, "m_LocalPosition");
+                    var localRotation = ParseYamlVector4(section.Content, "m_LocalRotation");
+                    var localScale = ParseYamlVector3(section.Content, "m_LocalScale");
+
+                    transformByGameObjectId[gameObjectId] = new YamlTransformInfo(section.FileId, parentTransformId, childTransformIds, localPosition, localRotation, localScale);
+                    gameObjectIdByTransformId[section.FileId] = gameObjectId;
+                    break;
+                }
+                case 33:
+                {
+                    var gameObjectId = ParseYamlPointerFileId(section.Content, "m_GameObject");
+                    if (gameObjectId <= 0)
+                    {
+                        break;
+                    }
+
+                    var meshPointer = ParseYamlMeshPointer(section.Content);
+                    meshFilterByGameObjectId[gameObjectId] = meshPointer;
+                    break;
+                }
+                case 23:
+                case 137:
+                {
+                    var gameObjectId = ParseYamlPointerFileId(section.Content, "m_GameObject");
+                    if (gameObjectId <= 0)
+                    {
+                        break;
+                    }
+
+                    var materialPointers = ParseYamlMaterialPointers(section.Content);
+                    var kind = section.ClassId == 137 ? "skinnedmeshrenderer" : "meshrenderer";
+                    rendererByGameObjectId[gameObjectId] = new YamlRendererInfo(section.FileId, section.ClassId, kind, materialPointers);
+                    break;
+                }
+            }
+        }
+
+        var parsedRenderObjects = new List<UnityRenderObject>();
+        var parsedObjectRefs = new List<UnityObjectRef>();
+        var transformObjectIdByGameObjectId = new Dictionary<long, string>();
+
+        foreach (var (gameObjectId, transformInfo) in transformByGameObjectId)
+        {
+            var transformObjectId = BuildYamlObjectIdForFile(assetId, transformInfo.TransformFileId);
+            transformObjectIdByGameObjectId[gameObjectId] = transformObjectId;
+            var parentObjectId = transformInfo.ParentTransformFileId > 0
+                ? BuildYamlObjectIdForFile(assetId, transformInfo.ParentTransformFileId)
+                : null;
+            var childObjectIds = transformInfo.ChildTransformFileIds
+                .Select(childId => BuildYamlObjectIdForFile(assetId, childId))
+                .ToArray();
+
+            parsedRenderObjects.Add(new UnityRenderObject(
+                transformObjectId,
+                assetId,
+                4,
+                "transform",
+                gameObjectNames.TryGetValue(gameObjectId, out var transformName)
+                    ? transformName
+                    : $"Transform_{transformInfo.TransformFileId.ToString(CultureInfo.InvariantCulture)}",
+                parentObjectId,
+                childObjectIds,
+                null,
+                [],
+                [],
+                transformInfo.LocalPosition,
+                transformInfo.LocalRotation,
+                transformInfo.LocalScale));
+
+            parsedObjectRefs.Add(new UnityObjectRef(
+                transformObjectId,
+                assetId,
+                containerId,
+                packageGuid,
+                null,
+                transformInfo.TransformFileId.ToString(CultureInfo.InvariantCulture),
+                4,
+                gameObjectNames.TryGetValue(gameObjectId, out var objectName)
+                    ? objectName
+                    : fallbackName,
+                []));
+        }
+
+        foreach (var (gameObjectId, name) in gameObjectNames)
+        {
+            var gameObjectObjectId = BuildYamlObjectIdForFile(assetId, gameObjectId);
+            var transformInfo = transformByGameObjectId.TryGetValue(gameObjectId, out var info) ? info : null;
+            var parentGameObjectId = transformInfo is not null
+                && transformInfo.ParentTransformFileId > 0
+                && gameObjectIdByTransformId.TryGetValue(transformInfo.ParentTransformFileId, out var parentGameObject)
+                    ? parentGameObject
+                    : 0;
+
+            var childGameObjectIds = transformInfo?.ChildTransformFileIds
+                .Select(childTransformId => gameObjectIdByTransformId.TryGetValue(childTransformId, out var childGameObject)
+                    ? BuildYamlObjectIdForFile(assetId, childGameObject)
+                    : null)
+                .Where(childId => !string.IsNullOrWhiteSpace(childId))
+                .Cast<string>()
+                .ToArray() ?? [];
+
+            parsedRenderObjects.Add(new UnityRenderObject(
+                gameObjectObjectId,
+                assetId,
+                1,
+                "gameobject",
+                name,
+                parentGameObjectId > 0 ? BuildYamlObjectIdForFile(assetId, parentGameObjectId) : null,
+                childGameObjectIds,
+                null,
+                [],
+                [],
+                null,
+                null,
+                null));
+
+            parsedObjectRefs.Add(new UnityObjectRef(
+                gameObjectObjectId,
+                assetId,
+                containerId,
+                packageGuid,
+                null,
+                gameObjectId.ToString(CultureInfo.InvariantCulture),
+                1,
+                name,
+                []));
+
+            if (meshFilterByGameObjectId.TryGetValue(gameObjectId, out var meshPointer))
+            {
+                var meshFilterObjectId = BuildYamlObjectIdForSuffix(assetId, $"meshfilter:{gameObjectId.ToString(CultureInfo.InvariantCulture)}");
+                var meshFilterParentId = transformObjectIdByGameObjectId.TryGetValue(gameObjectId, out var transformObjectId)
+                    ? transformObjectId
+                    : gameObjectObjectId;
+                parsedRenderObjects.Add(new UnityRenderObject(
+                    meshFilterObjectId,
+                    assetId,
+                    33,
+                    "meshfilter",
+                    $"{name}_MeshFilter",
+                    meshFilterParentId,
+                    [],
+                    meshPointer,
+                    [],
+                    [],
+                    null,
+                    null,
+                    null));
+
+                parsedObjectRefs.Add(new UnityObjectRef(
+                    meshFilterObjectId,
+                    assetId,
+                    containerId,
+                    packageGuid,
+                    null,
+                    gameObjectId.ToString(CultureInfo.InvariantCulture),
+                    33,
+                    $"{name}_MeshFilter",
+                    []));
+            }
+
+            if (rendererByGameObjectId.TryGetValue(gameObjectId, out var rendererInfo))
+            {
+                var rendererObjectId = BuildYamlObjectIdForSuffix(assetId, $"renderer:{gameObjectId.ToString(CultureInfo.InvariantCulture)}");
+                var rendererParentId = transformObjectIdByGameObjectId.TryGetValue(gameObjectId, out var transformObjectId)
+                    ? transformObjectId
+                    : gameObjectObjectId;
+                parsedRenderObjects.Add(new UnityRenderObject(
+                    rendererObjectId,
+                    assetId,
+                    rendererInfo.ClassId,
+                    rendererInfo.Kind,
+                    $"{name}_Renderer",
+                    rendererParentId,
+                    [],
+                    null,
+                    rendererInfo.MaterialPointers,
+                    BuildMaterialAssignments(rendererInfo.MaterialPointers),
+                    null,
+                    null,
+                    null));
+
+                parsedObjectRefs.Add(new UnityObjectRef(
+                    rendererObjectId,
+                    assetId,
+                    containerId,
+                    packageGuid,
+                    null,
+                    rendererInfo.FileId.ToString(CultureInfo.InvariantCulture),
+                    rendererInfo.ClassId,
+                    $"{name}_Renderer",
+                    []));
+            }
+        }
+
+        if (parsedRenderObjects.Count == 0)
+        {
+            return false;
+        }
+
+        renderObjects = parsedRenderObjects;
+        objectRefs = parsedObjectRefs;
+        return true;
+    }
+
+    private static IReadOnlyList<YamlObjectSection> ParseYamlObjectSections(string text)
+    {
+        var matches = Regex.Matches(text, "---\\s*!u!(\\d+)\\s*&(-?\\d+)");
+        if (matches.Count == 0)
+        {
+            return [];
+        }
+
+        var sections = new List<YamlObjectSection>(matches.Count);
+        for (var i = 0; i < matches.Count; i++)
+        {
+            var match = matches[i];
+            var start = match.Index + match.Length;
+            var end = i + 1 < matches.Count ? matches[i + 1].Index : text.Length;
+
+            if (!int.TryParse(match.Groups[1].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var classId)
+                || !long.TryParse(match.Groups[2].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var fileId))
+            {
+                continue;
+            }
+
+            sections.Add(new YamlObjectSection(classId, fileId, text[start..end]));
+        }
+
+        return sections;
+    }
+
+    private static long ParseYamlPointerFileId(string content, string fieldName)
+    {
+        var match = Regex.Match(content, $"{Regex.Escape(fieldName)}\\s*:\\s*\\{{\\s*fileID\\s*:\\s*(-?\\d+)");
+        return match.Success && long.TryParse(match.Groups[1].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var fileId)
+            ? fileId
+            : 0;
+    }
+
+    private static string? ParseYamlMeshPointer(string content)
+    {
+        var guidMatch = Regex.Match(content, "m_Mesh\\s*:\\s*\\{[^}]*fileID\\s*:\\s*(-?\\d+)[^}]*guid\\s*:\\s*([0-9a-fA-F]{32})[^}]*\\}");
+        if (guidMatch.Success)
+        {
+            var fileIdText = guidMatch.Groups[1].Value.Trim();
+            var guid = guidMatch.Groups[2].Value;
+            return $"guid:{guid}#file:{fileIdText}";
+        }
+
+        var localMatch = Regex.Match(content, "m_Mesh\\s*:\\s*\\{\\s*fileID\\s*:\\s*(-?\\d+)");
+        if (localMatch.Success && long.TryParse(localMatch.Groups[1].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var fileId) && fileId > 0)
+        {
+            return $"file:{fileId.ToString(CultureInfo.InvariantCulture)}";
+        }
+
+        return null;
+    }
+
+    private static IReadOnlyList<string> ParseYamlMaterialPointers(string content)
+    {
+        var sectionMatch = Regex.Match(content, "m_Materials\\s*:\\s*(?<body>(?:\\r?\\n\\s*-\\s*\\{[^}]*\\})+)");
+        if (!sectionMatch.Success)
+        {
+            return [];
+        }
+
+        var materialPointers = new List<string>();
+        var entries = Regex.Matches(sectionMatch.Groups["body"].Value, "\\{[^}]*\\}");
+        foreach (Match entry in entries)
+        {
+            var guidMatch = Regex.Match(entry.Value, "guid\\s*:\\s*([0-9a-fA-F]{32})");
+            if (guidMatch.Success)
+            {
+                materialPointers.Add($"guid:{guidMatch.Groups[1].Value}");
+                continue;
+            }
+
+            var fileIdMatch = Regex.Match(entry.Value, "fileID\\s*:\\s*(-?\\d+)");
+            if (fileIdMatch.Success)
+            {
+                materialPointers.Add(fileIdMatch.Groups[1].Value);
+            }
+        }
+
+        return materialPointers;
+    }
+
+    private static IReadOnlyList<long> ParseYamlPointerListFileIds(string content, string fieldName)
+    {
+        var sectionMatch = Regex.Match(content, $"{Regex.Escape(fieldName)}\\s*:\\s*(?<body>(?:\\r?\\n\\s*-\\s*\\{{[^}}]*\\}})+)");
+        if (!sectionMatch.Success)
+        {
+            return [];
+        }
+
+        var values = new List<long>();
+        var pointerMatches = Regex.Matches(sectionMatch.Groups["body"].Value, "fileID\\s*:\\s*(-?\\d+)");
+        foreach (Match pointerMatch in pointerMatches)
+        {
+            if (long.TryParse(pointerMatch.Groups[1].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var fileId))
+            {
+                values.Add(fileId);
+            }
+        }
+
+        return values;
+    }
+
+    private static string? TryReadYamlPropertyValue(string content, string fieldName)
+    {
+        var match = Regex.Match(content, $"^\\s*{Regex.Escape(fieldName)}\\s*:\\s*(.+)$", RegexOptions.Multiline);
+        if (!match.Success)
+        {
+            return null;
+        }
+
+        return match.Groups[1].Value.Trim();
+    }
+
+    private static IReadOnlyList<float>? ParseYamlVector3(string content, string fieldName)
+    {
+        var match = Regex.Match(content, $"{Regex.Escape(fieldName)}\\s*:\\s*\\{{\\s*x\\s*:\\s*([^,]+),\\s*y\\s*:\\s*([^,]+),\\s*z\\s*:\\s*([^}}]+)\\}}");
+        if (!match.Success)
+        {
+            return null;
+        }
+
+        if (!float.TryParse(match.Groups[1].Value.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var x)
+            || !float.TryParse(match.Groups[2].Value.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var y)
+            || !float.TryParse(match.Groups[3].Value.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var z))
+        {
+            return null;
+        }
+
+        return [x, y, z];
+    }
+
+    private static IReadOnlyList<float>? ParseYamlVector4(string content, string fieldName)
+    {
+        var match = Regex.Match(content, $"{Regex.Escape(fieldName)}\\s*:\\s*\\{{\\s*x\\s*:\\s*([^,]+),\\s*y\\s*:\\s*([^,]+),\\s*z\\s*:\\s*([^,]+),\\s*w\\s*:\\s*([^}}]+)\\}}");
+        if (!match.Success)
+        {
+            return null;
+        }
+
+        if (!float.TryParse(match.Groups[1].Value.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var x)
+            || !float.TryParse(match.Groups[2].Value.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var y)
+            || !float.TryParse(match.Groups[3].Value.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var z)
+            || !float.TryParse(match.Groups[4].Value.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var w))
+        {
+            return null;
+        }
+
+        return [x, y, z, w];
+    }
+
+    private static string BuildYamlObjectIdForFile(string assetId, long fileId)
+        => $"{assetId}:obj:{fileId.ToString(CultureInfo.InvariantCulture)}";
+
+    private static string BuildYamlObjectIdForSuffix(string assetId, string suffix)
+    {
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(suffix)));
+        return $"{assetId}:obj:yaml:{hash[..12].ToLowerInvariant()}";
+    }
+
+    private static bool TryBuildRenderMeshFromYaml(
+        byte[] assetBytes,
+        string assetId,
+        string containerId,
+        string? packageGuid,
+        string fallbackName,
+        List<string> warnings,
+        out UnityRenderMesh yamlMesh,
+        out UnityObjectRef? yamlObjectRef)
+    {
+        yamlMesh = null!;
+        yamlObjectRef = null;
+
+        string text;
+        try
+        {
+            text = Encoding.UTF8.GetString(assetBytes);
+        }
+        catch (Exception ex)
+        {
+            warnings.Add($"YAML decode failed for '{fallbackName}': {ex.Message}");
+            return false;
+        }
+
+        if (!text.StartsWith("%YAML", StringComparison.Ordinal)
+            || !text.Contains("\nMesh:", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var lines = text.Split('\n');
+        var meshName = TryReadYamlScalar(lines, "m_Name") ?? fallbackName;
+        var vertexCount = TryReadYamlInt(lines, "m_VertexCount");
+        var indexFormat = TryReadYamlInt(lines, "m_IndexFormat");
+        var indexHex = ReadYamlHexBlock(lines, "m_IndexBuffer");
+        var vertexHex = ReadYamlHexBlock(lines, "_typelessdata");
+        var dataSize = TryReadYamlInt(lines, "m_DataSize");
+        var subMeshes = ReadYamlSubMeshes(lines);
+        var channels = ReadYamlChannels(lines);
+        var meshFileId = TryReadYamlMeshFileId(text);
+
+        if (vertexCount is null || string.IsNullOrWhiteSpace(vertexHex))
+        {
+            warnings.Add($"YAML mesh data missing for '{fallbackName}'.");
+            return false;
+        }
+
+        var vertexBytes = ParseHexBytes(vertexHex);
+        if (dataSize is > 0 && vertexBytes.Length < dataSize)
+        {
+            warnings.Add($"YAML vertex data truncated for '{fallbackName}'.");
+        }
+
+        var positions = ReadYamlPositions(vertexBytes, vertexCount.Value, dataSize, channels);
+        var colors = ReadYamlColors(vertexBytes, vertexCount.Value, dataSize, channels);
+        var indexValues = ReadYamlIndexValues(indexHex, indexFormat);
+        var objectId = meshFileId is > 0
+            ? BuildYamlObjectIdForFile(assetId, meshFileId.Value)
+            : BuildYamlObjectId(assetId, meshName);
+
+        yamlMesh = new UnityRenderMesh(
+            objectId,
+            assetId,
+            meshName,
+            vertexCount,
+            subMeshes.Count > 0 ? subMeshes.Count : null,
+            null,
+            channels.Count > 0 ? channels.Count : null,
+            dataSize,
+            indexValues?.Count,
+            indexFormat,
+            Convert.ToBase64String(vertexBytes),
+            indexValues,
+            positions,
+            null,
+            null,
+            colors,
+            null,
+            null,
+            subMeshes);
+
+        yamlObjectRef = new UnityObjectRef(
+            objectId,
+            assetId,
+            containerId,
+            packageGuid,
+            null,
+            meshFileId?.ToString(CultureInfo.InvariantCulture),
+            43,
+            meshName,
+            []);
+
+        return true;
+    }
+
+    private static string BuildYamlObjectId(string assetId, string meshName)
+    {
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(meshName)));
+        return $"{assetId}:obj:yaml:{hash[..12].ToLowerInvariant()}";
+    }
+
+    private static long? TryReadYamlMeshFileId(string text)
+    {
+        var match = Regex.Match(text, "---\\s*!u!43\\s*&(-?\\d+)");
+        return match.Success && long.TryParse(match.Groups[1].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var fileId)
+            ? fileId
+            : null;
+    }
+
+    private static string? TryReadYamlScalar(string[] lines, string key)
+    {
+        var prefix = $"{key}:";
+        foreach (var line in lines)
+        {
+            var trimmed = line.TrimStart();
+            if (!trimmed.StartsWith(prefix, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            return trimmed[prefix.Length..].Trim();
+        }
+
+        return null;
+    }
+
+    private static int? TryReadYamlInt(string[] lines, string key)
+    {
+        var value = TryReadYamlScalar(lines, key);
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : null;
+    }
+
+    private static string? ReadYamlHexBlock(string[] lines, string key)
+    {
+        var prefix = $"{key}:";
+        for (var i = 0; i < lines.Length; i++)
+        {
+            var trimmed = lines[i].TrimStart();
+            if (!trimmed.StartsWith(prefix, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var sb = new StringBuilder();
+            var initial = trimmed[prefix.Length..].Trim();
+            AppendHex(sb, initial);
+
+            for (var j = i + 1; j < lines.Length; j++)
+            {
+                var next = lines[j].Trim();
+                if (next.Length == 0)
+                {
+                    continue;
+                }
+
+                if (next.Contains(':', StringComparison.Ordinal) && !IsHexOnly(next))
+                {
+                    break;
+                }
+
+                if (!IsHexOnly(next))
+                {
+                    break;
+                }
+
+                AppendHex(sb, next);
+            }
+
+            return sb.Length > 0 ? sb.ToString() : null;
+        }
+
+        return null;
+    }
+
+    private static void AppendHex(StringBuilder builder, string value)
+    {
+        for (var i = 0; i < value.Length; i++)
+        {
+            var ch = value[i];
+            if (IsHexChar(ch))
+            {
+                builder.Append(ch);
+            }
+        }
+    }
+
+    private static bool IsHexOnly(string value)
+    {
+        for (var i = 0; i < value.Length; i++)
+        {
+            var ch = value[i];
+            if (char.IsWhiteSpace(ch))
+            {
+                continue;
+            }
+
+            if (!IsHexChar(ch))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool IsHexChar(char ch)
+        => ch is >= '0' and <= '9'
+            or >= 'a' and <= 'f'
+            or >= 'A' and <= 'F';
+
+    private static byte[] ParseHexBytes(string hex)
+    {
+        var clean = new string(hex.Where(IsHexChar).ToArray());
+        if (clean.Length % 2 != 0)
+        {
+            clean = clean[..^1];
+        }
+
+        var bytes = new byte[clean.Length / 2];
+        for (var i = 0; i < bytes.Length; i++)
+        {
+            bytes[i] = byte.Parse(clean.AsSpan(i * 2, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+        }
+
+        return bytes;
+    }
+
+    private static List<UnityRenderSubMesh> ReadYamlSubMeshes(string[] lines)
+    {
+        var subMeshes = new List<UnityRenderSubMesh>();
+        var inSection = false;
+        var current = new Dictionary<string, int>();
+        var index = 0;
+
+        foreach (var line in lines)
+        {
+            var trimmed = line.Trim();
+            if (!inSection)
+            {
+                if (trimmed == "m_SubMeshes:")
+                {
+                    inSection = true;
+                }
+
+                continue;
+            }
+
+            if (trimmed.StartsWith("m_", StringComparison.Ordinal) && !trimmed.StartsWith("m_SubMeshes", StringComparison.Ordinal))
+            {
+                break;
+            }
+
+            if (trimmed.StartsWith("- ", StringComparison.Ordinal))
+            {
+                if (current.Count > 0)
+                {
+                    subMeshes.Add(BuildYamlSubMesh(index++, current));
+                    current = new Dictionary<string, int>();
+                }
+
+                continue;
+            }
+
+            var parts = trimmed.Split(':', 2);
+            if (parts.Length != 2)
+            {
+                continue;
+            }
+
+            if (int.TryParse(parts[1].Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var value))
+            {
+                current[parts[0].Trim()] = value;
+            }
+        }
+
+        if (current.Count > 0)
+        {
+            subMeshes.Add(BuildYamlSubMesh(index, current));
+        }
+
+        return subMeshes;
+    }
+
+    private static UnityRenderSubMesh BuildYamlSubMesh(int index, Dictionary<string, int> values)
+        => new(
+            index,
+            values.TryGetValue("firstByte", out var firstByte) ? firstByte : null,
+            values.TryGetValue("indexCount", out var indexCount) ? indexCount : null,
+            values.TryGetValue("topology", out var topology) ? topology : null,
+            values.TryGetValue("baseVertex", out var baseVertex) ? baseVertex : null,
+            values.TryGetValue("firstVertex", out var firstVertex) ? firstVertex : null,
+            values.TryGetValue("vertexCount", out var vertexCount) ? vertexCount : null);
+
+    private static List<YamlChannel> ReadYamlChannels(string[] lines)
+    {
+        var channels = new List<YamlChannel>();
+        var inSection = false;
+        YamlChannel? current = null;
+
+        foreach (var line in lines)
+        {
+            var trimmed = line.Trim();
+            if (!inSection)
+            {
+                if (trimmed == "m_Channels:")
+                {
+                    inSection = true;
+                }
+
+                continue;
+            }
+
+            if (trimmed.StartsWith("m_DataSize", StringComparison.Ordinal))
+            {
+                break;
+            }
+
+            if (trimmed.StartsWith("- stream", StringComparison.Ordinal))
+            {
+                if (current is not null)
+                {
+                    channels.Add(current);
+                }
+
+                current = new YamlChannel(ReadYamlIntValue(trimmed), 0, 0, 0);
+                continue;
+            }
+
+            if (current is null)
+            {
+                continue;
+            }
+
+            if (trimmed.StartsWith("offset:", StringComparison.Ordinal))
+            {
+                current = current with { Offset = ReadYamlIntValue(trimmed) };
+                continue;
+            }
+
+            if (trimmed.StartsWith("format:", StringComparison.Ordinal))
+            {
+                current = current with { Format = ReadYamlIntValue(trimmed) };
+                continue;
+            }
+
+            if (trimmed.StartsWith("dimension:", StringComparison.Ordinal))
+            {
+                current = current with { Dimension = ReadYamlIntValue(trimmed) };
+                continue;
+            }
+        }
+
+        if (current is not null)
+        {
+            channels.Add(current);
+        }
+
+        return channels;
+    }
+
+    private static int ReadYamlIntValue(string line)
+    {
+        var parts = line.Split(':', 2);
+        return parts.Length == 2 && int.TryParse(parts[1].Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
+            ? value
+            : 0;
+    }
+
+    private static List<float>? ReadYamlPositions(byte[] vertexBytes, int vertexCount, int? dataSize, List<YamlChannel> channels)
+    {
+        if (vertexCount <= 0 || vertexBytes.Length == 0)
+        {
+            return null;
+        }
+
+        var positionChannel = channels.FirstOrDefault(channel => channel.Dimension == 3 && channel.Offset == 0 && channel.Format == 0);
+        if (positionChannel is null)
+        {
+            return null;
+        }
+
+        var stride = ResolveYamlStride(channels, positionChannel.Stream);
+        if (dataSize is > 0)
+        {
+            var derivedStride = dataSize.Value / vertexCount;
+            if (derivedStride >= 12)
+            {
+                stride = derivedStride;
+            }
+        }
+        if (stride <= 0)
+        {
+            return null;
+        }
+
+        var positions = new List<float>(vertexCount * 3);
+        for (var vertexIndex = 0; vertexIndex < vertexCount; vertexIndex++)
+        {
+            var baseOffset = (vertexIndex * stride) + positionChannel.Offset;
+            if (baseOffset + 12 > vertexBytes.Length)
+            {
+                break;
+            }
+
+            positions.Add(ReadSingleLittleEndian(vertexBytes, baseOffset));
+            positions.Add(ReadSingleLittleEndian(vertexBytes, baseOffset + 4));
+            positions.Add(ReadSingleLittleEndian(vertexBytes, baseOffset + 8));
+        }
+
+        return positions.Count > 0 ? positions : null;
+    }
+
+    private static List<float>? ReadYamlColors(byte[] vertexBytes, int vertexCount, int? dataSize, List<YamlChannel> channels)
+    {
+        if (vertexCount <= 0 || vertexBytes.Length == 0)
+        {
+            return null;
+        }
+
+        var colorChannel = channels.FirstOrDefault(channel => channel.Dimension == 4);
+        if (colorChannel is null)
+        {
+            return null;
+        }
+
+        var stride = ResolveYamlStride(channels, colorChannel.Stream);
+        if (dataSize is > 0)
+        {
+            var derivedStride = dataSize.Value / vertexCount;
+            if (derivedStride >= 12)
+            {
+                stride = derivedStride;
+            }
+        }
+        if (stride <= 0)
+        {
+            return null;
+        }
+
+        var colors = new List<float>(vertexCount * 4);
+        var formatSize = ResolveYamlChannelFormatSize(colorChannel.Format);
+        var componentSize = formatSize;
+        
+        for (var vertexIndex = 0; vertexIndex < vertexCount; vertexIndex++)
+        {
+            var baseOffset = (vertexIndex * stride) + colorChannel.Offset;
+            if (baseOffset + (componentSize * 4) > vertexBytes.Length)
+            {
+                break;
+            }
+
+            for (var component = 0; component < 4; component++)
+            {
+                var componentOffset = baseOffset + (component * componentSize);
+                var value = colorChannel.Format switch
+                {
+                    0 => ReadSingleLittleEndian(vertexBytes, componentOffset),
+                    1 => (byte)vertexBytes[componentOffset] / 255f,
+                    2 => (sbyte)vertexBytes[componentOffset] / 127f,
+                    _ => 1f
+                };
+                colors.Add(value);
+            }
+        }
+
+        return colors.Count > 0 ? colors : null;
+    }
+
+    private static int ResolveYamlStride(List<YamlChannel> channels, int stream)
+    {
+        var stride = 0;
+        foreach (var channel in channels.Where(channel => channel.Stream == stream))
+        {
+            var elementSize = ResolveYamlChannelFormatSize(channel.Format) * channel.Dimension;
+            stride = Math.Max(stride, channel.Offset + elementSize);
+        }
+
+        return stride;
+    }
+
+    private static int ResolveYamlChannelFormatSize(int format)
+        => format switch
+        {
+            0 => 4,
+            1 => 2,
+            2 => 1,
+            3 => 1,
+            4 => 1,
+            5 => 1,
+            6 => 1,
+            7 => 1,
+            _ => 4
+        };
+
+    private static float ReadSingleLittleEndian(byte[] data, int offset)
+    {
+        if (offset + 4 > data.Length)
+        {
+            return 0f;
+        }
+
+        var value = BinaryPrimitives.ReadInt32LittleEndian(data.AsSpan(offset, 4));
+        return BitConverter.Int32BitsToSingle(value);
+    }
+
+    private static List<int>? ReadYamlIndexValues(string? indexHex, int? indexFormat)
+    {
+        if (string.IsNullOrWhiteSpace(indexHex))
+        {
+            return null;
+        }
+
+        var bytes = ParseHexBytes(indexHex);
+        if (bytes.Length == 0)
+        {
+            return null;
+        }
+
+        var indices = new List<int>();
+        if (indexFormat == 1)
+        {
+            for (var i = 0; i + 3 < bytes.Length; i += 4)
+            {
+                indices.Add(BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(i, 4)));
+            }
+        }
+        else
+        {
+            for (var i = 0; i + 1 < bytes.Length; i += 2)
+            {
+                indices.Add(BinaryPrimitives.ReadUInt16LittleEndian(bytes.AsSpan(i, 2)));
+            }
+        }
+
+        return indices.Count > 0 ? indices : null;
+    }
+
+    private sealed record YamlChannel(int Stream, int Offset, int Format, int Dimension);
+    private sealed record YamlObjectSection(int ClassId, long FileId, string Content);
+    private sealed record YamlTransformInfo(
+        long TransformFileId,
+        long ParentTransformFileId,
+        IReadOnlyList<long> ChildTransformFileIds,
+        IReadOnlyList<float>? LocalPosition,
+        IReadOnlyList<float>? LocalRotation,
+        IReadOnlyList<float>? LocalScale);
+    private sealed record YamlRendererInfo(long FileId, int ClassId, string Kind, IReadOnlyList<string> MaterialPointers);
 
     private static (
         IReadOnlyList<UnityObjectRef> ObjectRefs,

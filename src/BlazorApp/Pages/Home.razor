@@ -2,6 +2,7 @@
 @implements IAsyncDisposable
 
 @using System.IO.Compression
+@using System.Numerics
 @using RepoMod.Glb.Abstractions
 @using RepoMod.Glb.Contracts
 @using RepoMod.Parser.Abstractions
@@ -142,6 +143,11 @@
 					{
 						AddDiagnostic($"Avatar [{diagnostic.Severity}] {diagnostic.Code}: {diagnostic.Message}");
 					}
+
+					if (previewReady)
+					{
+						await ComposeAvatarOnlyAsync();
+					}
 				}
 			}
 		}
@@ -170,9 +176,13 @@
 			{
 				await module.InvokeVoidAsync("renderGlb", PreviewContainerId, latestGlbBase64);
 			}
+			else if (avatarConverterScene is not null)
+			{
+				await ComposeAvatarOnlyAsync();
+			}
 			else
 			{
-				await module.InvokeVoidAsync("clearPreview", PreviewContainerId, "three.js preview canvas will render here");
+				await module.InvokeVoidAsync("clearPreview", PreviewContainerId, "Loading player avatar...");
 			}
 		}
 		catch (JSException ex)
@@ -337,8 +347,7 @@
 		var selectedCount = modAssets.Count(item => item.Enabled);
 		if (selectedCount == 0)
 		{
-			composeStatus = "Compose skipped: no enabled assets.";
-			await ClearPreviewAsync(composeStatus);
+			await ComposeAvatarOnlyAsync();
 			return;
 		}
 
@@ -431,6 +440,178 @@
 				AddDiagnostic($"Preview render failed: {ex.Message}");
 			}
 		}
+	}
+
+	private async Task ComposeAvatarOnlyAsync()
+	{
+		if (avatarConverterScene is null)
+		{
+			composeStatus = "Compose skipped: avatar scene is not available.";
+			await ClearPreviewAsync(composeStatus);
+			return;
+		}
+
+		try
+		{
+			var transformedPrimitives = ApplyNodeTransforms(avatarConverterScene);
+			var composedPrimitives = transformedPrimitives
+				.OrderBy(item => item.PrimitiveId, StringComparer.Ordinal)
+				.Select(item => new GlbComposedPrimitive(
+					"avatar",
+					"world",
+					"world",
+					"world",
+					item))
+				.ToArray();
+			var anchorComposition = new GlbAnchorComposition("world", composedPrimitives);
+			var composition = new GlbCompositionResult(
+				avatarConverterScene.SceneId,
+				new[] { anchorComposition },
+				[],
+				[]);
+			var buildResult = GlbSerializer.Build(composition);
+
+			foreach (var diagnostic in buildResult.Diagnostics)
+			{
+				AddDiagnostic($"Avatar GLB [{diagnostic.Severity}] {diagnostic.Code}: {diagnostic.Message}");
+			}
+
+			latestGlbBase64 = Convert.ToBase64String(buildResult.GlbBytes);
+			composeStatus = $"Avatar ready ({buildResult.GlbBytes.Length:n0} bytes)";
+
+			if (previewReady)
+			{
+				var module = await GetPreviewModuleAsync();
+				await module.InvokeVoidAsync("renderGlb", PreviewContainerId, latestGlbBase64);
+			}
+		}
+		catch (Exception ex)
+		{
+			composeStatus = $"Avatar compose failed: {ex.Message}";
+			AddDiagnostic(composeStatus);
+			await ClearPreviewAsync(composeStatus);
+		}
+	}
+
+	private static IReadOnlyList<ConverterPrimitive> ApplyNodeTransforms(ConverterScene scene)
+	{
+		if (scene.Nodes.Count == 0)
+		{
+			return scene.Primitives;
+		}
+
+		var nodeById = scene.Nodes
+			.GroupBy(node => node.NodeId, StringComparer.Ordinal)
+			.ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+		var worldCache = new Dictionary<string, Matrix4x4>(StringComparer.Ordinal);
+
+		Matrix4x4 ResolveWorld(string nodeId)
+		{
+			if (worldCache.TryGetValue(nodeId, out var cached))
+			{
+				return cached;
+			}
+
+			if (!nodeById.TryGetValue(nodeId, out var node))
+			{
+				return Matrix4x4.Identity;
+			}
+
+			var local = BuildLocalMatrix(node);
+			if (!string.IsNullOrWhiteSpace(node.ParentNodeId) && nodeById.ContainsKey(node.ParentNodeId))
+			{
+				local *= ResolveWorld(node.ParentNodeId);
+			}
+
+			worldCache[nodeId] = local;
+			return local;
+		}
+
+		var transformed = new List<ConverterPrimitive>(scene.Primitives.Count);
+		foreach (var primitive in scene.Primitives)
+		{
+			if (string.IsNullOrWhiteSpace(primitive.NodeId)
+				|| primitive.Positions is not { Count: > 0 }
+				|| !nodeById.ContainsKey(primitive.NodeId))
+			{
+				transformed.Add(primitive);
+				continue;
+			}
+
+			var world = ResolveWorld(primitive.NodeId);
+			var transformedPositions = new List<float>(primitive.Positions.Count);
+			for (var i = 0; i + 2 < primitive.Positions.Count; i += 3)
+			{
+				var vertex = new Vector3(primitive.Positions[i], primitive.Positions[i + 1], primitive.Positions[i + 2]);
+				var transformedVertex = Vector3.Transform(vertex, world);
+				transformedPositions.Add(transformedVertex.X);
+				transformedPositions.Add(transformedVertex.Y);
+				transformedPositions.Add(transformedVertex.Z);
+			}
+
+			IReadOnlyList<float>? transformedNormals = primitive.Normals;
+			if (primitive.Normals is { Count: > 0 } normals && normals.Count % 3 == 0)
+			{
+				var normalMatrix = world;
+				normalMatrix.Translation = Vector3.Zero;
+				var values = new List<float>(normals.Count);
+				for (var i = 0; i + 2 < normals.Count; i += 3)
+				{
+					var normal = new Vector3(normals[i], normals[i + 1], normals[i + 2]);
+					var transformedNormal = Vector3.Normalize(Vector3.TransformNormal(normal, normalMatrix));
+					values.Add(transformedNormal.X);
+					values.Add(transformedNormal.Y);
+					values.Add(transformedNormal.Z);
+				}
+
+				transformedNormals = values;
+			}
+
+			IReadOnlyList<float>? transformedTangents = primitive.Tangents;
+			if (primitive.Tangents is { Count: > 0 } tangents && tangents.Count % 4 == 0)
+			{
+				var normalMatrix = world;
+				normalMatrix.Translation = Vector3.Zero;
+				var values = new List<float>(tangents.Count);
+				for (var i = 0; i + 3 < tangents.Count; i += 4)
+				{
+					var tangent = new Vector3(tangents[i], tangents[i + 1], tangents[i + 2]);
+					var transformedTangent = Vector3.Normalize(Vector3.TransformNormal(tangent, normalMatrix));
+					values.Add(transformedTangent.X);
+					values.Add(transformedTangent.Y);
+					values.Add(transformedTangent.Z);
+					values.Add(tangents[i + 3]);
+				}
+
+				transformedTangents = values;
+			}
+
+			transformed.Add(primitive with
+			{
+				Positions = transformedPositions,
+				Normals = transformedNormals,
+				Tangents = transformedTangents
+			});
+		}
+
+		return transformed;
+	}
+
+	private static Matrix4x4 BuildLocalMatrix(ConverterNode node)
+	{
+		var scale = node.LocalScale is { Count: >= 3 }
+			? new Vector3(node.LocalScale[0], node.LocalScale[1], node.LocalScale[2])
+			: Vector3.One;
+		var rotation = node.LocalRotation is { Count: >= 4 }
+			? new Quaternion(node.LocalRotation[0], node.LocalRotation[1], node.LocalRotation[2], node.LocalRotation[3])
+			: Quaternion.Identity;
+		var position = node.LocalPosition is { Count: >= 3 }
+			? new Vector3(node.LocalPosition[0], node.LocalPosition[1], node.LocalPosition[2])
+			: Vector3.Zero;
+
+		return Matrix4x4.CreateScale(scale)
+			* Matrix4x4.CreateFromQuaternion(rotation)
+			* Matrix4x4.CreateTranslation(position);
 	}
 
 	private async Task ClearPreviewAsync(string message)

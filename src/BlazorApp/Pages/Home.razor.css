@@ -17,7 +17,7 @@
 .layout-grid {
     display: grid;
     gap: 1rem;
-    grid-template-columns: minmax(260px, 1fr) minmax(360px, 2fr);
+    grid-template-columns: minmax(260px, 1fr) minmax(520px, 3fr);
 }
 
 .left-pane,
@@ -71,11 +71,11 @@
 }
 
 .preview-panel {
-    min-height: 280px;
+    min-height: 460px;
 }
 
 .preview-placeholder {
-    min-height: 220px;
+    min-height: 400px;
     border: 1px dashed var(--bs-border-color);
     border-radius: 0.5rem;
     overflow: hidden;
@@ -89,7 +89,7 @@
 }
 
 .preview-empty {
-    min-height: 220px;
+    min-height: 400px;
     display: grid;
     place-items: center;
     color: var(--bs-secondary-color);
