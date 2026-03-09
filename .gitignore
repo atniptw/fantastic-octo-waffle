@@ -21,6 +21,7 @@ dist/
 # Generated outputs
 outputs/
 artifacts/
+data/outputs/
 
 # Viewer temporary files
 viewer/.cache/
