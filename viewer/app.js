@@ -26,6 +26,7 @@ async function loadMetadata() {
       body.className = "card-body";
       body.innerHTML = `
         <h2 class="title">${item.hhh_entry}</h2>
+        <p class="meta">mode=${item.render_mode ?? "unknown"} source=${item.texture_source ?? "none"}</p>
         <p class="meta">mesh=${item.mesh?.name ?? "none"}</p>
         <p class="meta">v=${item.mesh?.vertex_count ?? 0} tri=${item.mesh?.triangle_count ?? 0}</p>
       `;

@@ -38,10 +38,15 @@ def test_processor_cli_writes_metadata(tmp_path: Path, monkeypatch) -> None:
     assert data["hhh_count"] == 2
     assert data["hhh_inspected"] == 2
     assert data["hhh_parse_errors"] == 0
+    assert "hhh_with_materials" in data
+    assert "hhh_with_local_textures" in data
     assert len(data["images"]) == 2
     for item in data["images"]:
         assert (output / item["image"]).exists()
         assert "mesh" in item
+        assert "render_mode" in item
+        assert "texture_source" in item
+        assert "primary_material_color" in item
 
 
 def test_processor_cli_inspects_dependency_unitypackage(tmp_path: Path, monkeypatch) -> None:
@@ -75,5 +80,8 @@ def test_processor_cli_inspects_dependency_unitypackage(tmp_path: Path, monkeypa
     data = json.loads(metadata_path.read_text(encoding="utf-8"))
     summary = data["dependency_summary"]
     assert summary["pathname_count"] == 2
+    assert summary["texture_count"] == 1
+    assert summary["material_count"] == 0
     assert "Assets/Textures/a.png" in summary["sample_pathnames"]
+    assert "a" in summary["texture_name_map"]
     assert data["hhh_inspected"] == 1

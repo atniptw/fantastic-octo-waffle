@@ -9,6 +9,11 @@ def build_metadata(parsed: dict, images: list[dict]) -> dict:
 
     hhh_assets = parsed.get("hhh_assets", [])
     parse_errors = [a for a in hhh_assets if a.get("inspect_status") != "ok"]
+    assets_with_materials = [a for a in hhh_assets if a.get("materials")]
+    assets_with_local_textures = [a for a in hhh_assets if a.get("local_textures")]
+    assets_with_dependency_candidates = [
+        a for a in hhh_assets if a.get("dependency_texture_candidates")
+    ]
 
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -18,6 +23,9 @@ def build_metadata(parsed: dict, images: list[dict]) -> dict:
         "hhh_count": len(parsed.get("hhh_entries", [])),
         "hhh_inspected": len(hhh_assets),
         "hhh_parse_errors": len(parse_errors),
+        "hhh_with_materials": len(assets_with_materials),
+        "hhh_with_local_textures": len(assets_with_local_textures),
+        "hhh_with_dependency_texture_candidates": len(assets_with_dependency_candidates),
         "image_count": len(images),
         "status": "ok" if images else "no-renderable-assets",
         "warnings": warnings,
