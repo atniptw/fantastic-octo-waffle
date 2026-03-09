@@ -1,23 +1,16 @@
 {
-  "name": "R.E.P.O. Dress-Up (Blazor WASM)",
+  "name": "unitypy-image-pipeline",
   "build": {
     "dockerfile": "Dockerfile"
   },
   "customizations": {
     "vscode": {
       "extensions": [
-        "ms-dotnettools.csharp",
-        "ms-dotnettools.vscode-razor",
-        "ms-playwright.playwright",
-        "dbaeumer.vscode-eslint",
-        "github.vscode-github-actions",
-        "ms-dotnettools.csdevkit"
+        "ms-python.python",
+        "ms-python.vscode-pylance"
       ]
     }
   },
-  "remoteEnv": {
-    "PLAYWRIGHT_BROWSERS_PATH": "/ms-playwright"
-  },
-  "forwardPorts": [5000, 5001, 5173],
-  "postCreateCommand": "git lfs install"
+  "postCreateCommand": "python -m pip install --upgrade pip && pip install -r requirements-dev.txt",
+  "remoteUser": "vscode"
 }

@@ -1,28 +1,12 @@
-FROM mcr.microsoft.com/devcontainers/dotnet:10.0
+FROM mcr.microsoft.com/devcontainers/python:1-3.11-bookworm
 
-ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
-
-# Install Node.js 24 LTS
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl gnupg \
-    && mkdir -p /etc/apt/keyrings \
-    && curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg \
-    && echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_24.x nodistro main" > /etc/apt/sources.list.d/nodesource.list \
+RUN find /etc/apt/sources.list.d -maxdepth 1 -type f -name '*yarn*' -delete \
+    && rm -f /etc/apt/keyrings/yarn.gpg \
     && apt-get update \
-    && apt-get install -y --no-install-recommends nodejs \
-    && npm install -g npm@latest \
-    && apt-get clean \
+    && apt-get install -y --no-install-recommends \
+        libgl1 \
+        libglib2.0-0 \
+        libsm6 \
+        libxext6 \
+        libxrender1 \
     && rm -rf /var/lib/apt/lists/*
-
-# Install git-lfs
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends git-lfs \
-    && git lfs install \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install Playwright and browsers at build time (shared path)
-RUN npm install -g playwright@latest \
-    && mkdir -p /ms-playwright \
-    && npx playwright install --with-deps \
-    && chmod -R 777 /ms-playwright

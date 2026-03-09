@@ -1,32 +1,31 @@
-# fantastic-octo-waffle
+# UnityPy Image Pipeline
 
-Blazor WebAssembly app for previewing and assembling R.E.P.O. cosmetic mods in the browser.
+Phase 1 reboot scaffold for a Python-first project.
 
-## Development
+## Overview
 
-- Requires .NET 10 LTS and Node 24 LTS.
-- Dev container included for Docker-based setup.
+This repository is being rebuilt around two components:
 
-### Run locally
+- `processor`: Reads Unity files and produces rendered images plus metadata.
+- `viewer`: Static website that displays generated images and metadata.
 
+## Phase 1 Scope
+
+- Hard reset legacy codebase.
+- Minimal Python 3.11 + UnityPy environment.
+- Placeholder processor and viewer modules.
+- Smoke tests and CI baseline.
+
+## Quickstart
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements-dev.txt
+python -m unity_processor.cli --help
+pytest -q
 ```
-cd src/BlazorApp
-dotnet run
-```
 
-### Run tests
+## Next
 
-```
-dotnet test tests/UnityAssetParser.Tests/UnityAssetParser.Tests.csproj
-npm run test:e2e
-```
-
-For detailed AI-agent verification and troubleshooting workflows, see:
-
-- [docs/agent-verification-matrix.md](docs/agent-verification-matrix.md)
-- [docs/agent-troubleshooting.md](docs/agent-troubleshooting.md)
-- [docs/parser-oracle-workflow.md](docs/parser-oracle-workflow.md)
-
-## License
-
-MIT
+Phase 2 will implement real parsing and rendering.

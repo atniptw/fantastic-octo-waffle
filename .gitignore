@@ -1,55 +1,35 @@
-# .NET
-bin/
-obj/
-*.user
-*.userosscache
-*.suo
-*.userprefs
-*.dll
-*.exe
-*.pdb
-*.cache
-*.log
-*.vspscc
-*.vssscc
-*.pidb
-*.svclog
-*.sln.docstates
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
 
-# Rider/VS
-.idea/
-.vs/
-.vscode/
+# Virtual environments
+.venv/
+venv/
 
-# Node
-node_modules/
-**/node_modules/
-pnpm-lock.yaml
-yarn.lock
-npm-debug.log*
+# Build artifacts
+build/
+dist/
+*.egg-info/
 
-# Build output
-wwwroot/dist/
-wwwroot/lib/
-src/BlazorApp/wwwroot/lib/
+# Generated outputs
+outputs/
+artifacts/
 
-# OS
+# Viewer temporary files
+viewer/.cache/
+viewer/node_modules/
+
+# OS/editor
 .DS_Store
-Thumbs.db
+.vscode/
+.idea/
 
-# Playwright
-playwright/.cache/
-.playwright-cli/
-
-# Test results
-TestResults/
-test-results/
-
-# Coverage
-coverage/
-coverage*.json
-
-# Misc
-*.tmp
-*.temp
-*.swp
+# Logs
+*.log
