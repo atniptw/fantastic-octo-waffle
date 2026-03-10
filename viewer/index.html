@@ -16,14 +16,16 @@
   </head>
   <body>
     <main>
-      <h1>Unity Preview Viewer</h1>
-      <p class="lead">One GLB export per .hhh with mesh diagnostics and warnings.</p>
-      <section id="summary" class="summary">Loading metadata...</section>
+      <header class="page-header">
+        <h1>Asset Viewer</h1>
+      </header>
       <section class="layout">
-        <section id="gallery" class="gallery" aria-live="polite"></section>
+        <section id="gallery" class="gallery" aria-live="polite">
+          <div id="group-tabs" class="group-tabs" role="tablist" aria-label="Asset groups"></div>
+          <div id="group-panel" class="group-panel"></div>
+        </section>
         <aside id="model-panel" class="model-panel" aria-live="polite">
           <h2>3D Preview</h2>
-          <p id="model-status" class="meta">Click a card to load a model.</p>
           <div id="model-canvas" class="model-canvas" role="img" aria-label="3D model canvas"></div>
         </aside>
       </section>

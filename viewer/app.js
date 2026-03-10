@@ -15,6 +15,7 @@ const state = {
 };
 
 const DEBUG_PREFIX = "[viewer-debug]";
+const GROUP_ORDER = ["head", "body", "neck", "other"];
 
 function debugLog(event, details = {}) {
   try {
@@ -26,7 +27,31 @@ function debugLog(event, details = {}) {
 
 function setStatus(message) {
   const status = document.getElementById("model-status");
-  status.textContent = message;
+  if (status) {
+    status.textContent = message;
+  }
+}
+
+function modNameFromSource(source) {
+  if (!source || typeof source !== "string") {
+    return "Unknown Mod";
+  }
+  const fileName = source.split("/").pop() ?? source;
+  return fileName.replace(/\.[^/.]+$/, "") || "Unknown Mod";
+}
+
+function bodyPartFromEntry(entry) {
+  const match = /_(head|body|neck)\.hhh$/i.exec(entry ?? "");
+  return match ? match[1].toLowerCase() : "other";
+}
+
+function assetNameFromEntry(entry) {
+  const fileName = (entry ?? "").split("/").pop() ?? entry ?? "Unknown Asset";
+  const trimmed = fileName
+    .replace(/\.hhh$/i, "")
+    .replace(/_(head|body|neck)$/i, "")
+    .trim();
+  return trimmed || "Unknown Asset";
 }
 
 function disposeObject(object) {
@@ -185,7 +210,7 @@ async function loadModel(item) {
   if (state.cache.key === modelUrl && state.cache.scene) {
     swapModel(cloneCachedScene(state.cache.scene));
     fitCamera(item.mesh_bounds);
-    setStatus(`Loaded ${item.hhh_entry} (cached)`);
+    setStatus("Model loaded (cached)");
     debugLog("loadModel:cached", { hhh_entry: item.hhh_entry, model_url: modelUrl });
     return;
   }
@@ -195,7 +220,7 @@ async function loadModel(item) {
     swapModel(gltf.scene);
     fitCamera(item.mesh_bounds);
     state.cache = { key: modelUrl, scene: gltf.scene.clone(true) };
-    setStatus(`Loaded ${item.hhh_entry}`);
+    setStatus("Model loaded");
     debugLog("loadModel:success", {
       hhh_entry: item.hhh_entry,
       model_url: modelUrl,
@@ -211,46 +236,122 @@ async function loadModel(item) {
   }
 }
 
-function buildCard(item) {
+function buildCard(item, modName) {
   const card = document.createElement("article");
   card.className = "card";
 
   const body = document.createElement("div");
   body.className = "card-body";
   body.innerHTML = `
-    <h2 class="title">${item.hhh_entry}</h2>
-    <p class="meta">model=${item.model_format ?? "unknown"} status=${item.export_status ?? "unknown"}</p>
-    <p class="meta">texture-source=${item.texture_source ?? "none"}</p>
-    <p class="meta">mesh=${item.mesh?.name ?? "none"}</p>
-    <p class="meta">v=${item.mesh?.vertex_count ?? 0} tri=${item.mesh?.triangle_count ?? 0}</p>
+    <h2 class="title">${item.asset_name}</h2>
+    <p class="meta">${modName}</p>
   `;
 
-  const warn = (item.warnings ?? [])[0];
-  if (warn) {
-    const warnLine = document.createElement("p");
-    warnLine.className = "warn";
-    warnLine.textContent = warn;
-    body.appendChild(warnLine);
-  }
-
   card.appendChild(body);
-  card.addEventListener("click", () => loadModel(item));
+  card.addEventListener("click", () => {
+    const active = document.querySelector(".card.active");
+    if (active) {
+      active.classList.remove("active");
+    }
+    card.classList.add("active");
+    loadModel(item);
+  });
   return card;
 }
 
+function groupItemsByBodyPart(items) {
+  const groups = new Map();
+  for (const name of GROUP_ORDER) {
+    groups.set(name, []);
+  }
+
+  for (const item of items) {
+    const part = bodyPartFromEntry(item.hhh_entry);
+    const normalized = {
+      ...item,
+      body_part: part,
+      asset_name: assetNameFromEntry(item.hhh_entry),
+    };
+
+    if (!groups.has(part)) {
+      groups.get("other").push(normalized);
+      continue;
+    }
+    groups.get(part).push(normalized);
+  }
+
+  return groups;
+}
+
+function renderGroupedGallery(items, modName) {
+  const tabs = document.getElementById("group-tabs");
+  const panel = document.getElementById("group-panel");
+  tabs.innerHTML = "";
+  panel.innerHTML = "";
+
+  const groups = groupItemsByBodyPart(items);
+  const availableGroups = GROUP_ORDER.filter((name) => (groups.get(name) ?? []).length > 0);
+
+  const renderGroup = (groupName) => {
+    const entries = groups.get(groupName) ?? [];
+    panel.innerHTML = "";
+
+    const header = document.createElement("header");
+    header.className = "group-header";
+
+    const title = document.createElement("h2");
+    title.className = "group-title";
+    title.textContent = groupName;
+    header.append(title);
+
+    const grid = document.createElement("div");
+    grid.className = "group-grid";
+    for (const item of entries) {
+      grid.appendChild(buildCard(item, modName));
+    }
+
+    panel.append(header, grid);
+  };
+
+  for (const groupName of availableGroups) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "group-tab";
+    button.role = "tab";
+    button.textContent = `${groupName} (${(groups.get(groupName) ?? []).length})`;
+    button.setAttribute("aria-selected", "false");
+    button.addEventListener("click", () => {
+      for (const tab of tabs.querySelectorAll(".group-tab")) {
+        tab.setAttribute("aria-selected", "false");
+      }
+      button.setAttribute("aria-selected", "true");
+      renderGroup(groupName);
+    });
+    tabs.appendChild(button);
+  }
+
+  const firstTab = tabs.querySelector(".group-tab");
+  if (firstTab) {
+    firstTab.setAttribute("aria-selected", "true");
+    renderGroup(availableGroups[0]);
+  }
+
+  debugLog("metadata:gallery-populated", {
+    card_count: items.length,
+    group_counts: Object.fromEntries(GROUP_ORDER.map((name) => [name, (groups.get(name) ?? []).length])),
+  });
+}
+
 async function loadMetadata() {
-  const summary = document.getElementById("summary");
-  const gallery = document.getElementById("gallery");
   try {
     const response = await fetch("../data/outputs/metadata.json");
     if (!response.ok) {
-      summary.textContent = "No metadata found yet. Run processor first.";
       debugLog("metadata:missing", { status: response.status });
       return;
     }
 
     const data = await response.json();
-    summary.textContent = `Source: ${data.source} | hhh=${data.hhh_count} | models=${data.model_count ?? 0} | parse-errors=${data.hhh_parse_errors}`;
+    const modName = modNameFromSource(data.source);
     debugLog("metadata:loaded", {
       source: data.source,
       hhh_count: data.hhh_count,
@@ -258,13 +359,8 @@ async function loadMetadata() {
       parse_errors: data.hhh_parse_errors,
     });
 
-    gallery.innerHTML = "";
-    for (const item of data.images ?? []) {
-      gallery.appendChild(buildCard(item));
-    }
-    debugLog("metadata:gallery-populated", { card_count: (data.images ?? []).length });
+    renderGroupedGallery(data.images ?? [], modName);
   } catch {
-    summary.textContent = "Unable to load metadata. Run viewer via a local static server.";
     debugLog("metadata:error", { reason: "fetch-failed" });
   }
 }
