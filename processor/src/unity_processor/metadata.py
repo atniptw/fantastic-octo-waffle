@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 
 def build_metadata(parsed: dict, images: list[dict]) -> dict:
-    """Build metadata for one-image-per-.hhh MVP outputs."""
+    """Build metadata for one-model-per-.hhh outputs."""
     warnings = list(parsed.get("warnings", []))
     for item in images:
         warnings.extend(item.get("warnings", []))
@@ -14,8 +14,11 @@ def build_metadata(parsed: dict, images: list[dict]) -> dict:
     assets_with_dependency_candidates = [
         a for a in hhh_assets if a.get("dependency_texture_candidates")
     ]
+    exported_models = [i for i in images if i.get("model")]
+    failed_exports = [i for i in images if i.get("export_status") != "ok"]
 
     return {
+        "schema_version": 2,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "source": parsed.get("input"),
         "dependency_unitypackage": parsed.get("dependency_unitypackage"),
@@ -26,8 +29,9 @@ def build_metadata(parsed: dict, images: list[dict]) -> dict:
         "hhh_with_materials": len(assets_with_materials),
         "hhh_with_local_textures": len(assets_with_local_textures),
         "hhh_with_dependency_texture_candidates": len(assets_with_dependency_candidates),
-        "image_count": len(images),
-        "status": "ok" if images else "no-renderable-assets",
+        "model_count": len(exported_models),
+        "export_failed_count": len(failed_exports),
+        "status": "ok" if exported_models else "no-exported-models",
         "warnings": warnings,
         "images": images,
     }

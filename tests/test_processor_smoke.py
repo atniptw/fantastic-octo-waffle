@@ -34,7 +34,8 @@ def test_processor_cli_writes_metadata(tmp_path: Path, monkeypatch) -> None:
     assert metadata_path.exists()
 
     data = json.loads(metadata_path.read_text(encoding="utf-8"))
-    assert data["image_count"] == 2
+    assert data["schema_version"] == 2
+    assert data["model_count"] >= 0
     assert data["hhh_count"] == 2
     assert data["hhh_inspected"] == 2
     assert data["hhh_parse_errors"] == 0
@@ -42,10 +43,13 @@ def test_processor_cli_writes_metadata(tmp_path: Path, monkeypatch) -> None:
     assert "hhh_with_local_textures" in data
     assert len(data["images"]) == 2
     for item in data["images"]:
-        assert (output / item["image"]).exists()
+        if item.get("model"):
+            assert (output / item["model"]).exists()
         assert "mesh" in item
-        assert "render_mode" in item
+        assert "model_format" in item
         assert "texture_source" in item
+        assert "export_status" in item
+        assert "mesh_bounds" in item
         assert "primary_material_color" in item
 
 

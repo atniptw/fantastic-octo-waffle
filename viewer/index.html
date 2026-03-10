@@ -5,14 +5,29 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Unity Preview Viewer</title>
     <link rel="stylesheet" href="styles.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.164.1/build/three.module.js",
+          "three/addons/": "https://unpkg.com/three@0.164.1/examples/jsm/"
+        }
+      }
+    </script>
   </head>
   <body>
     <main>
       <h1>Unity Preview Viewer</h1>
-      <p class="lead">One preview per .hhh with mesh diagnostics and warnings.</p>
+      <p class="lead">One GLB export per .hhh with mesh diagnostics and warnings.</p>
       <section id="summary" class="summary">Loading metadata...</section>
-      <section id="gallery" class="gallery" aria-live="polite"></section>
+      <section class="layout">
+        <section id="gallery" class="gallery" aria-live="polite"></section>
+        <aside id="model-panel" class="model-panel" aria-live="polite">
+          <h2>3D Preview</h2>
+          <p id="model-status" class="meta">Click a card to load a model.</p>
+          <div id="model-canvas" class="model-canvas" role="img" aria-label="3D model canvas"></div>
+        </aside>
+      </section>
     </main>
-    <script src="app.js" defer></script>
+    <script type="module" src="app.js"></script>
   </body>
 </html>

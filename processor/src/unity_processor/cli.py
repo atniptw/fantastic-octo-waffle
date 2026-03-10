@@ -12,7 +12,7 @@ from .render import render_preview_images
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="unity-processor",
-        description="MVP UnityPy image pipeline CLI.",
+        description="Unity model pipeline CLI.",
     )
     parser.add_argument(
         "mod_zip",
@@ -49,10 +49,10 @@ def main() -> int:
     metadata_path = output_dir / args.metadata
     metadata_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
     print(f"wrote {metadata_path}")
-    if images:
+    if parsed.get("hhh_entries"):
         return 0
 
-    print("no renderable .hhh assets were produced", flush=True)
+    print("no .hhh assets were discovered", flush=True)
     return 2
 
 
