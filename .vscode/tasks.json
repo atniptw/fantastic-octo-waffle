@@ -1,0 +1,29 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Add New Mod From URL",
+      "type": "shell",
+      "command": "./scripts/download_and_process_mod.sh \"${input:modZipUrl}\"",
+      "problemMatcher": []
+    },
+    {
+      "label": "Reprocess Downloaded Mod",
+      "type": "shell",
+      "command": "./scripts/process_mod_file.sh \"${input:modZipFile}\"",
+      "problemMatcher": []
+    }
+  ],
+  "inputs": [
+    {
+      "id": "modZipUrl",
+      "type": "promptString",
+      "description": "Direct URL to mod zip"
+    },
+    {
+      "id": "modZipFile",
+      "type": "promptString",
+      "description": "Path to mod zip file (for example: data/RESET-MoreHeadPlus-1.9.6.zip)"
+    }
+  ]
+}
