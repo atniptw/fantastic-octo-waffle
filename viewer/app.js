@@ -11,6 +11,7 @@ const state = {
   modelRoot: null,
   raf: 0,
   cache: { key: null, scene: null },
+  inspectLight: null,
 };
 
 const DEBUG_PREFIX = "[viewer-debug]";
@@ -60,6 +61,8 @@ function ensureViewer() {
 
   state.renderer = new THREE.WebGLRenderer({ antialias: true });
   state.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  state.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  state.renderer.toneMappingExposure = 1.25;
   state.renderer.setSize(width, height);
   canvasHost.appendChild(state.renderer.domElement);
 
@@ -67,14 +70,35 @@ function ensureViewer() {
   state.controls.enableDamping = true;
   state.controls.target.set(0, 0, 0);
 
-  const ambient = new THREE.AmbientLight(0xffffff, 0.75);
-  const key = new THREE.DirectionalLight(0xffffff, 0.95);
+  // Three-point plus hemisphere fill keeps dark materials visible in previews.
+  const ambient = new THREE.AmbientLight(0xffffff, 1.15);
+  const hemi = new THREE.HemisphereLight(0xe8f3ff, 0x5a6a7a, 0.75);
+
+  const key = new THREE.DirectionalLight(0xfff7ea, 0.95);
   key.position.set(3, 4, 5);
-  state.scene.add(ambient, key);
+
+  const fill = new THREE.DirectionalLight(0xe7f1ff, 0.8);
+  fill.position.set(-3, 2.5, -2);
+
+  const rim = new THREE.DirectionalLight(0xffffff, 0.4);
+  rim.position.set(0, 2, -5);
+
+  // Keep a front-biased light aligned with the camera to reduce inspection-time dark faces.
+  const inspectLight = new THREE.DirectionalLight(0xffffff, 0.95);
+  inspectLight.position.copy(state.camera.position);
+  inspectLight.target.position.copy(state.controls.target);
+  state.inspectLight = inspectLight;
+
+  state.scene.add(ambient, hemi, key, fill, rim, inspectLight, inspectLight.target);
 
   state.loader = new GLTFLoader();
 
   const tick = () => {
+    if (state.inspectLight) {
+      state.inspectLight.position.copy(state.camera.position);
+      state.inspectLight.target.position.copy(state.controls.target);
+      state.inspectLight.target.updateMatrixWorld();
+    }
     state.controls.update();
     state.renderer.render(state.scene, state.camera);
     state.raf = requestAnimationFrame(tick);
