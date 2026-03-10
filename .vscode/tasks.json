@@ -2,6 +2,16 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "Start Viewer Web Server",
+      "type": "shell",
+      "command": ".venv/bin/python -m http.server 8000",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
       "label": "Add New Mod From URL",
       "type": "shell",
       "command": "./scripts/download_and_process_mod.sh \"${input:modZipUrl}\"",
