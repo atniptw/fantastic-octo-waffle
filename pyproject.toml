@@ -15,3 +15,10 @@ target-version = "py311"
 [tool.mypy]
 python_version = "3.11"
 ignore_missing_imports = true
+
+[tool.unity_pipeline.commands]
+commit_gate = "./scripts/commit_gate.sh"
+validate_commit_message = "python3 scripts/validate_commit_message.py '<message>'"
+run_both_apps = "./scripts/run_both_apps.sh --mod-zip data/YOUR-MOD.zip --port 8000"
+observe_viewer = "./scripts/viewer_observe_playwright.sh --url http://localhost:8000/viewer/ --report data/outputs/viewer_observability.json"
+check_outputs = "python3 scripts/check_processed_outputs.py --metadata data/outputs/metadata.json"

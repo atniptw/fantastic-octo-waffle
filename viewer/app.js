@@ -13,6 +13,16 @@ const state = {
   cache: { key: null, scene: null },
 };
 
+const DEBUG_PREFIX = "[viewer-debug]";
+
+function debugLog(event, details = {}) {
+  try {
+    console.info(`${DEBUG_PREFIX} ${event}`, details);
+  } catch {
+    console.info(`${DEBUG_PREFIX} ${event}`);
+  }
+}
+
 function setStatus(message) {
   const status = document.getElementById("model-status");
   status.textContent = message;
@@ -88,6 +98,7 @@ function fitCamera(bounds) {
     state.camera.position.set(1.5, 1.2, 1.5);
     state.controls.target.set(0, 0, 0);
     state.controls.update();
+    debugLog("fitCamera:fallback", { reason: "missing-or-invalid-bounds" });
     return;
   }
 
@@ -103,6 +114,18 @@ function fitCamera(bounds) {
   state.camera.far = Math.max(radius * 40, 100);
   state.camera.updateProjectionMatrix();
   state.controls.update();
+
+  debugLog("fitCamera:computed", {
+    bounds,
+    size: [size.x, size.y, size.z],
+    radius,
+    camera: {
+      position: [state.camera.position.x, state.camera.position.y, state.camera.position.z],
+      target: [state.controls.target.x, state.controls.target.y, state.controls.target.z],
+      near: state.camera.near,
+      far: state.camera.far,
+    },
+  });
 }
 
 function swapModel(sceneObject) {
@@ -122,16 +145,24 @@ async function loadModel(item) {
   ensureViewer();
   if (!item.model) {
     setStatus("This asset has no exported model.");
+    debugLog("loadModel:missing-model", { hhh_entry: item.hhh_entry });
     return;
   }
 
   const modelUrl = `../data/outputs/${item.model}`;
   setStatus(`Loading ${item.hhh_entry}...`);
+  debugLog("loadModel:start", {
+    hhh_entry: item.hhh_entry,
+    model: item.model,
+    model_url: modelUrl,
+    mesh_bounds: item.mesh_bounds,
+  });
 
   if (state.cache.key === modelUrl && state.cache.scene) {
     swapModel(cloneCachedScene(state.cache.scene));
     fitCamera(item.mesh_bounds);
     setStatus(`Loaded ${item.hhh_entry} (cached)`);
+    debugLog("loadModel:cached", { hhh_entry: item.hhh_entry, model_url: modelUrl });
     return;
   }
 
@@ -141,8 +172,18 @@ async function loadModel(item) {
     fitCamera(item.mesh_bounds);
     state.cache = { key: modelUrl, scene: gltf.scene.clone(true) };
     setStatus(`Loaded ${item.hhh_entry}`);
+    debugLog("loadModel:success", {
+      hhh_entry: item.hhh_entry,
+      model_url: modelUrl,
+      child_count: gltf.scene.children.length,
+    });
   } catch (error) {
     setStatus(`Failed to load ${item.hhh_entry}: ${error?.message ?? "unknown error"}`);
+    debugLog("loadModel:error", {
+      hhh_entry: item.hhh_entry,
+      model_url: modelUrl,
+      error: error?.message ?? "unknown error",
+    });
   }
 }
 
@@ -180,18 +221,27 @@ async function loadMetadata() {
     const response = await fetch("../data/outputs/metadata.json");
     if (!response.ok) {
       summary.textContent = "No metadata found yet. Run processor first.";
+      debugLog("metadata:missing", { status: response.status });
       return;
     }
 
     const data = await response.json();
     summary.textContent = `Source: ${data.source} | hhh=${data.hhh_count} | models=${data.model_count ?? 0} | parse-errors=${data.hhh_parse_errors}`;
+    debugLog("metadata:loaded", {
+      source: data.source,
+      hhh_count: data.hhh_count,
+      model_count: data.model_count,
+      parse_errors: data.hhh_parse_errors,
+    });
 
     gallery.innerHTML = "";
     for (const item of data.images ?? []) {
       gallery.appendChild(buildCard(item));
     }
+    debugLog("metadata:gallery-populated", { card_count: (data.images ?? []).length });
   } catch {
     summary.textContent = "Unable to load metadata. Run viewer via a local static server.";
+    debugLog("metadata:error", { reason: "fetch-failed" });
   }
 }
 

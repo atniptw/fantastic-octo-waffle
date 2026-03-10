@@ -22,6 +22,12 @@ dist/
 outputs/
 artifacts/
 data/outputs/
+data/outputs/*.json
+data/outputs/*.glb
+
+# Large local input archives
+data/*.zip
+data/*.unitypackage
 
 # Viewer temporary files
 viewer/.cache/

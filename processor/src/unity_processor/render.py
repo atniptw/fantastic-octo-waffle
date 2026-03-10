@@ -6,6 +6,7 @@ import logging
 import numpy as np
 from pathlib import Path
 import tarfile
+from typing import Any
 from zipfile import ZipFile
 
 import UnityPy
@@ -27,6 +28,173 @@ def _safe_slug(value: str) -> str:
 
 def _entry_hash(entry_path: str) -> str:
     return hashlib.sha1(entry_path.encode("utf-8")).hexdigest()[:10]
+
+
+def _vector3(value: Any, default: tuple[float, float, float]) -> np.ndarray:
+    if value is None:
+        return np.array(default, dtype=float)
+    try:
+        return np.array(
+            [
+                float(getattr(value, "x", default[0])),
+                float(getattr(value, "y", default[1])),
+                float(getattr(value, "z", default[2])),
+            ],
+            dtype=float,
+        )
+    except Exception:
+        return np.array(default, dtype=float)
+
+
+def _quaternion(value: Any, default: tuple[float, float, float, float]) -> np.ndarray:
+    if value is None:
+        return np.array(default, dtype=float)
+    try:
+        return np.array(
+            [
+                float(getattr(value, "x", default[0])),
+                float(getattr(value, "y", default[1])),
+                float(getattr(value, "z", default[2])),
+                float(getattr(value, "w", default[3])),
+            ],
+            dtype=float,
+        )
+    except Exception:
+        return np.array(default, dtype=float)
+
+
+def _rotation_from_quaternion(quaternion: np.ndarray) -> np.ndarray:
+    x, y, z, w = quaternion
+    norm = x * x + y * y + z * z + w * w
+    if norm <= 1e-12:
+        return np.eye(3, dtype=float)
+
+    scale = 2.0 / norm
+    xx = x * x * scale
+    yy = y * y * scale
+    zz = z * z * scale
+    xy = x * y * scale
+    xz = x * z * scale
+    yz = y * z * scale
+    wx = w * x * scale
+    wy = w * y * scale
+    wz = w * z * scale
+
+    return np.array(
+        [
+            [1.0 - (yy + zz), xy - wz, xz + wy],
+            [xy + wz, 1.0 - (xx + zz), yz - wx],
+            [xz - wy, yz + wx, 1.0 - (xx + yy)],
+        ],
+        dtype=float,
+    )
+
+
+def _compose_trs_matrix(position: np.ndarray, rotation: np.ndarray, scale: np.ndarray) -> np.ndarray:
+    matrix = np.eye(4, dtype=float)
+    matrix[:3, :3] = _rotation_from_quaternion(rotation) @ np.diag(scale)
+    matrix[:3, 3] = position
+    return matrix
+
+
+def _component_path_id(component_ref: Any) -> int:
+    if component_ref is None:
+        return 0
+    direct = int(getattr(component_ref, "path_id", 0) or 0)
+    if direct:
+        return direct
+    nested = getattr(component_ref, "component", None)
+    return int(getattr(nested, "path_id", 0) or 0)
+
+
+def _transform_id_for_game_object(game_object_id: int, object_by_id: dict[int, Any]) -> int:
+    game_object_obj = object_by_id.get(game_object_id)
+    if game_object_obj is None:
+        return 0
+
+    try:
+        game_object = game_object_obj.read()
+    except Exception:
+        return 0
+
+    for component_ref in list(getattr(game_object, "m_Components", []) or []):
+        component_id = _component_path_id(component_ref)
+        component_obj = object_by_id.get(component_id)
+        if component_obj is None:
+            continue
+        if getattr(getattr(component_obj, "type", None), "name", "") == "Transform":
+            return component_id
+    return 0
+
+
+def _world_matrix_for_transform(transform_id: int, object_by_id: dict[int, Any]) -> np.ndarray:
+    cache: dict[int, np.ndarray] = {}
+
+    def compute(path_id: int) -> np.ndarray:
+        if path_id in cache:
+            return cache[path_id]
+
+        transform_obj = object_by_id.get(path_id)
+        if transform_obj is None:
+            identity = np.eye(4, dtype=float)
+            cache[path_id] = identity
+            return identity
+
+        try:
+            transform = transform_obj.read()
+        except Exception:
+            identity = np.eye(4, dtype=float)
+            cache[path_id] = identity
+            return identity
+
+        position = _vector3(getattr(transform, "m_LocalPosition", None), (0.0, 0.0, 0.0))
+        rotation = _quaternion(getattr(transform, "m_LocalRotation", None), (0.0, 0.0, 0.0, 1.0))
+        scale = _vector3(getattr(transform, "m_LocalScale", None), (1.0, 1.0, 1.0))
+        local = _compose_trs_matrix(position, rotation, scale)
+
+        parent_ref = getattr(transform, "m_Father", None)
+        parent_id = int(getattr(parent_ref, "path_id", 0) or 0)
+        if parent_id:
+            world = compute(parent_id) @ local
+        else:
+            world = local
+
+        cache[path_id] = world
+        return world
+
+    return compute(transform_id)
+
+
+def _mesh_world_matrix(env: object, mesh_path_id: int) -> np.ndarray | None:
+    object_by_id = {int(obj.path_id): obj for obj in env.objects}
+
+    for obj in env.objects:
+        obj_type = getattr(getattr(obj, "type", None), "name", "")
+        if obj_type not in {"MeshFilter", "SkinnedMeshRenderer"}:
+            continue
+
+        try:
+            component = obj.read()
+        except Exception:
+            continue
+
+        mesh_ref = getattr(component, "m_Mesh", None)
+        ref_id = int(getattr(mesh_ref, "path_id", 0) or 0)
+        if ref_id != mesh_path_id:
+            continue
+
+        game_object_ref = getattr(component, "m_GameObject", None)
+        game_object_id = int(getattr(game_object_ref, "path_id", 0) or 0)
+        if not game_object_id:
+            continue
+
+        transform_id = _transform_id_for_game_object(game_object_id, object_by_id)
+        if not transform_id:
+            continue
+
+        return _world_matrix_for_transform(transform_id, object_by_id)
+
+    return None
 
 
 def _parse_obj_mesh(
@@ -174,6 +342,14 @@ def _load_primary_mesh(payload: bytes) -> tuple[trimesh.Trimesh | None, str | No
 
     if not isinstance(mesh, trimesh.Trimesh) or mesh.vertices is None or len(mesh.vertices) == 0:
         return None, "Trimesh conversion produced no vertices."
+
+    mesh_path_id = int(mesh_objects[0].path_id)
+    transform = _mesh_world_matrix(env, mesh_path_id)
+    if transform is not None:
+        try:
+            mesh.apply_transform(transform)
+        except Exception as exc:
+            return None, f"Applying Unity transform hierarchy failed: {exc}"
 
     return mesh, None
 
