@@ -15,7 +15,7 @@ const state = {
 };
 
 const DEBUG_PREFIX = "[viewer-debug]";
-const GROUP_ORDER = ["head", "body", "neck", "other"];
+const GROUP_ORDER = ["head", "body", "neck", "hip", "leftarm", "rightarm", "leftleg", "rightleg", "world", "other"];
 
 function debugLog(event, details = {}) {
   try {
@@ -41,7 +41,8 @@ function modNameFromSource(source) {
 }
 
 function bodyPartFromEntry(entry) {
-  const match = /_(head|body|neck)\.hhh$/i.exec(entry ?? "");
+  const fileName = (entry ?? "").split("/").pop() ?? "";
+  const match = /_([a-z0-9]+)\.hhh$/i.exec(fileName);
   return match ? match[1].toLowerCase() : "other";
 }
 
@@ -49,7 +50,7 @@ function assetNameFromEntry(entry) {
   const fileName = (entry ?? "").split("/").pop() ?? entry ?? "Unknown Asset";
   const trimmed = fileName
     .replace(/\.hhh$/i, "")
-    .replace(/_(head|body|neck)$/i, "")
+    .replace(/_[a-z0-9]+$/i, "")
     .trim();
   return trimmed || "Unknown Asset";
 }
@@ -274,8 +275,7 @@ function groupItemsByBodyPart(items) {
     };
 
     if (!groups.has(part)) {
-      groups.get("other").push(normalized);
-      continue;
+      groups.set(part, []);
     }
     groups.get(part).push(normalized);
   }
@@ -290,7 +290,11 @@ function renderGroupedGallery(items, modName) {
   panel.innerHTML = "";
 
   const groups = groupItemsByBodyPart(items);
-  const availableGroups = GROUP_ORDER.filter((name) => (groups.get(name) ?? []).length > 0);
+  const preferred = GROUP_ORDER.filter((name) => (groups.get(name) ?? []).length > 0);
+  const dynamic = [...groups.keys()]
+    .filter((name) => !GROUP_ORDER.includes(name) && (groups.get(name) ?? []).length > 0)
+    .sort((a, b) => a.localeCompare(b));
+  const availableGroups = [...preferred, ...dynamic];
 
   const renderGroup = (groupName) => {
     const entries = groups.get(groupName) ?? [];
