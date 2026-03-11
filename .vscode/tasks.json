@@ -22,6 +22,12 @@
       "type": "shell",
       "command": "./scripts/process_mod_file.sh \"${input:modZipFile}\"",
       "problemMatcher": []
+    },
+    {
+      "label": "Process All Mods",
+      "type": "shell",
+      "command": "./scripts/process_all_mods.sh",
+      "problemMatcher": []
     }
   ],
   "inputs": [

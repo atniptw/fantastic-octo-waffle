@@ -31,6 +31,33 @@ main {
   letter-spacing: 0.01em;
 }
 
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.toolbar-label {
+  font-size: 0.78rem;
+  color: #4c6287;
+  font-weight: 600;
+}
+
+.toolbar-select {
+  border: 1px solid #b7c7df;
+  background: #f9fbff;
+  color: #1f3558;
+  border-radius: 8px;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.78rem;
+  min-width: 210px;
+}
+
+.toolbar-select:focus-visible {
+  outline: 2px solid #7aa0db;
+  outline-offset: 1px;
+}
+
 .layout {
   display: grid;
   grid-template-columns: minmax(320px, 1fr) minmax(320px, 430px);
@@ -190,6 +217,20 @@ main {
 }
 
 @media (max-width: 900px) {
+  .page-header {
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .toolbar {
+    width: 100%;
+  }
+
+  .toolbar-select {
+    min-width: 0;
+    width: 100%;
+  }
+
   .layout {
     grid-template-columns: 1fr;
   }

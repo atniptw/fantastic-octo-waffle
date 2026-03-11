@@ -18,6 +18,12 @@
     <main>
       <header class="page-header">
         <h1>Asset Viewer</h1>
+        <div class="toolbar" aria-label="Viewer filters">
+          <label for="mod-filter" class="toolbar-label">Mod</label>
+          <select id="mod-filter" class="toolbar-select" aria-label="Filter assets by mod">
+            <option value="__all__">All Mods</option>
+          </select>
+        </div>
       </header>
       <section class="layout">
         <section id="gallery" class="gallery" aria-live="polite">
