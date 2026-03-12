@@ -89,3 +89,37 @@ def test_processor_cli_inspects_dependency_unitypackage(tmp_path: Path, monkeypa
     assert "Assets/Textures/a.png" in summary["sample_pathnames"]
     assert "a" in summary["texture_name_map"]
     assert data["hhh_inspected"] == 1
+
+
+def test_processor_cli_accumulates_multiple_mods_metadata(tmp_path: Path, monkeypatch) -> None:
+    output = tmp_path / "data" / "outputs"
+    monkeypatch.chdir(tmp_path)
+
+    first_zip = tmp_path / "first-mod.zip"
+    with ZipFile(first_zip, "w") as archive:
+        archive.writestr("assets/first_model.hhh", b"dummy")
+
+    monkeypatch.setattr(
+        "sys.argv",
+        ["unity-processor", str(first_zip), "--output", str(output)],
+    )
+    assert main() == 0
+
+    second_zip = tmp_path / "second-mod.zip"
+    with ZipFile(second_zip, "w") as archive:
+        archive.writestr("assets/second_model.hhh", b"dummy")
+
+    monkeypatch.setattr(
+        "sys.argv",
+        ["unity-processor", str(second_zip), "--output", str(output)],
+    )
+    assert main() == 0
+
+    metadata_path = output / "metadata.json"
+    data = json.loads(metadata_path.read_text(encoding="utf-8"))
+
+    assert data["source"] == str(second_zip)
+    assert data["mod_count"] == 2
+    sources = {entry["source"] for entry in data["mods"]}
+    assert str(first_zip) in sources
+    assert str(second_zip) in sources

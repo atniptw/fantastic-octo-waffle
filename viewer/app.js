@@ -40,16 +40,6 @@ function modNameFromSource(source) {
   return fileName.replace(/\.[^/.]+$/, "") || "Unknown Mod";
 }
 
-function itemModName(item, fallbackModName) {
-  if (item?.mod_name) {
-    return item.mod_name;
-  }
-  if (item?.mod_source) {
-    return modNameFromSource(item.mod_source);
-  }
-  return fallbackModName;
-}
-
 function bodyPartFromEntry(entry) {
   const fileName = (entry ?? "").split("/").pop() ?? "";
   const match = /_([a-z0-9]+)\.hhh$/i.exec(fileName);
@@ -247,8 +237,7 @@ async function loadModel(item) {
   }
 }
 
-function buildCard(item, fallbackModName) {
-  const modName = itemModName(item, fallbackModName);
+function buildCard(item) {
   const card = document.createElement("article");
   card.className = "card";
 
@@ -256,7 +245,7 @@ function buildCard(item, fallbackModName) {
   body.className = "card-body";
   body.innerHTML = `
     <h2 class="title">${item.asset_name}</h2>
-    <p class="meta">${modName}</p>
+    <p class="meta">${item.mod_name ?? "Unknown Mod"}</p>
   `;
 
   card.appendChild(body);
@@ -283,6 +272,7 @@ function groupItemsByBodyPart(items) {
       ...item,
       body_part: part,
       asset_name: assetNameFromEntry(item.hhh_entry),
+      mod_name: item.mod_name ?? "Unknown Mod",
     };
 
     if (!groups.has(part)) {
@@ -294,7 +284,7 @@ function groupItemsByBodyPart(items) {
   return groups;
 }
 
-function renderGroupedGallery(items, modName) {
+function renderGroupedGallery(items) {
   const tabs = document.getElementById("group-tabs");
   const panel = document.getElementById("group-panel");
   tabs.innerHTML = "";
@@ -322,7 +312,7 @@ function renderGroupedGallery(items, modName) {
     const grid = document.createElement("div");
     grid.className = "group-grid";
     for (const item of entries) {
-      grid.appendChild(buildCard(item, modName));
+      grid.appendChild(buildCard(item));
     }
 
     panel.append(header, grid);
@@ -357,40 +347,20 @@ function renderGroupedGallery(items, modName) {
   });
 }
 
-function populateModFilter(data, items, fallbackModName, onFilterChange) {
-  const modFilter = document.getElementById("mod-filter");
-  if (!modFilter) {
-    return;
+function flattenMetadataImages(data) {
+  if (Array.isArray(data?.mods) && data.mods.length > 0) {
+    const items = [];
+    for (const mod of data.mods) {
+      const modName = modNameFromSource(mod?.source);
+      for (const item of mod?.images ?? []) {
+        items.push({ ...item, mod_name: modName });
+      }
+    }
+    return items;
   }
 
-  const counts = new Map();
-  for (const item of items) {
-    const name = itemModName(item, fallbackModName);
-    counts.set(name, (counts.get(name) ?? 0) + 1);
-  }
-
-  const knownMods = (Array.isArray(data.source_mods) ? data.source_mods : [])
-    .map((mod) => mod?.mod_name)
-    .filter((name) => typeof name === "string" && name.length > 0);
-  const dynamicMods = [...counts.keys()].sort((a, b) => a.localeCompare(b));
-  const modNames = [...new Set([...knownMods, ...dynamicMods])];
-
-  modFilter.innerHTML = "";
-
-  const allOption = document.createElement("option");
-  allOption.value = "__all__";
-  allOption.textContent = `All Mods (${items.length})`;
-  modFilter.appendChild(allOption);
-
-  for (const modName of modNames) {
-    const option = document.createElement("option");
-    option.value = modName;
-    option.textContent = `${modName} (${counts.get(modName) ?? 0})`;
-    modFilter.appendChild(option);
-  }
-
-  modFilter.value = "__all__";
-  modFilter.onchange = () => onFilterChange(modFilter.value);
+  const fallbackModName = modNameFromSource(data?.source);
+  return (data?.images ?? []).map((item) => ({ ...item, mod_name: fallbackModName }));
 }
 
 async function loadMetadata() {
@@ -402,31 +372,17 @@ async function loadMetadata() {
     }
 
     const data = await response.json();
-    const modName = modNameFromSource(data.source);
-    const allItems = data.images ?? [];
-    const sourceMods = Array.isArray(data.source_mods) ? data.source_mods.length : 0;
+    const images = flattenMetadataImages(data);
     debugLog("metadata:loaded", {
       source: data.source,
-      source_mod_count: sourceMods,
+      mod_count: data.mod_count ?? (Array.isArray(data.mods) ? data.mods.length : 1),
       hhh_count: data.hhh_count,
       model_count: data.model_count,
       parse_errors: data.hhh_parse_errors,
+      image_count: images.length,
     });
 
-    const applyFilter = (selectedMod) => {
-      const filtered =
-        selectedMod === "__all__"
-          ? allItems
-          : allItems.filter((item) => itemModName(item, modName) === selectedMod);
-      renderGroupedGallery(filtered, modName);
-      debugLog("metadata:filter-applied", {
-        selected_mod: selectedMod,
-        filtered_count: filtered.length,
-      });
-    };
-
-    populateModFilter(data, allItems, modName, applyFilter);
-    applyFilter("__all__");
+    renderGroupedGallery(images);
   } catch {
     debugLog("metadata:error", { reason: "fetch-failed" });
   }
