@@ -40,6 +40,13 @@ function modNameFromSource(source) {
   return fileName.replace(/\.[^/.]+$/, "") || "Unknown Mod";
 }
 
+function itemModName(item, fallbackModName) {
+  if (item?.mod_name && typeof item.mod_name === "string") {
+    return item.mod_name;
+  }
+  return fallbackModName;
+}
+
 function bodyPartFromEntry(entry) {
   const fileName = (entry ?? "").split("/").pop() ?? "";
   const match = /_([a-z0-9]+)\.hhh$/i.exec(fileName);
@@ -347,6 +354,38 @@ function renderGroupedGallery(items) {
   });
 }
 
+function populateModFilter(items, fallbackModName, onFilterChange) {
+  const modFilter = document.getElementById("mod-filter");
+  if (!modFilter) {
+    return;
+  }
+
+  const counts = new Map();
+  for (const item of items) {
+    const name = itemModName(item, fallbackModName);
+    counts.set(name, (counts.get(name) ?? 0) + 1);
+  }
+
+  const modNames = [...counts.keys()].sort((a, b) => a.localeCompare(b));
+
+  modFilter.innerHTML = "";
+
+  const allOption = document.createElement("option");
+  allOption.value = "__all__";
+  allOption.textContent = `All Mods (${items.length})`;
+  modFilter.appendChild(allOption);
+
+  for (const modName of modNames) {
+    const option = document.createElement("option");
+    option.value = modName;
+    option.textContent = `${modName} (${counts.get(modName) ?? 0})`;
+    modFilter.appendChild(option);
+  }
+
+  modFilter.value = "__all__";
+  modFilter.onchange = () => onFilterChange(modFilter.value);
+}
+
 function flattenMetadataImages(data) {
   if (Array.isArray(data?.mods) && data.mods.length > 0) {
     const items = [];
@@ -373,6 +412,7 @@ async function loadMetadata() {
 
     const data = await response.json();
     const images = flattenMetadataImages(data);
+    const fallbackModName = modNameFromSource(data.source);
     debugLog("metadata:loaded", {
       source: data.source,
       mod_count: data.mod_count ?? (Array.isArray(data.mods) ? data.mods.length : 1),
@@ -382,7 +422,20 @@ async function loadMetadata() {
       image_count: images.length,
     });
 
-    renderGroupedGallery(images);
+    const applyFilter = (selectedMod) => {
+      const filtered =
+        selectedMod === "__all__"
+          ? images
+          : images.filter((item) => itemModName(item, fallbackModName) === selectedMod);
+      renderGroupedGallery(filtered);
+      debugLog("metadata:filter-applied", {
+        selected_mod: selectedMod,
+        filtered_count: filtered.length,
+      });
+    };
+
+    populateModFilter(images, fallbackModName, applyFilter);
+    applyFilter("__all__");
   } catch {
     debugLog("metadata:error", { reason: "fetch-failed" });
   }
